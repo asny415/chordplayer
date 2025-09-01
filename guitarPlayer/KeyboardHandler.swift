@@ -101,12 +101,13 @@ class KeyboardHandler: ObservableObject {
 
         // Drum controls
         if let drumSettings = appData.performanceConfig.drumSettings {
-            if keyName == drumSettings.playKey {
+                if keyName == drumSettings.playKey {
                 let drumPatternToPlay = appData.DRUM_PATTERN_MAP[currentTimeSignature] ?? drumSettings.defaultPattern
-                drumPlayer.playPattern(patternName: drumPatternToPlay) // Corrected method call
+                // Pass current tempo, timeSignature, velocity and duration (ms) so DrumPlayer schedules correctly for non-4/4 signatures
+                drumPlayer.playPattern(patternName: drumPatternToPlay, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: UInt8(appData.CONFIG.velocity), durationMs: appData.CONFIG.duration)
                 return
             }
-            if keyName == drumSettings.stopKey {
+                if keyName == drumSettings.stopKey {
                 drumPlayer.stop() // Corrected method call
                 return
             }

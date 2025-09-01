@@ -119,7 +119,9 @@ struct ContentView: View {
                 Button(action: {
                     isDrumPlaying.toggle()
                     if isDrumPlaying {
-                        drumPlayer.playPattern(patternName: "ROCK_4_4_BASIC") // Default drum pattern
+                        // Pass current tempo and time signature from metronome to DrumPlayer
+                        let timeSig = "\(selectedTimeSignatureNumerator)/\(selectedTimeSignatureDenominator)"
+                        drumPlayer.playPattern(patternName: "ROCK_4_4_BASIC", tempo: selectedTempo, timeSignature: timeSig, velocity: UInt8(appData.CONFIG.velocity), durationMs: appData.CONFIG.duration)
                     } else {
                         drumPlayer.stop()
                     }

@@ -16,47 +16,103 @@ class DrumPlayer: ObservableObject {
         self.appData = appData
     }
 
-    func playPattern(patternName: String, velocity: UInt8 = 100) {
+    func playPattern(patternName: String, tempo: Double = 120.0, timeSignature: String = "4/4", velocity: UInt8 = 100, durationMs: Int = 200) {
         stop() // Stop any existing pattern
 
         guard let pattern = appData.drumPatternLibrary?[patternName] else {
             print("[DrumPlayer] Pattern definition for \(patternName) not found.")
             return
         }
-        self.currentPatternEvents = pattern
-        self.currentPatternIndex = 0
 
-        scheduleNextDrumEvent(velocity: velocity)
-    }
+        // Build schedule similar to JS: wholeNoteTime in ms, rhythmic vs physical time
+        let wholeNoteMs = (60.0 / tempo) * 4.0 * 1000.0
+        var rhythmicTime: Double = 0
+        var physicalTime: Double = 0
+        var schedule: [(timestampMs: Double, notes: [Int])] = []
 
-    private func scheduleNextDrumEvent(velocity: UInt8) {
-        guard let patternEvents = currentPatternEvents, !patternEvents.isEmpty else {
-            stop()
-            return
+        for event in pattern {
+            // reuse JS-like _getDelayInMs semantics via metronome parsing
+            var delayMs: Double = 0
+            // event.delay in DrumPatternEvent is String
+            if let parsedFraction = MusicTheory.parseDelay(delayString: event.delay) {
+                delayMs = parsedFraction * wholeNoteMs
+                rhythmicTime += delayMs
+                physicalTime = rhythmicTime
+            } else if let ms = Double(event.delay) {
+                delayMs = ms
+                physicalTime += delayMs
+            } else {
+                print("[DrumPlayer] Could not parse delay for drum event: \(event.delay)")
+                continue
+            }
+            schedule.append((timestampMs: physicalTime, notes: event.notes))
         }
 
-        let event = patternEvents[currentPatternIndex]
-
-        // Calculate the actual delay in seconds
-        guard let eventDelay = metronome.duration(forNoteValue: .string(event.delay)) else {
-            print("[DrumPlayer] Could not parse delay for drum event: \(event.delay)")
-            stop()
-            return
-        }
-
-        // Schedule note-on for each note in the event
-        for note in event.notes {
-            midiManager.sendNoteOn(note: UInt8(note), velocity: velocity, channel: 9) // Drum channel is typically 9 (10 in MIDI spec)
-            // Send note-off almost immediately for percussion
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                self?.midiManager.sendNoteOff(note: UInt8(note), velocity: 0, channel: 9)
+        // compute loopDuration from timeSignature
+        var loopDurationMs: Double = wholeNoteMs
+        do {
+            let parts = timeSignature.split(separator: "/").map { String($0) }
+            if parts.count == 2, let beats = Double(parts[0]), let beatType = Double(parts[1]), beatType != 0 {
+                loopDurationMs = (beats / beatType) * wholeNoteMs
+            } else {
+                loopDurationMs = wholeNoteMs
             }
         }
 
-        // Schedule the next event
-        currentPatternIndex = (currentPatternIndex + 1) % patternEvents.count
-        currentPatternTimer = Timer.scheduledTimer(withTimeInterval: eventDelay, repeats: false) { [weak self] _ in
-            self?.scheduleNextDrumEvent(velocity: velocity)
+        // store schedule and timing
+        self.currentPatternEvents = pattern
+        self.currentPatternIndex = 0
+
+        // Save computed schedule and start looping
+        let startTime = Date().timeIntervalSince1970 * 1000.0 // ms epoch
+        var scheduleIndex = 0
+        var loopCount = 0
+
+        // local copy of schedule and durations
+        let scheduleCopy = schedule
+        let noteDurationSeconds = Double(durationMs) / 1000.0
+
+        print("[DrumPlayer] Starting loop pattern=\(patternName) tempo=\(tempo) timeSig=\(timeSignature) loopDurationMs=\(loopDurationMs)")
+        print("[DrumPlayer] Computed drum schedule (ms):")
+        for (i, s) in scheduleCopy.enumerated() {
+            print("  [\(i)] t=\(s.timestampMs)ms notes=\(s.notes)")
+        }
+
+        // schedule function
+        func tick() {
+            guard !scheduleCopy.isEmpty else { return }
+            let ev = scheduleCopy[scheduleIndex]
+            // send notes
+            for note in ev.notes {
+                midiManager.sendNoteOn(note: UInt8(note), velocity: velocity, channel: 9)
+                // send note off after specified duration (short percussive)
+                DispatchQueue.main.asyncAfter(deadline: .now() + noteDurationSeconds) { [weak self] in
+                    self?.midiManager.sendNoteOff(note: UInt8(note), velocity: 0, channel: 9)
+                }
+            }
+
+            scheduleIndex += 1
+            if scheduleIndex >= scheduleCopy.count {
+                scheduleIndex = 0
+                loopCount += 1
+            }
+
+            // compute next event absolute time
+            let next = scheduleCopy[scheduleIndex]
+            let nextEventAbsoluteMs = startTime + (Double(loopCount) * loopDurationMs) + next.timestampMs
+            let delayMs = max(0, nextEventAbsoluteMs - (Date().timeIntervalSince1970 * 1000.0))
+
+            currentPatternTimer = Timer.scheduledTimer(withTimeInterval: delayMs / 1000.0, repeats: false) { _ in
+                tick()
+            }
+        }
+
+        // schedule first tick
+        if let first = schedule.first {
+            let firstDelayMs = first.timestampMs
+            currentPatternTimer = Timer.scheduledTimer(withTimeInterval: firstDelayMs / 1000.0, repeats: false) { _ in
+                tick()
+            }
         }
     }
 
