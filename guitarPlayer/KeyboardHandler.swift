@@ -221,11 +221,16 @@ class KeyboardHandler: ObservableObject {
                 print("patternLibrary contains '\(patternName)'? \(exists)")
 
                 if let fp = finalPattern {
+                    // Convert duration (ms in JS CONFIG) to seconds for Swift timers
+                    let durationSeconds = TimeInterval(appData.CONFIG.duration) / 1000.0
+                    let keyString = appData.KEY_CYCLE[currentKeyIndex]
                     guitarPlayer.playChord(
                         chordName: chord,
                         pattern: fp,
+                        tempo: currentTempo,
+                        key: keyString,
                         velocity: UInt8(appData.CONFIG.velocity),
-                        duration: TimeInterval(appData.CONFIG.duration)
+                        duration: durationSeconds
                     )
                 } else {
                     print("\nError: Could not resolve pattern data for \(chord).")
