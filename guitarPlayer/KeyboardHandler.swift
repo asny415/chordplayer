@@ -90,12 +90,7 @@ class KeyboardHandler: ObservableObject {
         let isOptionDown = event.modifierFlags.contains(.option)
         let isCommandDown = event.modifierFlags.contains(.command)
 
-        // Handle Ctrl+C for cleanup (exit)
-        if isControlDown && characters == "c" {
-            print("Ctrl+C pressed. Exiting.")
-            NSApplication.shared.terminate(nil)
-            return
-        }
+    // Ctrl+C exit handling removed to avoid accidental termination on keyboard use
 
         // Get the key name for comparison with JS logic
         let keyName: String

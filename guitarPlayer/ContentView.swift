@@ -13,7 +13,7 @@ struct ContentView: View {
 
     
 
-    @FocusState private var isFocused: Bool // Add this for focus management
+    // Removed root FocusState to avoid macOS focus ring around the whole view
 
     let keys = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     let timeSignatureNumerators = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -139,6 +139,7 @@ struct ContentView: View {
                 .focusable(false)
             }
             .padding(.horizontal)
+            .focusable(false)
 
             Divider()
 
@@ -154,9 +155,11 @@ struct ContentView: View {
                                 Text(chordLabel(chordName))
                                     .font(.headline)
                                     .padding()
-                                    .frame(maxWidth: .infinity, minHeight: 60)
-                                    .background(keyboardHandler.activeChordName == chordName ? Color.accentColor.opacity(0.6) : Color.blue.opacity(0.2))
-                                    .cornerRadius(8)
+                                    .frame(minWidth: 100, minHeight: 60)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(keyboardHandler.activeChordName == chordName ? Color.accentColor.opacity(0.6) : Color.gray.opacity(0.12))
+                                    )
                                     .scaleEffect(keyboardHandler.activeChordName == chordName ? 1.03 : 1.0)
                                     .shadow(color: keyboardHandler.activeChordName == chordName ? Color.black.opacity(0.2) : Color.clear, radius: 4, x: 0, y: 2)
                             }
@@ -170,14 +173,14 @@ struct ContentView: View {
                 }
                 .padding()
             }
+        .focusable(false)
         }
-        .padding()
+    .background(Color(nsColor: NSColor.windowBackgroundColor))
+    .focusable(false)
+    .padding()
         .frame(minWidth: 800, minHeight: 600) // Set a reasonable window size
-        .focusable()
-        .focused($isFocused) // Apply focus state
         .onAppear {
             DispatchQueue.main.async {
-                isFocused = true // Request focus when view appears
                 // Initialize KeyboardHandler here with actual environment objects
                 // Ensure KeyboardHandler state matches persisted AppData on first appearance
                 keyboardHandler.currentTimeSignature = appData.performanceConfig.timeSignature
