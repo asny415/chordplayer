@@ -7,12 +7,8 @@ struct ContentView: View {
     @EnvironmentObject var metronome: Metronome
     @EnvironmentObject var guitarPlayer: GuitarPlayer
     @EnvironmentObject var drumPlayer: DrumPlayer
-
-    @State private var selectedTempo: Double
-    @State private var selectedTimeSignatureNumerator: Int
-    @State private var selectedTimeSignatureDenominator: Int
-    @State private var selectedKeyIndex: Int = 0 // For now, just an index
-    @State private var isMetronomePlaying: Bool = false
+    @EnvironmentObject var keyboardHandler: KeyboardHandler
+    // Use KeyboardHandler as single source-of-truth for keyboard-driven state
     @State private var isDrumPlaying: Bool = false
 
     
@@ -24,9 +20,7 @@ struct ContentView: View {
     let timeSignatureDenominators = [2, 4, 8, 16]
 
     init() {
-        _selectedTempo = State(initialValue: 120.0)
-        _selectedTimeSignatureNumerator = State(initialValue: 4)
-        _selectedTimeSignatureDenominator = State(initialValue: 4)
+    // No local initial state; KeyboardHandler initializes runtime values
         // _keyboardHandler initialization removed from here
     }
 
@@ -46,51 +40,50 @@ struct ContentView: View {
 
                 Spacer()
 
-                // Tempo Control
+                // Tempo Control (bound to KeyboardHandler.currentTempo)
                 VStack {
-                    Text("Tempo: \(Int(selectedTempo)) BPM")
-                    Slider(value: $selectedTempo, in: 60...240, step: 5) {
+                    Text("Tempo: \(Int(keyboardHandler.currentTempo)) BPM")
+                    Slider(value: Binding(get: {
+                        keyboardHandler.currentTempo
+                    }, set: { new in
+                        keyboardHandler.currentTempo = new
+                        metronome.tempo = new
+                    }), in: 60...240, step: 5) {
                         Text("Tempo")
                     } minimumValueLabel: { Text("60") } maximumValueLabel: { Text("240") }
-                    .onChange(of: selectedTempo) { newValue in
-                        metronome.tempo = newValue
-                    }
                 }
                 .frame(width: 200)
 
                 Spacer()
 
-                // Time Signature Control
-                HStack {
-                    Picker("Numerator", selection: $selectedTimeSignatureNumerator) {
-                        ForEach(timeSignatureNumerators, id: \.self) { num in
-                            Text("\(num)").tag(num)
-                        }
+                // Time Signature Control - simplified to three choices
+                Picker("Time Signature", selection: Binding(get: {
+                    keyboardHandler.currentTimeSignature
+                }, set: { new in
+                    keyboardHandler.currentTimeSignature = new
+                    let parts = new.split(separator: "/").map(String.init)
+                    if parts.count == 2, let num = Int(parts[0]), let den = Int(parts[1]) {
+                        metronome.timeSignatureNumerator = num
+                        metronome.timeSignatureDenominator = den
                     }
-                    .pickerStyle(.menu)
-                    .frame(width: 60)
-                    .onChange(of: selectedTimeSignatureNumerator) { newValue in
-                        metronome.timeSignatureNumerator = newValue
-                    }
-
-                    Text("/")
-
-                    Picker("Denominator", selection: $selectedTimeSignatureDenominator) {
-                        ForEach(timeSignatureDenominators, id: \.self) { den in
-                            Text("\(den)").tag(den)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 60)
-                    .onChange(of: selectedTimeSignatureDenominator) { newValue in
-                        metronome.timeSignatureDenominator = newValue
+                })) {
+                    ForEach(appData.TIME_SIGNATURE_CYCLE, id: \.self) { ts in
+                        Text(ts).tag(ts)
                     }
                 }
+                .pickerStyle(.menu)
+                .frame(minWidth: 160)
 
                 Spacer()
 
-                // Key Control
-                Picker("Key", selection: $selectedKeyIndex) {
+                // Key Control (synchronized with KeyboardHandler.currentKeyIndex)
+                Picker("Key", selection: Binding(get: {
+                    keyboardHandler.currentKeyIndex
+                }, set: { new in
+                    keyboardHandler.currentKeyIndex = new
+                    // Optionally update appData performance config
+                    appData.performanceConfig.key = appData.KEY_CYCLE[new]
+                })) {
                     ForEach(0..<keys.count, id: \.self) { index in
                         Text(keys[index]).tag(index)
                     }
@@ -100,34 +93,32 @@ struct ContentView: View {
 
                 Spacer()
 
-                // Metronome Toggle
-                Button(action: {
-                    isMetronomePlaying.toggle()
-                    if isMetronomePlaying {
-                        metronome.start()
-                    } else {
-                        metronome.stop()
-                    }
-                }) {
-                    Label(isMetronomePlaying ? "Stop Metronome" : "Start Metronome", systemImage: isMetronomePlaying ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                // Quantization Picker
+                Picker("Quantize", selection: Binding(get: {
+                    keyboardHandler.quantizationMode
+                }, set: { new in
+                    keyboardHandler.quantizationMode = new
+                    appData.performanceConfig.quantize = new
+                })) {
+                    Text(QuantizationMode.none.rawValue).tag(QuantizationMode.none.rawValue)
+                    Text(QuantizationMode.measure.rawValue).tag(QuantizationMode.measure.rawValue)
+                    Text(QuantizationMode.halfMeasure.rawValue).tag(QuantizationMode.halfMeasure.rawValue)
                 }
-                .buttonStyle(.bordered)
+                .pickerStyle(.menu)
+                .frame(minWidth: 140)
 
                 Spacer()
 
-                // Drum Machine Toggle
+                // Drum Machine Toggle (uses safe SF Symbols)
                 Button(action: {
-                    isDrumPlaying.toggle()
-                    if isDrumPlaying {
-                        // Pass current tempo and time signature from metronome to DrumPlayer
-                        let timeSig = "\(selectedTimeSignatureNumerator)/\(selectedTimeSignatureDenominator)"
-                        // Use JS drum defaults: velocity 100 and duration 200ms for note-off
-                        drumPlayer.playPattern(patternName: "ROCK_4_4_BASIC", tempo: selectedTempo, timeSignature: timeSig, velocity: 100, durationMs: 200)
-                    } else {
+                    if drumPlayer.isPlaying {
                         drumPlayer.stop()
+                    } else {
+                        let timeSig = keyboardHandler.currentTimeSignature
+                        drumPlayer.playPattern(patternName: "ROCK_4_4_BASIC", tempo: keyboardHandler.currentTempo, timeSignature: timeSig, velocity: 100, durationMs: 200)
                     }
                 }) {
-                    Label(isDrumPlaying ? "Stop Drums" : "Start Drums", systemImage: isDrumPlaying ? "beats.headphones.fill" : "beats.headphones")
+                    Label(drumPlayer.isPlaying ? "Stop Drums" : "Start Drums", systemImage: drumPlayer.isPlaying ? "stop.fill" : "play.fill")
                 }
                 .buttonStyle(.bordered)
             }
@@ -168,8 +159,16 @@ struct ContentView: View {
             DispatchQueue.main.async {
                 isFocused = true // Request focus when view appears
                 // Initialize KeyboardHandler here with actual environment objects
-                
-                
+                // Ensure KeyboardHandler state matches persisted AppData on first appearance
+                keyboardHandler.currentTimeSignature = appData.performanceConfig.timeSignature
+                keyboardHandler.currentTempo = appData.performanceConfig.tempo
+                // Sync metronome to appData values
+                let parts = appData.performanceConfig.timeSignature.split(separator: "/").map(String.init)
+                if parts.count == 2, let num = Int(parts[0]), let den = Int(parts[1]) {
+                    metronome.timeSignatureNumerator = num
+                    metronome.timeSignatureDenominator = den
+                }
+                metronome.tempo = appData.performanceConfig.tempo
             }
         }
     }
@@ -182,4 +181,5 @@ struct ContentView: View {
         .environmentObject(Metronome(midiManager: MidiManager())) // Pass a dummy MidiManager for preview
         .environmentObject(GuitarPlayer(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), appData: AppData())) // Dummy for preview
         .environmentObject(DrumPlayer(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), appData: AppData())) // Dummy for preview
+        .environmentObject(KeyboardHandler(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), guitarPlayer: GuitarPlayer(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), appData: AppData()), drumPlayer: DrumPlayer(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), appData: AppData()), appData: AppData()))
 }

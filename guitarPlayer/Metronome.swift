@@ -9,6 +9,7 @@ class Metronome: ObservableObject {
     private var timer: Timer?
     private var beatCount: Int = 0
     private var midiManager: MidiManager // Dependency injection
+    @Published var isPlaying: Bool = false
 
     init(midiManager: MidiManager) {
         self.midiManager = midiManager
@@ -16,6 +17,9 @@ class Metronome: ObservableObject {
 
     func start() {
         stop() // Ensure any existing timer is stopped
+        DispatchQueue.main.async {
+            self.isPlaying = true
+        }
         let interval = 60.0 / tempo // Seconds per beat
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             guard let self = self else { return }
@@ -35,6 +39,9 @@ class Metronome: ObservableObject {
         timer?.invalidate()
         timer = nil
         beatCount = 0
+        DispatchQueue.main.async {
+            self.isPlaying = false
+        }
     }
 
     // Function to calculate duration of a musical note (e.g., "1/4" note) in seconds

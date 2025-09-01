@@ -12,9 +12,9 @@ class DrumPlayer: ObservableObject {
     // Work item for the next scheduled tick so we can cancel it on stop()
     private var scheduledWorkItem: DispatchWorkItem?
         // Clock info for quantization
-        private(set) var isPlaying: Bool = false
-        private(set) var startTimeMs: Double = 0
-        private(set) var loopDurationMs: Double = 0
+            @Published private(set) var isPlaying: Bool = false
+            private(set) var startTimeMs: Double = 0
+            private(set) var loopDurationMs: Double = 0
 
         var clockInfo: (isPlaying: Bool, startTime: Double, loopDuration: Double) {
             return (isPlaying: isPlaying, startTime: startTimeMs, loopDuration: loopDurationMs)
@@ -76,8 +76,9 @@ class DrumPlayer: ObservableObject {
         // Save computed schedule and start looping
         // Use monotonic uptime (ms) as baseline to avoid mixing wall-clock vs uptime
         let startUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
-        // update clock info for quantization
-        self.isPlaying = true
+    // update clock info for quantization (set synchronously)
+    self.isPlaying = true
+    print("[DrumPlayer] started pattern=\(patternName) tempo=\(tempo) timeSignature=\(timeSignature) loopDuration=\(loopDurationMs)ms")
         self.startTimeMs = startUptimeMs
         self.loopDurationMs = loopDurationMs
         var scheduleIndex = 0
@@ -144,6 +145,7 @@ class DrumPlayer: ObservableObject {
     func stop() {
     // Prevent further scheduled ticks from running
     self.isPlaying = false
+    print("[DrumPlayer] stopped")
     // Cancel any scheduled work item
     scheduledWorkItem?.cancel()
     scheduledWorkItem = nil

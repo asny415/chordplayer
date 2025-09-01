@@ -102,14 +102,14 @@ struct PatternGroup: Codable {
 }
 
 struct PerformanceConfig: Codable {
-    let tempo: Double
-    let timeSignature: String
-    let key: String
-    let quantize: String? // Optional because it can be undefined in JS
-    let quantizeToggleKey: String? // Optional
-    let drumSettings: DrumSettings? // Optional
-    let keyMap: [String: String] // Assuming keyMap is always present, can be empty
-    let patternGroups: [PatternGroup]
+    var tempo: Double
+    var timeSignature: String
+    var key: String
+    var quantize: String? // Optional because it can be undefined in JS
+    var quantizeToggleKey: String? // Optional
+    var drumSettings: DrumSettings? // Optional
+    var keyMap: [String: String] // Assuming keyMap is always present, can be empty
+    var patternGroups: [PatternGroup]
 }
 
 struct AppConfig: Codable {

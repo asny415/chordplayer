@@ -7,7 +7,7 @@ class AppData: ObservableObject {
     @Published var patternLibrary: PatternLibrary?
 
     // Configuration properties
-    let performanceConfig: PerformanceConfig
+    var performanceConfig: PerformanceConfig
     let KEY_CYCLE: [String]
     let TIME_SIGNATURE_CYCLE: [String]
     let DRUM_PATTERN_MAP: [String: String]

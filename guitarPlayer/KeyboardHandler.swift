@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import Combine
 
 class KeyboardHandler: ObservableObject {
     private var midiManager: MidiManager
@@ -17,6 +18,7 @@ class KeyboardHandler: ObservableObject {
     @Published var currentGroupIndex: Int
 
     private var eventMonitor: Any?
+    private var cancellables = Set<AnyCancellable>()
 
     init(midiManager: MidiManager, metronome: Metronome, guitarPlayer: GuitarPlayer, drumPlayer: DrumPlayer, appData: AppData) {
         self.midiManager = midiManager
@@ -40,12 +42,40 @@ class KeyboardHandler: ObservableObject {
         }
 
         setupEventMonitor()
+        // Observe programmatic changes to timeSignature (e.g., from UI picker)
+        $currentTimeSignature
+            .sink { [weak self] new in
+                guard let self = self else { return }
+                // Update metronome and persist to appData when time signature changes
+                let parts = new.split(separator: "/").map(String.init)
+                if parts.count == 2, let num = Int(parts[0]), let den = Int(parts[1]) {
+                    DispatchQueue.main.async {
+                        self.metronome.timeSignatureNumerator = num
+                        self.metronome.timeSignatureDenominator = den
+                    }
+                }
+                self.appData.performanceConfig.timeSignature = new
+                print("[KeyboardHandler] timeSignature changed -> \(new)")
+            }
+            .store(in: &cancellables)
     }
 
     private func setupEventMonitor() {
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleKeyEvent(event: event)
-            return event // Pass the event on
+        // Ensure the monitor is installed on the main thread.
+        // Install synchronously when possible so the first key press is not missed during initialization.
+        let installer = {
+            self.eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                self.handleKeyEvent(event: event)
+                return event
+            }
+        }
+
+        if Thread.isMainThread {
+            installer()
+        } else {
+            DispatchQueue.main.sync {
+                installer()
+            }
         }
     }
 
@@ -86,6 +116,12 @@ class KeyboardHandler: ObservableObject {
         default: keyName = characters.lowercased()
         }
 
+        // Debug: log certain keys to help diagnose missing shortcut handling
+        let debugKeys: Set<String> = ["t", "p", "o", "q", "=", "-", "up", "down"]
+        if debugKeys.contains(keyName) {
+            print("[KeyboardHandler] key event: keyName='\(keyName)' chars='\(characters)' modifiers='\(event.modifierFlags)' keyCode=\(event.keyCode)")
+        }
+
         // Quantization Toggle
         let quantizeToggleKey = appData.performanceConfig.quantizeToggleKey ?? "q"
         if keyName == quantizeToggleKey {
@@ -95,19 +131,25 @@ class KeyboardHandler: ObservableObject {
             } else {
                 quantizationMode = modes.first ?? "MEASURE"
             }
-            print("\nQuantization mode: \(quantizationMode)")
+            // propagate quantization setting to appData so UI and other subsystems stay in sync
+            appData.performanceConfig.quantize = quantizationMode
             return
         }
 
         // Drum controls
         if let drumSettings = appData.performanceConfig.drumSettings {
-                if keyName == drumSettings.playKey {
-                let drumPatternToPlay = appData.DRUM_PATTERN_MAP[currentTimeSignature] ?? drumSettings.defaultPattern
-                // Match JS DrumPlayer defaults: velocity 100, duration 200ms
-                drumPlayer.playPattern(patternName: drumPatternToPlay, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: 100, durationMs: 200)
+            if keyName == drumSettings.playKey {
+                // Toggle behavior: start if stopped, stop if playing
+                if drumPlayer.isPlaying {
+                    drumPlayer.stop()
+                } else {
+                    let drumPatternToPlay = appData.DRUM_PATTERN_MAP[currentTimeSignature] ?? drumSettings.defaultPattern
+                    // Match JS DrumPlayer defaults: velocity 100, duration 200ms
+                    drumPlayer.playPattern(patternName: drumPatternToPlay, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: 100, durationMs: 200)
+                }
                 return
             }
-                if keyName == drumSettings.stopKey {
+            if keyName == drumSettings.stopKey {
                 drumPlayer.stop() // Corrected method call
                 return
             }
@@ -116,24 +158,26 @@ class KeyboardHandler: ObservableObject {
         // Key transposition
         if keyName == "equal" || keyName == "plus" || characters == "=" {
             currentKeyIndex = (currentKeyIndex + 1) % appData.KEY_CYCLE.count
-            print("\nKey transposed UP to: \(appData.KEY_CYCLE[currentKeyIndex])")
+            // propagate key change to global config so UI reflects it
+            appData.performanceConfig.key = appData.KEY_CYCLE[currentKeyIndex]
             return
         }
         if keyName == "minus" || keyName == "underscore" || characters == "-" {
             currentKeyIndex = (currentKeyIndex - 1 + appData.KEY_CYCLE.count) % appData.KEY_CYCLE.count
-            print("\nKey transposed DOWN to: \(appData.KEY_CYCLE[currentKeyIndex])")
+            appData.performanceConfig.key = appData.KEY_CYCLE[currentKeyIndex]
             return
         }
 
         // Tempo controls
         if keyName == "up" {
             currentTempo = min(240, currentTempo + 5)
-            print("\nTempo increased to: \(currentTempo) BPM")
+            // update metronome so tempo UI and timing are immediately effective
+            metronome.tempo = currentTempo
             return
         }
         if keyName == "down" {
             currentTempo = max(60, currentTempo - 5)
-            print("\nTempo decreased to: \(currentTempo) BPM")
+            metronome.tempo = currentTempo
             return
         }
 
@@ -144,7 +188,16 @@ class KeyboardHandler: ObservableObject {
             } else {
                 currentTimeSignature = appData.TIME_SIGNATURE_CYCLE.first ?? "4/4"
             }
-            print("\nTime Signature changed to: \(currentTimeSignature)")
+        // propagate to metronome (split N/D) and persist to appData
+            let parts = currentTimeSignature.split(separator: "/").map(String.init)
+            if parts.count == 2 {
+                if let num = Int(parts[0]), let den = Int(parts[1]) {
+                    metronome.timeSignatureNumerator = num
+                    metronome.timeSignatureDenominator = den
+                    // persist the timeSignature to appData so UI and saved config stay in sync
+                    appData.performanceConfig.timeSignature = currentTimeSignature
+                }
+            }
             return
         }
 
