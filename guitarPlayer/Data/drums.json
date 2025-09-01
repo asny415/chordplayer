@@ -1,0 +1,25 @@
+{
+  "ROCK_4_4_BASIC": [
+    { "delay": "0", "notes": [36, 42] },
+    { "delay": "1/8", "notes": [42] },
+    { "delay": "1/8", "notes": [38, 42] },
+    { "delay": "1/8", "notes": [42] },
+    { "delay": "1/8", "notes": [36, 42] },
+    { "delay": "1/8", "notes": [42] },
+    { "delay": "1/8", "notes": [38, 42] },
+    { "delay": "1/8", "notes": [42] }
+  ],
+  "WALTZ_3_4_BASIC": [
+    { "delay": "0", "notes": [36, 42] },
+    { "delay": "1/4", "notes": [38, 42] },
+    { "delay": "1/4", "notes": [42] }
+  ],
+  "SHUFFLE_6_8_BASIC": [
+    { "delay": "0", "notes": [36, 42] },
+    { "delay": "1/8", "notes": [42] },
+    { "delay": "1/8", "notes": [38, 42] },
+    { "delay": "1/8", "notes": [42] },
+    { "delay": "1/8", "notes": [36, 42] },
+    { "delay": "1/8", "notes": [42] }
+  ]
+}

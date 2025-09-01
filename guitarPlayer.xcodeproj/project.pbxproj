@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		945556E52E648C0F00D53154 /* CoreMIDI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 945556E42E648C0F00D53154 /* CoreMIDI.framework */; };
+		945556E72E648C1600D53154 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 945556E62E648C1600D53154 /* AudioToolbox.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		945556B82E6487FD00D53154 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +32,8 @@
 		945556A62E6487F900D53154 /* guitarPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = guitarPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		945556B72E6487FD00D53154 /* guitarPlayerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = guitarPlayerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		945556C12E6487FD00D53154 /* guitarPlayerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = guitarPlayerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		945556E42E648C0F00D53154 /* CoreMIDI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMIDI.framework; path = System/Library/Frameworks/CoreMIDI.framework; sourceTree = SDKROOT; };
+		945556E62E648C1600D53154 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -52,6 +59,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				945556E72E648C1600D53154 /* AudioToolbox.framework in Frameworks */,
+				945556E52E648C0F00D53154 /* CoreMIDI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +87,7 @@
 				945556A82E6487F900D53154 /* guitarPlayer */,
 				945556BA2E6487FD00D53154 /* guitarPlayerTests */,
 				945556C42E6487FD00D53154 /* guitarPlayerUITests */,
+				945556E32E648C0F00D53154 /* Frameworks */,
 				945556A72E6487F900D53154 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +100,15 @@
 				945556C12E6487FD00D53154 /* guitarPlayerUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		945556E32E648C0F00D53154 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				945556E62E648C1600D53154 /* AudioToolbox.framework */,
+				945556E42E648C0F00D53154 /* CoreMIDI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

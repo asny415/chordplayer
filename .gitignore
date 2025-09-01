@@ -1,0 +1,65 @@
+## Xcode
+# Build products
+build/
+DerivedData/
+
+# Xcode workspace user data
+*.xcworkspace/xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+
+# Xcode schemes and state
+*.xccheckout
+*.xcscmblueprint
+*.xcdebugger
+
+# App and archive products
+*.app
+*.ipa
+*.xcarchive
+*.dSYM
+
+# Swift compiled artifacts
+*.swiftmodule
+*.swiftdoc
+*.hmap
+*.gch
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# IDEs and system files
+.DS_Store
+.idea/
+.vscode/
+
+# Temporary files
+*.orig
+*.swp
+
+# Local macOS app build outputs in this folder
+build/
+Release/
+*.app.dSYM/
+
+# Patterns for project-specific build folders
+guitarPlayer.build/
+EagerLinkingTBDs/
