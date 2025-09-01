@@ -165,7 +165,7 @@ struct ContentView: View {
                             }
                             .buttonStyle(.plain)
                             .focusable(false)
-                            .animation(.easeOut(duration: 0.18))
+                            .animation(.easeOut(duration: 0.18), value: keyboardHandler.activeChordName)
                         }
                     } else {
                         Text("Loading chords...")

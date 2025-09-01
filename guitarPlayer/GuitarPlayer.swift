@@ -36,14 +36,10 @@ class GuitarPlayer: ObservableObject {
         // Build MIDI notes for each string (muted strings get -1)
         var midiNotes: [Int] = Array(repeating: -1, count: 6)
         for (i, fretVal) in chordDefinition.enumerated() {
-            if let fv = fretVal as? StringOrInt {
-                switch fv {
-                case .int(let fretInt):
-                    midiNotes[i] = MusicTheory.standardGuitarTuning[i] + fretInt + transposeOffset + capo
-                case .string(_):
-                    midiNotes[i] = -1
-                }
-            } else {
+            switch fretVal {
+            case .int(let fretInt):
+                midiNotes[i] = MusicTheory.standardGuitarTuning[i] + fretInt + transposeOffset + capo
+            case .string(_):
                 midiNotes[i] = -1
             }
         }
@@ -139,7 +135,7 @@ class GuitarPlayer: ObservableObject {
         midiManager.sendPanic()
         // Cancel all pending note-off work items
         // Cancel any scheduled events via MidiManager
-        for (note, work) in playingNotes {
+        for (_, work) in playingNotes {
             work.cancel()
         }
         playingNotes.removeAll()

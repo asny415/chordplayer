@@ -68,20 +68,20 @@ struct MusicTheory {
         }
 
         // 6th string root check
-        if let fretVal = frets[0] as? StringOrInt, case .int(_) = fretVal {
+        if case .int(_) = frets[0] {
             return "6th_string"
         }
         // 5th string root check
-        if let fretVal = frets[1] as? StringOrInt, case .int(_) = fretVal {
+        if case .int(_) = frets[1] {
             return "5th_string"
         }
         // 4th string root check
-        if let fretVal = frets[2] as? StringOrInt, case .int(_) = fretVal {
+        if case .int(_) = frets[2] {
             return "4th_string"
         }
 
         for i in (0...5).reversed() { // Iterate from high E to low E
-            if let fretVal = frets[i] as? StringOrInt, case .int(_) = fretVal {
+            if case .int(_) = frets[i] {
                 return "\(6 - i)th_string"
             }
         }

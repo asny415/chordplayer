@@ -86,7 +86,6 @@ class DrumPlayer: ObservableObject {
 
         // local copy of schedule and durations
         let scheduleCopy = schedule
-        let noteDurationSeconds = Double(durationMs) / 1000.0
 
     // minimal logging: remove detailed schedule prints to reduce runtime overhead
 
