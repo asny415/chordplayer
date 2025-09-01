@@ -2,12 +2,17 @@ import Foundation
 import Combine
 
 class GuitarPlayer: ObservableObject {
+    // Enable timing diagnostics
+    // Shared scheduling queue to avoid creating many global queue tasks
+    private let schedulingQueue = DispatchQueue(label: "com.guitastudio.guitarScheduler", qos: .userInitiated)
     private var midiManager: MidiManager
     private var metronome: Metronome
     private var appData: AppData // To access chord and pattern libraries
 
-    // Keep track of currently playing notes to send note-off
-    private var playingNotes: [UInt8: Timer] = [:]
+    // Keep track of currently playing notes to send note-off (use DispatchWorkItem for cancellable off tasks)
+    private var playingNotes: [UInt8: DispatchWorkItem] = [:]
+    // Track which MIDI note is sounding for each string (nil if muted)
+    private var stringNotes: [Int?] = Array(repeating: nil, count: 6)
 
     init(midiManager: MidiManager, metronome: Metronome, appData: AppData) {
         self.midiManager = midiManager
@@ -20,7 +25,7 @@ class GuitarPlayer: ObservableObject {
             print("[GuitarPlayer] Chord definition for \(chordName) not found.")
             return
         }
-        print("[GuitarPlayer] Playing chord: \(chordName) key:\(key) tempo:\(tempo) duration:\(duration)s")
+    // minimal logging: do not print per-play to avoid runtime overhead
 
         // Compute transpose offset based on key (C=0, C#=1, ...)
         var transposeOffset = 0
@@ -43,10 +48,8 @@ class GuitarPlayer: ObservableObject {
             }
         }
 
-        print("[GuitarPlayer] Generated MIDI Notes (muted=-1): \(midiNotes)")
-
-        // Stop any currently playing notes from previous chord
-        panic()
+    // Stop any currently playing notes from previous chord
+    panic()
 
         // JS uses wholeNoteTime = (60/tempo)*4*1000 ms; we'll compute seconds
         let wholeNoteSeconds = (60.0 / tempo) * 4.0
@@ -82,13 +85,8 @@ class GuitarPlayer: ObservableObject {
             schedule.append((timestamp: physicalTime, notes: event.notes))
         }
 
-        // Log the computed schedule for diagnosis
-        print("[GuitarPlayer] Computed schedule (seconds from now):")
-        for (i, item) in schedule.enumerated() {
-            print("  [\(i)] t=\(String(format: "%.3f", item.timestamp))s notes=\(item.notes)")
-        }
-
-        // Now schedule each event relative to now
+    // Now schedule each event relative to now using dedicated schedulingQueue
+    let schedulingStartUptime = ProcessInfo.processInfo.systemUptime
         for item in schedule {
             let eventTimestamp = item.timestamp
             for stringNumber in item.notes {
@@ -100,32 +98,49 @@ class GuitarPlayer: ObservableObject {
                 let noteToPlay = midiNotes[actualStringIndex]
                 if noteToPlay == -1 { continue }
 
-                DispatchQueue.main.asyncAfter(deadline: .now() + eventTimestamp) {
-                    let nowOffset = Date().timeIntervalSince1970
-                    print("[GuitarPlayer] Note ON: \(noteToPlay) vel:\(velocity) scheduledOffset:\(String(format: "%.3f", eventTimestamp)) nowEpoch:\(String(format: "%.3f", nowOffset))")
-                    self.midiManager.sendNoteOn(note: UInt8(noteToPlay), velocity: velocity)
-
-                    let noteOffTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
-                        print("[GuitarPlayer] Note OFF: \(noteToPlay) duration:\(duration)")
-                        self?.midiManager.sendNoteOff(note: UInt8(noteToPlay), velocity: 0)
-                        self?.playingNotes.removeValue(forKey: UInt8(noteToPlay))
+                schedulingQueue.asyncAfter(deadline: .now() + eventTimestamp) { [weak self] in
+                    guard let self = self else { return }
+                    // Send note on
+                    // Before playing, if this string had a previous sounding note, cancel its off and send noteOff
+                    if let prev = self.stringNotes[actualStringIndex], prev >= 0 {
+                        let prevNote = UInt8(prev)
+                        if let prevWork = self.playingNotes[prevNote] {
+                            prevWork.cancel()
+                            self.playingNotes.removeValue(forKey: prevNote)
+                        }
+                        self.midiManager.sendNoteOff(note: prevNote, velocity: 0)
                     }
-                    self.playingNotes[UInt8(noteToPlay)] = noteOffTimer
+
+                    // Send note on
+                    // no per-note debug prints to reduce runtime overhead
+                    self.midiManager.sendNoteOn(note: UInt8(noteToPlay), velocity: velocity)
+                    // record that this string now holds this note
+                    self.stringNotes[actualStringIndex] = noteToPlay
+
+                    // Schedule note off using a cancellable DispatchWorkItem to avoid main-thread timers
+                    let work = DispatchWorkItem { [weak self] in
+                        guard let s = self else { return }
+                        s.midiManager.sendNoteOff(note: UInt8(noteToPlay), velocity: 0)
+                        s.playingNotes.removeValue(forKey: UInt8(noteToPlay))
+                        // Clear stringNotes if it still points to this note
+                        if s.stringNotes[actualStringIndex] == noteToPlay {
+                            s.stringNotes[actualStringIndex] = nil
+                        }
+                    }
+                    // Store the work item so it can be cancelled by panic()
+                    self.playingNotes[UInt8(noteToPlay)] = work
+                    self.schedulingQueue.asyncAfter(deadline: .now() + duration, execute: work)
                 }
             }
         }
     }
 
     func panic() {
-        print("[GuitarPlayer] panic() called. Sending MIDI panic and clearing \(playingNotes.count) pending notes.")
-        if !playingNotes.isEmpty {
-            print("[GuitarPlayer] pending notes to clear: \(Array(playingNotes.keys))")
-        }
+    // minimize logging in panic to reduce overhead
         midiManager.sendPanic()
-        // Invalidate all pending note-off timers
-        for (note, timer) in playingNotes {
-            timer.invalidate()
-            print("[GuitarPlayer] Invalidated timer for note \(note)")
+        // Cancel all pending note-off work items
+        for (note, work) in playingNotes {
+            work.cancel()
         }
         playingNotes.removeAll()
     }

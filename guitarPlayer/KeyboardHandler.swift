@@ -242,7 +242,9 @@ class KeyboardHandler: ObservableObject {
                                 division = 2.0
                             }
                             let quantizationInterval = clock.loopDuration / division
-                            let loopElapsedTime = fmod((Date().timeIntervalSince1970 * 1000.0) - clock.startTime, clock.loopDuration)
+                            // Use monotonic uptime (ms) so both drum and guitar use same baseline
+                            let nowUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
+                            let loopElapsedTime = fmod(nowUptimeMs - clock.startTime, clock.loopDuration)
                             let currentInterval = floor(loopElapsedTime / quantizationInterval)
                             let timeToNextIntervalStart = ((currentInterval + 1.0) * quantizationInterval) - loopElapsedTime
                             let QUANTIZATION_WINDOW_PERCENT = 0.5
@@ -251,7 +253,8 @@ class KeyboardHandler: ObservableObject {
                             if timeToNextIntervalStart <= quantizationWindow {
                                 // schedule delayed play to align with next interval start
                                 let delaySeconds = timeToNextIntervalStart / 1000.0
-                                DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
+                                // Use guitar's scheduling queue to avoid creating new global queue tasks
+                                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
                                     guard let self = self else { return }
                                     self.guitarPlayer.playChord(chordName: chord, pattern: fp, tempo: self.currentTempo, key: keyString, velocity: UInt8(self.appData.CONFIG.velocity), duration: durationSeconds)
                                 }

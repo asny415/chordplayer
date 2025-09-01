@@ -9,6 +9,8 @@ class DrumPlayer: ObservableObject {
     private var currentPatternTimer: Timer?
     private var currentPatternEvents: [DrumPatternEvent]?
     private var currentPatternIndex: Int = 0
+    // Work item for the next scheduled tick so we can cancel it on stop()
+    private var scheduledWorkItem: DispatchWorkItem?
         // Clock info for quantization
         private(set) var isPlaying: Bool = false
         private(set) var startTimeMs: Double = 0
@@ -72,10 +74,11 @@ class DrumPlayer: ObservableObject {
         self.currentPatternIndex = 0
 
         // Save computed schedule and start looping
-        let startTime = Date().timeIntervalSince1970 * 1000.0 // ms epoch
+        // Use monotonic uptime (ms) as baseline to avoid mixing wall-clock vs uptime
+        let startUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
         // update clock info for quantization
         self.isPlaying = true
-        self.startTimeMs = startTime
+        self.startTimeMs = startUptimeMs
         self.loopDurationMs = loopDurationMs
         var scheduleIndex = 0
         var loopCount = 0
@@ -84,23 +87,32 @@ class DrumPlayer: ObservableObject {
         let scheduleCopy = schedule
         let noteDurationSeconds = Double(durationMs) / 1000.0
 
-        print("[DrumPlayer] Starting loop pattern=\(patternName) tempo=\(tempo) timeSig=\(timeSignature) loopDurationMs=\(loopDurationMs)")
-        print("[DrumPlayer] Computed drum schedule (ms):")
-        for (i, s) in scheduleCopy.enumerated() {
-            print("  [\(i)] t=\(s.timestampMs)ms notes=\(s.notes)")
+    // minimal logging: remove detailed schedule prints to reduce runtime overhead
+
+        // schedule function using background queue and monotonic uptime
+        let schedulingQueue = DispatchQueue(label: "com.guitastudio.drumScheduler", qos: .userInitiated)
+
+        func scheduleNextTick(afterDelayMs delayMs: Double) {
+            // cancel any previously scheduled work item
+            scheduledWorkItem?.cancel()
+            let work = DispatchWorkItem { tick() }
+            scheduledWorkItem = work
+            schedulingQueue.asyncAfter(deadline: .now() + (delayMs / 1000.0), execute: work)
         }
 
-        // schedule function
         func tick() {
+            // stop if flag cleared
+            if !self.isPlaying { return }
             guard !scheduleCopy.isEmpty else { return }
             let ev = scheduleCopy[scheduleIndex]
-            // send notes
+            // compute scheduled uptime for event (no debug prints)
             for note in ev.notes {
                 midiManager.sendNoteOn(note: UInt8(note), velocity: velocity, channel: 9)
-                // send note off after specified duration (short percussive)
-                DispatchQueue.main.asyncAfter(deadline: .now() + noteDurationSeconds) { [weak self] in
+                // send note off after specified duration using scheduling queue
+                let offWork = DispatchWorkItem { [weak self] in
                     self?.midiManager.sendNoteOff(note: UInt8(note), velocity: 0, channel: 9)
                 }
+                schedulingQueue.asyncAfter(deadline: .now() + noteDurationSeconds, execute: offWork)
             }
 
             scheduleIndex += 1
@@ -109,34 +121,39 @@ class DrumPlayer: ObservableObject {
                 loopCount += 1
             }
 
-            // compute next event absolute time
+            // compute next event absolute uptime
             let next = scheduleCopy[scheduleIndex]
-            let nextEventAbsoluteMs = startTime + (Double(loopCount) * loopDurationMs) + next.timestampMs
-            let delayMs = max(0, nextEventAbsoluteMs - (Date().timeIntervalSince1970 * 1000.0))
+            let nextEventAbsoluteUptimeMs = startUptimeMs + (Double(loopCount) * loopDurationMs) + next.timestampMs
+            let nowUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
+            let delayMs = max(0, nextEventAbsoluteUptimeMs - nowUptimeMs)
 
-            currentPatternTimer = Timer.scheduledTimer(withTimeInterval: delayMs / 1000.0, repeats: false) { _ in
-                tick()
-            }
+            // schedule next tick
+            scheduleNextTick(afterDelayMs: delayMs)
         }
 
         // schedule first tick
         if let first = schedule.first {
-            let firstDelayMs = first.timestampMs
-            currentPatternTimer = Timer.scheduledTimer(withTimeInterval: firstDelayMs / 1000.0, repeats: false) { _ in
-                tick()
-            }
+            let firstEventAbsoluteUptimeMs = startUptimeMs + first.timestampMs
+            let nowUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
+            let firstDelayMs = max(0, firstEventAbsoluteUptimeMs - nowUptimeMs)
+            scheduleNextTick(afterDelayMs: firstDelayMs)
         }
     }
 
     func stop() {
-        currentPatternTimer?.invalidate()
-        currentPatternTimer = nil
-        currentPatternEvents = nil
-        currentPatternIndex = 0
-        // reset clock info
-        self.isPlaying = false
-        self.startTimeMs = 0
-        self.loopDurationMs = 0
-        midiManager.sendPanic() // Send panic to ensure all drum notes are off
+    // Prevent further scheduled ticks from running
+    self.isPlaying = false
+    // Cancel any scheduled work item
+    scheduledWorkItem?.cancel()
+    scheduledWorkItem = nil
+
+    currentPatternTimer?.invalidate()
+    currentPatternTimer = nil
+    currentPatternEvents = nil
+    currentPatternIndex = 0
+    // reset clock info
+    self.startTimeMs = 0
+    self.loopDurationMs = 0
+    midiManager.sendPanic() // Send panic to ensure all drum notes are off
     }
 }
