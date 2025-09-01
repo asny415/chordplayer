@@ -24,6 +24,8 @@ class MidiManager: ObservableObject {
 
     private var client = MIDIClientRef()
     private var outputPort = MIDIPortRef()
+    // Serial high-priority queue for MIDI sends
+    private let midiQueue = DispatchQueue(label: "com.guitastudio.midi", qos: .userInteractive)
 
     init() {
         setupMidi()
@@ -98,63 +100,64 @@ class MidiManager: ObservableObject {
 
     func sendNoteOn(note: UInt8, velocity: UInt8, channel: UInt8 = 0) {
         guard let destination = selectedOutput else {
-            print("No MIDI output selected.")
+            // No output - nothing to do
             return
         }
 
-        var packet = MIDIPacket()
-        packet.timeStamp = 0 // Send immediately
-        packet.length = 3
-        packet.data.0 = 0x90 | channel // Note On message (0x90) + channel
-        packet.data.1 = note          // MIDI Note Number
-        packet.data.2 = velocity      // Velocity
+        // Enqueue MIDI send on a dedicated high-priority serial queue to
+        // minimize scheduling jitter and contention.
+        midiQueue.async { [weak self] in
+            // slight increase of thread priority within allowed range
+            Thread.current.threadPriority = 1.0
+            var packet = MIDIPacket()
+            packet.timeStamp = 0 // Send immediately
+            packet.length = 3
+            packet.data.0 = 0x90 | channel // Note On message (0x90) + channel
+            packet.data.1 = note          // MIDI Note Number
+            packet.data.2 = velocity      // Velocity
 
-        var packetList = MIDIPacketList(numPackets: 1, packet: packet)
-        let status = MIDISend(outputPort, destination, &packetList)
-        if status != noErr {
-            print("Error sending MIDI note on: \(status)")
+            var packetList = MIDIPacketList(numPackets: 1, packet: packet)
+            let status = MIDISend(self?.outputPort ?? MIDIPortRef(), destination, &packetList)
+            if status != noErr {
+                // avoid frequent logging in hot path
+            }
         }
     }
 
     func sendNoteOff(note: UInt8, velocity: UInt8, channel: UInt8 = 0) {
-        guard let destination = selectedOutput else {
-            print("No MIDI output selected.")
-            return
-        }
-
-        var packet = MIDIPacket()
-        packet.timeStamp = 0 // Send immediately
-        packet.length = 3
-        packet.data.0 = 0x80 | channel // Note Off message (0x80) + channel
-        packet.data.1 = note          // MIDI Note Number
-        packet.data.2 = velocity      // Velocity
-
-        var packetList = MIDIPacketList(numPackets: 1, packet: packet)
-        let status = MIDISend(outputPort, destination, &packetList)
-        if status != noErr {
-            print("Error sending MIDI note off: \(status)")
+        guard let destination = selectedOutput else { return }
+        midiQueue.async { [weak self] in
+            Thread.current.threadPriority = 1.0
+            var packet = MIDIPacket()
+            packet.timeStamp = 0
+            packet.length = 3
+            packet.data.0 = 0x80 | channel
+            packet.data.1 = note
+            packet.data.2 = velocity
+            var packetList = MIDIPacketList(numPackets: 1, packet: packet)
+            let status = MIDISend(self?.outputPort ?? MIDIPortRef(), destination, &packetList)
+            if status != noErr {
+                // avoid frequent logging
+            }
         }
     }
 
     func sendPanic() {
-        guard let destination = selectedOutput else {
-            print("No MIDI output selected for panic.")
-            return
-        }
-
-        // Send All Notes Off (Controller 123) for all channels
-        for channel: UInt8 in 0..<16 {
-            var packet = MIDIPacket()
-            packet.timeStamp = 0
-            packet.length = 3
-            packet.data.0 = 0xB0 | channel // Control Change message (0xB0) + channel
-            packet.data.1 = 123           // All Notes Off controller
-            packet.data.2 = 0             // Value (ignored for All Notes Off)
-
-            var packetList = MIDIPacketList(numPackets: 1, packet: packet)
-            let status = MIDISend(outputPort, destination, &packetList)
-            if status != noErr {
-                print("Error sending MIDI panic: \(status)")
+        guard let destination = selectedOutput else { return }
+        midiQueue.async { [weak self] in
+            Thread.current.threadPriority = 1.0
+            for channel: UInt8 in 0..<16 {
+                var packet = MIDIPacket()
+                packet.timeStamp = 0
+                packet.length = 3
+                packet.data.0 = 0xB0 | channel
+                packet.data.1 = 123
+                packet.data.2 = 0
+                var packetList = MIDIPacketList(numPackets: 1, packet: packet)
+                let status = MIDISend(self?.outputPort ?? MIDIPortRef(), destination, &packetList)
+                if status != noErr {
+                    // ignore logging in the hot path
+                }
             }
         }
     }

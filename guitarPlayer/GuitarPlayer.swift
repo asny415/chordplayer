@@ -99,6 +99,8 @@ class GuitarPlayer: ObservableObject {
                 if noteToPlay == -1 { continue }
 
                 schedulingQueue.asyncAfter(deadline: .now() + eventTimestamp) { [weak self] in
+                    // boost thread priority for MIDI timing work
+                    Thread.current.threadPriority = 1.0
                     guard let self = self else { return }
                     // Send note on
                     // Before playing, if this string had a previous sounding note, cancel its off and send noteOff

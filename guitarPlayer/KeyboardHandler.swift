@@ -254,7 +254,8 @@ class KeyboardHandler: ObservableObject {
                                 // schedule delayed play to align with next interval start
                                 let delaySeconds = timeToNextIntervalStart / 1000.0
                                 // Use guitar's scheduling queue to avoid creating new global queue tasks
-                                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
+                                DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
+                                    Thread.current.threadPriority = 1.0
                                     guard let self = self else { return }
                                     self.guitarPlayer.playChord(chordName: chord, pattern: fp, tempo: self.currentTempo, key: keyString, velocity: UInt8(self.appData.CONFIG.velocity), duration: durationSeconds)
                                 }

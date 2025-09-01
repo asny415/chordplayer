@@ -105,7 +105,8 @@ class DrumPlayer: ObservableObject {
             if !self.isPlaying { return }
             guard !scheduleCopy.isEmpty else { return }
             let ev = scheduleCopy[scheduleIndex]
-            // compute scheduled uptime for event (no debug prints)
+            // boost thread priority for timing-critical work
+            Thread.current.threadPriority = 1.0
             for note in ev.notes {
                 midiManager.sendNoteOn(note: UInt8(note), velocity: velocity, channel: 9)
                 // send note off after specified duration using scheduling queue
