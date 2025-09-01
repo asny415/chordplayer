@@ -93,6 +93,21 @@ struct ContentView: View {
 
                 Spacer()
 
+                // Current Pattern Group (e.g., Intro / Verse / Chorus)
+                Picker("Group", selection: Binding(get: {
+                    keyboardHandler.currentGroupIndex
+                }, set: { new in
+                    keyboardHandler.currentGroupIndex = new
+                })) {
+                    ForEach(0..<appData.performanceConfig.patternGroups.count, id: \.self) { idx in
+                        Text(appData.performanceConfig.patternGroups[idx].name).tag(idx)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(minWidth: 160)
+
+                Spacer()
+
                 // Quantization Picker
                 Picker("Quantize", selection: Binding(get: {
                     keyboardHandler.quantizationMode
@@ -132,8 +147,8 @@ struct ContentView: View {
                     if let chordLibrary = appData.chordLibrary {
                         ForEach(chordLibrary.keys.sorted(), id: \.self) { chordName in
                             Button(action: {
-                                // For now, use a default pattern. Will add pattern selection later.
-                                guitarPlayer.playChord(chordName: chordName, pattern: appData.patternLibrary?["STRUM_FAST_4_4_1_4"] ?? []) // Updated call
+                                // Route button press through KeyboardHandler so group/pattern resolution is consistent with keyboard
+                                keyboardHandler.playChordButton(chordName: chordName)
                             }) {
                                 Text(chordName.replacingOccurrences(of: "_", with: " "))
                                     .font(.headline)

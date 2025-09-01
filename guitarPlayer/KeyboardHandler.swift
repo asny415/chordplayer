@@ -330,6 +330,90 @@ class KeyboardHandler: ObservableObject {
             NSEvent.removeMonitor(monitor)
         }
     }
+
+    // Public helper so UI can request playing a chord using the same resolution logic
+    func playChordButton(chordName: String) {
+        // Use same resolution logic as keyboard-driven chord playing
+        let currentGroup = appData.performanceConfig.patternGroups[currentGroupIndex]
+
+        var resolvedPatternName: String? = nil
+
+        // Check explicit chord mapping in group. If key exists and value is non-nil, use it.
+        if let valueOptional = currentGroup.patterns[chordName] {
+            if let value = valueOptional {
+                resolvedPatternName = value
+            } else {
+                // explicit null -> treat as absent
+            }
+        }
+
+        // If still not resolved, check group's __default__
+        if resolvedPatternName == nil {
+            if let defaultOptional = currentGroup.patterns["__default__"] {
+                if let defaultValue = defaultOptional {
+                    resolvedPatternName = defaultValue
+                }
+            }
+        }
+
+        // Fallback to DEFAULT_PATTERNS
+        if resolvedPatternName == nil {
+            let chordType = MusicTheory.getChordType(chordName: chordName)
+            let section = MusicTheory.getSectionName(groupIndex: currentGroupIndex)
+            let rootString = MusicTheory.getChordRootString(chordName: chordName, chordLibrary: appData.chordLibrary)
+
+            let defaultPatternName = appData.DEFAULT_PATTERNS[chordType]?[currentTimeSignature]?[section]?[rootString]
+            if let dpn = defaultPatternName {
+                resolvedPatternName = dpn
+            } else {
+                print("[KeyboardHandler] playChordButton: no pattern for chord=\(chordName) groupIndex=\(currentGroupIndex) timeSig=\(currentTimeSignature)")
+                return
+            }
+        }
+
+        if let patternName = resolvedPatternName {
+            if let finalPattern = appData.patternLibrary?[patternName] {
+                let durationSeconds = TimeInterval(appData.CONFIG.duration) / 1000.0
+                let keyString = appData.KEY_CYCLE[currentKeyIndex]
+                let quantMode = quantizationMode
+
+                if quantMode == QuantizationMode.none.rawValue {
+                    guitarPlayer.playChord(chordName: chordName, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
+                } else {
+                    let clock = drumPlayer.clockInfo
+                    if !clock.isPlaying || clock.loopDuration <= 0 {
+                        guitarPlayer.playChord(chordName: chordName, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
+                    } else {
+                        var division = 1.0
+                        if quantMode == QuantizationMode.halfMeasure.rawValue {
+                            division = 2.0
+                        }
+                        let quantizationInterval = clock.loopDuration / division
+                        let nowUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
+                        let loopElapsedTime = fmod(nowUptimeMs - clock.startTime, clock.loopDuration)
+                        let currentInterval = floor(loopElapsedTime / quantizationInterval)
+                        let timeToNextIntervalStart = ((currentInterval + 1.0) * quantizationInterval) - loopElapsedTime
+                        let QUANTIZATION_WINDOW_PERCENT = 0.5
+                        let quantizationWindow = quantizationInterval * QUANTIZATION_WINDOW_PERCENT
+
+                        if timeToNextIntervalStart <= quantizationWindow {
+                            let delaySeconds = timeToNextIntervalStart / 1000.0
+                            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
+                                Thread.current.threadPriority = 1.0
+                                guard let self = self else { return }
+                                self.guitarPlayer.playChord(chordName: chordName, pattern: finalPattern, tempo: self.currentTempo, key: keyString, velocity: UInt8(self.appData.CONFIG.velocity), duration: durationSeconds)
+                            }
+                        } else {
+                            // Outside window: ignore
+                            return
+                        }
+                    }
+                }
+            } else {
+                print("[KeyboardHandler] playChordButton: pattern \(patternName) missing in patternLibrary")
+            }
+        }
+    }
 }
 
 // Helper struct to simulate the 'key' object from Node.js readline
