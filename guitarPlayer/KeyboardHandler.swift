@@ -222,17 +222,45 @@ class KeyboardHandler: ObservableObject {
                 print("patternLibrary contains '\(patternName)'? \(exists)")
 
                 if let fp = finalPattern {
-                    // Convert duration (ms in JS CONFIG) to seconds for Swift timers
+                    // Prepare play parameters
                     let durationSeconds = TimeInterval(appData.CONFIG.duration) / 1000.0
                     let keyString = appData.KEY_CYCLE[currentKeyIndex]
-                    guitarPlayer.playChord(
-                        chordName: chord,
-                        pattern: fp,
-                        tempo: currentTempo,
-                        key: keyString,
-                        velocity: UInt8(appData.CONFIG.velocity),
-                        duration: durationSeconds
-                    )
+                    let quantMode = quantizationMode
+
+                    // Quantization handling similar to JS scheduleChord
+                    if quantMode == QuantizationMode.none.rawValue {
+                        guitarPlayer.playChord(chordName: chord, pattern: fp, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
+                    } else {
+                        // Need drum clock info
+                        let clock = drumPlayer.clockInfo
+                        if !clock.isPlaying || clock.loopDuration <= 0 {
+                            // No clock available: play immediately
+                            guitarPlayer.playChord(chordName: chord, pattern: fp, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
+                        } else {
+                            var division = 1.0
+                            if quantMode == QuantizationMode.halfMeasure.rawValue {
+                                division = 2.0
+                            }
+                            let quantizationInterval = clock.loopDuration / division
+                            let loopElapsedTime = fmod((Date().timeIntervalSince1970 * 1000.0) - clock.startTime, clock.loopDuration)
+                            let currentInterval = floor(loopElapsedTime / quantizationInterval)
+                            let timeToNextIntervalStart = ((currentInterval + 1.0) * quantizationInterval) - loopElapsedTime
+                            let QUANTIZATION_WINDOW_PERCENT = 0.5
+                            let quantizationWindow = quantizationInterval * QUANTIZATION_WINDOW_PERCENT
+
+                            if timeToNextIntervalStart <= quantizationWindow {
+                                // schedule delayed play to align with next interval start
+                                let delaySeconds = timeToNextIntervalStart / 1000.0
+                                DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
+                                    guard let self = self else { return }
+                                    self.guitarPlayer.playChord(chordName: chord, pattern: fp, tempo: self.currentTempo, key: keyString, velocity: UInt8(self.appData.CONFIG.velocity), duration: durationSeconds)
+                                }
+                            } else {
+                                // Outside window: ignore press (same as JS)
+                                return
+                            }
+                        }
+                    }
                 } else {
                     print("\nError: Could not resolve pattern data for \(chord).")
                 }

@@ -9,6 +9,14 @@ class DrumPlayer: ObservableObject {
     private var currentPatternTimer: Timer?
     private var currentPatternEvents: [DrumPatternEvent]?
     private var currentPatternIndex: Int = 0
+        // Clock info for quantization
+        private(set) var isPlaying: Bool = false
+        private(set) var startTimeMs: Double = 0
+        private(set) var loopDurationMs: Double = 0
+
+        var clockInfo: (isPlaying: Bool, startTime: Double, loopDuration: Double) {
+            return (isPlaying: isPlaying, startTime: startTimeMs, loopDuration: loopDurationMs)
+        }
 
     init(midiManager: MidiManager, metronome: Metronome, appData: AppData) {
         self.midiManager = midiManager
@@ -65,6 +73,10 @@ class DrumPlayer: ObservableObject {
 
         // Save computed schedule and start looping
         let startTime = Date().timeIntervalSince1970 * 1000.0 // ms epoch
+        // update clock info for quantization
+        self.isPlaying = true
+        self.startTimeMs = startTime
+        self.loopDurationMs = loopDurationMs
         var scheduleIndex = 0
         var loopCount = 0
 
@@ -121,6 +133,10 @@ class DrumPlayer: ObservableObject {
         currentPatternTimer = nil
         currentPatternEvents = nil
         currentPatternIndex = 0
+        // reset clock info
+        self.isPlaying = false
+        self.startTimeMs = 0
+        self.loopDurationMs = 0
         midiManager.sendPanic() // Send panic to ensure all drum notes are off
     }
 }
