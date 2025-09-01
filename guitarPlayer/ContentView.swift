@@ -121,7 +121,8 @@ struct ContentView: View {
                     if isDrumPlaying {
                         // Pass current tempo and time signature from metronome to DrumPlayer
                         let timeSig = "\(selectedTimeSignatureNumerator)/\(selectedTimeSignatureDenominator)"
-                        drumPlayer.playPattern(patternName: "ROCK_4_4_BASIC", tempo: selectedTempo, timeSignature: timeSig, velocity: UInt8(appData.CONFIG.velocity), durationMs: appData.CONFIG.duration)
+                        // Use JS drum defaults: velocity 100 and duration 200ms for note-off
+                        drumPlayer.playPattern(patternName: "ROCK_4_4_BASIC", tempo: selectedTempo, timeSignature: timeSig, velocity: 100, durationMs: 200)
                     } else {
                         drumPlayer.stop()
                     }

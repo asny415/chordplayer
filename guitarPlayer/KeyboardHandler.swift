@@ -103,8 +103,8 @@ class KeyboardHandler: ObservableObject {
         if let drumSettings = appData.performanceConfig.drumSettings {
                 if keyName == drumSettings.playKey {
                 let drumPatternToPlay = appData.DRUM_PATTERN_MAP[currentTimeSignature] ?? drumSettings.defaultPattern
-                // Pass current tempo, timeSignature, velocity and duration (ms) so DrumPlayer schedules correctly for non-4/4 signatures
-                drumPlayer.playPattern(patternName: drumPatternToPlay, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: UInt8(appData.CONFIG.velocity), durationMs: appData.CONFIG.duration)
+                // Match JS DrumPlayer defaults: velocity 100, duration 200ms
+                drumPlayer.playPattern(patternName: drumPatternToPlay, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: 100, durationMs: 200)
                 return
             }
                 if keyName == drumSettings.stopKey {
