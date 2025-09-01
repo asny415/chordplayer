@@ -101,3 +101,13 @@ struct MusicTheory {
         return numerator / denominator
     }
 }
+
+
+// Helper struct to simulate the 'key' object from Node.js readline
+struct JSKey {
+    let name: String
+    let meta: Bool // Corresponds to Command key on macOS
+    let alt: Bool // Corresponds to Option key on macOS
+    let ctrl: Bool // Corresponds to Control key on macOS
+    let shift: Bool
+}

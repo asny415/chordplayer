@@ -16,9 +16,11 @@ class KeyboardHandler: ObservableObject {
     @Published var currentTimeSignature: String
     @Published var quantizationMode: String
     @Published var currentGroupIndex: Int
+    @Published var activeChordName: String?
 
     private var eventMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
+    private var activeChordClearWorkItem: DispatchWorkItem?
 
     init(midiManager: MidiManager, metronome: Metronome, guitarPlayer: GuitarPlayer, drumPlayer: DrumPlayer, appData: AppData) {
         self.midiManager = midiManager
@@ -66,7 +68,8 @@ class KeyboardHandler: ObservableObject {
         let installer = {
             self.eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 self.handleKeyEvent(event: event)
-                return event
+                // Consume the event so the system doesn't emit the default beep
+                return nil
             }
         }
 
@@ -222,6 +225,8 @@ class KeyboardHandler: ObservableObject {
         }
 
         if let chord = chordName {
+            // Visual feedback: mark chord active when triggered via keyboard
+            markChordActive(chord)
             let currentGroup = appData.performanceConfig.patternGroups[currentGroupIndex]
             // Resolve pattern name for this chord/group.
             // Note: `currentGroup.patterns` has type [String: String?], so accessing
@@ -333,6 +338,8 @@ class KeyboardHandler: ObservableObject {
 
     // Public helper so UI can request playing a chord using the same resolution logic
     func playChordButton(chordName: String) {
+    // Visual feedback: mark chord active when triggered via UI
+    markChordActive(chordName)
         // Use same resolution logic as keyboard-driven chord playing
         let currentGroup = appData.performanceConfig.patternGroups[currentGroupIndex]
 
@@ -379,6 +386,7 @@ class KeyboardHandler: ObservableObject {
 
                 if quantMode == QuantizationMode.none.rawValue {
                     guitarPlayer.playChord(chordName: chordName, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
+                    return
                 } else {
                     let clock = drumPlayer.clockInfo
                     if !clock.isPlaying || clock.loopDuration <= 0 {
@@ -403,6 +411,7 @@ class KeyboardHandler: ObservableObject {
                                 guard let self = self else { return }
                                 self.guitarPlayer.playChord(chordName: chordName, pattern: finalPattern, tempo: self.currentTempo, key: keyString, velocity: UInt8(self.appData.CONFIG.velocity), duration: durationSeconds)
                             }
+                                return
                         } else {
                             // Outside window: ignore
                             return
@@ -414,13 +423,21 @@ class KeyboardHandler: ObservableObject {
             }
         }
     }
+    
+    private func markChordActive(_ chord: String) {
+        DispatchQueue.main.async {
+            self.activeChordName = chord
+            self.activeChordClearWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                DispatchQueue.main.async {
+                    self?.activeChordName = nil
+                }
+            }
+            self.activeChordClearWorkItem = work
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.25, execute: work)
+        }
+    }
+
 }
 
-// Helper struct to simulate the 'key' object from Node.js readline
-struct JSKey {
-    let name: String
-    let meta: Bool // Corresponds to Command key on macOS
-    let alt: Bool // Corresponds to Option key on macOS
-    let ctrl: Bool // Corresponds to Control key on macOS
-    let shift: Bool
-}
+// JSKey is defined in MusicTheory.swift

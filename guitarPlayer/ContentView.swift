@@ -136,6 +136,7 @@ struct ContentView: View {
                     Label(drumPlayer.isPlaying ? "Stop Drums" : "Start Drums", systemImage: drumPlayer.isPlaying ? "stop.fill" : "play.fill")
                 }
                 .buttonStyle(.bordered)
+                .focusable(false)
             }
             .padding(.horizontal)
 
@@ -150,14 +151,18 @@ struct ContentView: View {
                                 // Route button press through KeyboardHandler so group/pattern resolution is consistent with keyboard
                                 keyboardHandler.playChordButton(chordName: chordName)
                             }) {
-                                Text(chordName.replacingOccurrences(of: "_", with: " "))
+                                Text(chordLabel(chordName))
                                     .font(.headline)
                                     .padding()
                                     .frame(maxWidth: .infinity, minHeight: 60)
-                                    .background(Color.blue.opacity(0.2))
+                                    .background(keyboardHandler.activeChordName == chordName ? Color.accentColor.opacity(0.6) : Color.blue.opacity(0.2))
                                     .cornerRadius(8)
+                                    .scaleEffect(keyboardHandler.activeChordName == chordName ? 1.03 : 1.0)
+                                    .shadow(color: keyboardHandler.activeChordName == chordName ? Color.black.opacity(0.2) : Color.clear, radius: 4, x: 0, y: 2)
                             }
                             .buttonStyle(.plain)
+                            .focusable(false)
+                            .animation(.easeOut(duration: 0.18))
                         }
                     } else {
                         Text("Loading chords...")
@@ -186,6 +191,22 @@ struct ContentView: View {
                 metronome.tempo = appData.performanceConfig.tempo
             }
         }
+    }
+
+    // Format chord name for display: show Major chords as simple letters (C, C#, etc.)
+    private func chordLabel(_ chordName: String) -> String {
+        // If exact suffix _Major, display root only
+        if chordName.hasSuffix("_Major") {
+            var root = chordName.replacingOccurrences(of: "_Major", with: "")
+            // Convert _Sharp -> # and remove remaining underscores
+            root = root.replacingOccurrences(of: "_Sharp", with: "#")
+            root = root.replacingOccurrences(of: "_", with: "")
+            return root
+        }
+        // Otherwise, show readable name, convert _Sharp to # for compactness
+        var label = chordName.replacingOccurrences(of: "_Sharp", with: "#")
+        label = label.replacingOccurrences(of: "_", with: " ")
+        return label
     }
 }
 
