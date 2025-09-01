@@ -2,6 +2,23 @@
 import Foundation
 
 struct MusicTheory {
+    // A map from Chord Name to its default shortcut display string.
+    // Used by the UI to show users what key to press.
+    // Modifiers: ⇧ (Shift), ⌃ (Control), ⌥ (Option/Alt), ⌘ (Command)
+    static let defaultChordToShortcutMap: [String: String] = {
+        var map: [String: String] = [:]
+        let baseNotes = ["A", "B", "C", "D", "E", "F", "G"]
+        for note in baseNotes {
+            let key = note.lowercased()
+            map["\(note)_Major"] = key.uppercased()
+            map["\(note)_Minor"] = "⇧+\(key.uppercased())"
+            map["\(note)7"] = "⌃+\(key.uppercased())"
+            map["\(note)_Major7"] = "⌘+\(key.uppercased())"
+            map["\(note)_Minor7"] = "⌥+\(key.uppercased())"
+        }
+        return map
+    }()
+
     // Standard guitar tuning in MIDI notes (E2, A2, D3, G3, B3, E4)
     // MIDI note numbers: C0 = 12, C1 = 24, C2 = 36, C3 = 48, C4 = 60, C5 = 72
     // E2 = 40, A2 = 45, D3 = 50, G3 = 55, B3 = 59, E4 = 64

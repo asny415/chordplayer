@@ -42,6 +42,7 @@ struct StyledPicker<T: Hashable>: View {
 struct ChordButtonView: View {
     let chordName: String
     let isSelected: Bool
+    let shortcut: String?
     let action: () -> Void
     
     private var displayName: (String, String) {
@@ -65,21 +66,36 @@ struct ChordButtonView: View {
     
     var body: some View {
         Button(action: action) {
-            VStack {
-                Text(displayName.0)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(isSelected ? .white : .primary)
-                    .minimumScaleFactor(0.5) // Allow font to shrink
-                    .lineLimit(1)
-                
-                if !displayName.1.isEmpty {
-                    Text(displayName.1)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+            ZStack(alignment: .topTrailing) {
+                // Main content
+                VStack {
+                    Text(displayName.0)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundColor(isSelected ? .white : .primary)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    
+                    if !displayName.1.isEmpty {
+                        Text(displayName.1)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                    }
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 5)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // Shortcut key overlay
+                if let shortcut = shortcut {
+                    Text(shortcut.uppercased())
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(5)
+                        .background(Color.black.opacity(0.25))
+                        .clipShape(Circle())
+                        .padding(4)
                 }
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 5)
             .frame(minWidth: 100, minHeight: 80)
             .background(
                 RoundedRectangle(cornerRadius: 12)
@@ -196,6 +212,7 @@ struct ContentView: View {
                         ChordButtonView(
                             chordName: chordName,
                             isSelected: keyboardHandler.activeChordName == chordName,
+                            shortcut: MusicTheory.defaultChordToShortcutMap[chordName],
                             action: {
                                 keyboardHandler.playChordButton(chordName: chordName)
                             }
