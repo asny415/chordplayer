@@ -84,7 +84,7 @@ typealias PatternLibrary = [String: [MusicPatternEvent]]
 
 // MARK: - Configuration Models
 
-enum QuantizationMode: String, Codable {
+enum QuantizationMode: String, Codable, CaseIterable {
     case none = "NONE"
     case measure = "MEASURE"
     case halfMeasure = "HALF_MEASURE"
