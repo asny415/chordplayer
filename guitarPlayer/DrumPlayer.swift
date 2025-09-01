@@ -107,13 +107,13 @@ class DrumPlayer: ObservableObject {
             let ev = scheduleCopy[scheduleIndex]
             // boost thread priority for timing-critical work
             Thread.current.threadPriority = 1.0
+            // compute scheduled uptime for this event in ms
+            let scheduledOnUptimeMs = startUptimeMs + (Double(loopCount) * loopDurationMs) + ev.timestampMs
             for note in ev.notes {
-                midiManager.sendNoteOn(note: UInt8(note), velocity: velocity, channel: 9)
-                // send note off after specified duration using scheduling queue
-                let offWork = DispatchWorkItem { [weak self] in
-                    self?.midiManager.sendNoteOff(note: UInt8(note), velocity: 0, channel: 9)
-                }
-                schedulingQueue.asyncAfter(deadline: .now() + noteDurationSeconds, execute: offWork)
+                midiManager.sendNoteOnScheduled(note: UInt8(note), velocity: velocity, channel: 9, scheduledUptimeMs: scheduledOnUptimeMs)
+                // schedule note off at scheduledOnUptimeMs + durationMs
+                let scheduledOffUptimeMs = scheduledOnUptimeMs + (Double(durationMs))
+                midiManager.sendNoteOffScheduled(note: UInt8(note), velocity: 0, channel: 9, scheduledUptimeMs: scheduledOffUptimeMs)
             }
 
             scheduleIndex += 1
@@ -156,5 +156,6 @@ class DrumPlayer: ObservableObject {
     self.startTimeMs = 0
     self.loopDurationMs = 0
     midiManager.sendPanic() // Send panic to ensure all drum notes are off
+    midiManager.cancelAllPendingScheduledEvents()
     }
 }
