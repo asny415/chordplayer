@@ -5,7 +5,7 @@
     { "delay": "1/8", "notes": [38, 42] },
     { "delay": "1/8", "notes": [42] },
     { "delay": "1/8", "notes": [36, 42] },
-    { "delay": "1/8", "notes": [42] },
+    { "delay": "1/8", "notes": [36, 42] },
     { "delay": "1/8", "notes": [38, 42] },
     { "delay": "1/8", "notes": [42] }
   ],
