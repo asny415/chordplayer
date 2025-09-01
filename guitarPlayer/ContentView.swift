@@ -186,19 +186,22 @@ struct ContentView: View {
             .frame(width: 180)
             
             // Drum Machine Toggle
-            Button(action: {
-                if drumPlayer.isPlaying {
-                    drumPlayer.stop()
-                } else {
-                    drumPlayer.playPattern(patternName: "ROCK_4_4_BASIC", tempo: keyboardHandler.currentTempo, timeSignature: keyboardHandler.currentTimeSignature, velocity: 100, durationMs: 200)
+            VStack(spacing: 4) {
+                ControlStripLabel(title: "Drum Machine")
+                Button(action: {
+                    if drumPlayer.isPlaying {
+                        drumPlayer.stop()
+                    } else {
+                        drumPlayer.playPattern(patternName: "ROCK_4_4_BASIC", tempo: keyboardHandler.currentTempo, timeSignature: keyboardHandler.currentTimeSignature, velocity: 100, durationMs: 200)
+                    }
+                }) {
+                    Image(systemName: drumPlayer.isPlaying ? "stop.circle.fill" : "play.circle.fill")
+                        .font(.system(size: 36))
+                        .foregroundColor(drumPlayer.isPlaying ? .red : .green)
                 }
-            }) {
-                Image(systemName: drumPlayer.isPlaying ? "stop.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 36))
-                    .foregroundColor(drumPlayer.isPlaying ? .red : .green)
+                .buttonStyle(.plain)
+                .focusable(false)
             }
-            .buttonStyle(.plain)
-            .focusable(false)
         }
         .focusable(false)
     }
