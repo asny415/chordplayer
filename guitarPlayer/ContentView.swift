@@ -389,10 +389,16 @@ struct ContentView: View {
                                                 Spacer()
                                                 Image(systemName: "plus.circle.fill")
                                                     .font(.title2)
-                                                    .foregroundColor(.green)
+                                                    .foregroundColor(.accentColor)
                                             }
-                                            .padding(8)
-                                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.03)))
+                                            .padding(12)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10).fill(.regularMaterial)
+                                            )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            )
                                         }
                                         .buttonStyle(.plain)
                                     }
