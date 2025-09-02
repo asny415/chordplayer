@@ -114,6 +114,29 @@ struct ChordButtonView: View {
     }
 }
 
+// Simple debug helper: prints the global frame of the view it's attached to.
+struct FrameLogger: View {
+    let name: String
+    @State private var lastFrame: CGRect = .zero
+    var body: some View {
+        GeometryReader { geo in
+            Color.clear
+                .onAppear {
+                    let f = geo.frame(in: .global)
+                    print("[FrameLogger] \(name) onAppear frame=\(f)")
+                    lastFrame = f
+                }
+                .onReceive(Timer.publish(every: 0.75, on: .main, in: .common).autoconnect()) { _ in
+                    let f = geo.frame(in: .global)
+                    if f != lastFrame {
+                        lastFrame = f
+                        print("[FrameLogger] \(name) changed frame=\(f)")
+                    }
+                }
+        }
+    }
+}
+
 
 // MARK: - Main Content View
 
@@ -141,7 +164,7 @@ struct ContentView: View {
             // Main background color
             Color.black.opacity(0.9).ignoresSafeArea()
             
-            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 10) {
                 // MARK: - Top Control Bar
                 controlBar
                     .padding()
@@ -151,7 +174,7 @@ struct ContentView: View {
                 
                 // MARK: - Group Configuration Panel
                 groupConfigPanel
-            }
+                                .padding(.bottom, 12)
         }
         .preferredColorScheme(.dark)
         .frame(minWidth: 900, minHeight: 600) // Increased minWidth for more horizontal space
@@ -179,7 +202,8 @@ struct ContentView: View {
             .environmentObject(keyboardHandler)
         }
     }
-    
+}
+
     // MARK: - Control Bar View
     private var controlBar: some View {
         HStack(spacing: 16) {
@@ -239,6 +263,7 @@ struct ContentView: View {
             }
         }
         .focusable(false)
+        .background(FrameLogger(name: "controlBar"))
     }
     
     // MARK: - Group Configuration Panel
@@ -270,6 +295,7 @@ struct ContentView: View {
                     }
                     .padding(4)
                 }
+                .background(FrameLogger(name: "leftGroupList"))
             }
             .frame(minWidth: 220, maxWidth: 280)
             .padding()
@@ -280,6 +306,7 @@ struct ContentView: View {
 
             // Right: Selected group editor
             VStack(alignment: .leading, spacing: 12) {
+                // ensure the editor content doesn't get visually overlapped by the controlBar above
                 if appData.performanceConfig.patternGroups.indices.contains(keyboardHandler.currentGroupIndex) {
                     let bindingGroupIndex = keyboardHandler.currentGroupIndex
                     let group = appData.performanceConfig.patternGroups[bindingGroupIndex]
@@ -337,6 +364,7 @@ struct ContentView: View {
                                 .onChange(of: chordSearchFocused) { _old, focused in
                                     keyboardHandler.isTextInputActive = focused
                                 }
+                                .background(FrameLogger(name: "searchTextField"))
 
                             // Show limited results in a responsive grid so more chords are visible at once
                             ScrollView(.vertical, showsIndicators: true) {
@@ -370,8 +398,9 @@ struct ContentView: View {
                                     }
                                 }
                                 .padding(.top, 6)
-                                .frame(maxHeight: 220)
                             }
+                            .frame(maxHeight: 220)
+                            .background(FrameLogger(name: "searchResults"))
                         }
 
                         Divider()
@@ -409,7 +438,9 @@ struct ContentView: View {
                                     }
                                     .padding(.top, 6)
                                 }
+                                .padding(.top, 8)
                                 .frame(maxHeight: 300)
+                                .background(FrameLogger(name: "groupChords"))
                             } else {
                                 Text("No group selected")
                                     .foregroundColor(.secondary)
@@ -679,20 +710,22 @@ struct ContentView: View {
 }
 
 // MARK: - Preview
-#Preview {
-    // Creating a more robust preview environment
-    let midiManager = MidiManager()
-    let metronome = Metronome(midiManager: midiManager)
-    let appData = AppData()
-    let guitarPlayer = GuitarPlayer(midiManager: midiManager, metronome: metronome, appData: appData)
-    let drumPlayer = DrumPlayer(midiManager: midiManager, metronome: metronome, appData: appData)
-    let keyboardHandler = KeyboardHandler(midiManager: midiManager, metronome: metronome, guitarPlayer: guitarPlayer, drumPlayer: drumPlayer, appData: appData)
-    
-    ContentView()
-        .environmentObject(appData)
-        .environmentObject(midiManager)
-        .environmentObject(metronome)
-        .environmentObject(guitarPlayer)
-        .environmentObject(drumPlayer)
-        .environmentObject(keyboardHandler)
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        // Creating a more robust preview environment
+        let midiManager = MidiManager()
+        let metronome = Metronome(midiManager: midiManager)
+        let appData = AppData()
+        let guitarPlayer = GuitarPlayer(midiManager: midiManager, metronome: metronome, appData: appData)
+        let drumPlayer = DrumPlayer(midiManager: midiManager, metronome: metronome, appData: appData)
+        let keyboardHandler = KeyboardHandler(midiManager: midiManager, metronome: metronome, guitarPlayer: guitarPlayer, drumPlayer: drumPlayer, appData: appData)
+
+        return ContentView()
+            .environmentObject(appData)
+            .environmentObject(midiManager)
+            .environmentObject(metronome)
+            .environmentObject(guitarPlayer)
+            .environmentObject(drumPlayer)
+            .environmentObject(keyboardHandler)
+    }
 }
