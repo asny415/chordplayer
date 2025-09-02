@@ -320,13 +320,12 @@ struct GroupConfigPanelView: View {
                         // Initialization of runtimeGroupSettings should happen in response to user actions or in setup code.
                         HStack(spacing: 12) {
                             Picker("Fingering", selection: Binding(get: {
-                                appData.runtimeGroupSettings[bindingGroupIndex]?.fingeringId ?? ""
+                                appData.runtimeGroupSettings[bindingGroupIndex]?.fingeringId ?? appData.fingeringLibrary.first ?? ""
                             }, set: { new in
                                 var settings = appData.runtimeGroupSettings[bindingGroupIndex] ?? GroupRuntimeSettings()
-                                settings.fingeringId = new.isEmpty ? nil : new
+                                settings.fingeringId = new
                                 appData.runtimeGroupSettings[bindingGroupIndex] = settings
                             })) {
-                                Text("(none)").tag("")
                                 ForEach(appData.fingeringLibrary, id: \.self) { f in
                                     Text(f).tag(f)
                                 }
@@ -356,13 +355,12 @@ struct GroupConfigPanelView: View {
 
                         HStack(spacing: 12) {
                             Picker("Drum Pattern", selection: Binding(get: {
-                                appData.runtimeGroupSettings[bindingGroupIndex]?.drumPatternId ?? ""
+                                appData.runtimeGroupSettings[bindingGroupIndex]?.drumPatternId ?? appData.drumPatternLibrary?.keys.sorted().first ?? ""
                             }, set: { new in
                                 var settings = appData.runtimeGroupSettings[bindingGroupIndex] ?? GroupRuntimeSettings()
-                                settings.drumPatternId = new.isEmpty ? nil : new
+                                settings.drumPatternId = new
                                 appData.runtimeGroupSettings[bindingGroupIndex] = settings
                             })) {
-                                Text("(none)").tag("")
                                 if let drums = appData.drumPatternLibrary {
                                     ForEach(drums.keys.sorted(), id: \.self) { key in
                                         Text(key).tag(key)
@@ -408,6 +406,32 @@ struct GroupConfigPanelView: View {
             })
             .environmentObject(appData)
             .environmentObject(keyboardHandler)
+        }
+        .onChange(of: keyboardHandler.currentGroupIndex) { _, newIndex in
+            guard appData.performanceConfig.patternGroups.indices.contains(newIndex) else { return }
+
+            var settings = appData.runtimeGroupSettings[newIndex] ?? GroupRuntimeSettings()
+            var changed = false
+
+            // Ensure default fingering
+            if settings.fingeringId == nil || settings.fingeringId!.isEmpty {
+                if let defaultFingering = appData.fingeringLibrary.first {
+                    settings.fingeringId = defaultFingering
+                    changed = true
+                }
+            }
+
+            // Ensure default drum pattern
+            if settings.drumPatternId == nil || settings.drumPatternId!.isEmpty {
+                if let defaultDrum = appData.drumPatternLibrary?.keys.sorted().first {
+                    settings.drumPatternId = defaultDrum
+                    changed = true
+                }
+            }
+
+            if changed {
+                appData.runtimeGroupSettings[newIndex] = settings
+            }
         }
     }
 
