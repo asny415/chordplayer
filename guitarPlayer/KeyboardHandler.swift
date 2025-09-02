@@ -17,6 +17,8 @@ class KeyboardHandler: ObservableObject {
     @Published var quantizationMode: String
     @Published var currentGroupIndex: Int
     @Published var activeChordName: String?
+    // When true, global keyboard handler should ignore events (TextField is active)
+    @Published var isTextInputActive: Bool = false
 
     private var eventMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
@@ -67,6 +69,10 @@ class KeyboardHandler: ObservableObject {
         // Install synchronously when possible so the first key press is not missed during initialization.
         let installer = {
             self.eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                // If a text input is active, allow the event to propagate to the responder
+                if self.isTextInputActive {
+                    return event
+                }
                 self.handleKeyEvent(event: event)
                 // Consume the event so the system doesn't emit the default beep
                 return nil

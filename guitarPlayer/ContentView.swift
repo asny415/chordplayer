@@ -124,11 +124,12 @@ struct ContentView: View {
     @EnvironmentObject var guitarPlayer: GuitarPlayer
     @EnvironmentObject var drumPlayer: DrumPlayer
     @EnvironmentObject var keyboardHandler: KeyboardHandler
+    @FocusState private var groupNameFocused: Bool
     
     let keys = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     
     var body: some View {
-        ZStack {
+    ZStack {
             // Main background color
             Color.black.opacity(0.9).ignoresSafeArea()
             
@@ -140,13 +141,19 @@ struct ContentView: View {
                 
                 Divider()
                 
-                // MARK: - Chord Buttons
-                chordGrid
+                // MARK: - Group Configuration Panel
+                groupConfigPanel
             }
         }
         .preferredColorScheme(.dark)
         .frame(minWidth: 900, minHeight: 600) // Increased minWidth for more horizontal space
         .onAppear(perform: setupInitialState)
+        // Clicking on empty area should clear focus so global shortcuts work again
+        .contentShape(Rectangle())
+        .onTapGesture {
+            groupNameFocused = false
+            keyboardHandler.isTextInputActive = false
+        }
     }
     
     // MARK: - Control Bar View
@@ -210,30 +217,188 @@ struct ContentView: View {
         .focusable(false)
     }
     
-    // MARK: - Chord Grid View
-    private var chordGrid: some View {
-        ScrollView {
-            if let chordLibrary = appData.chordLibrary {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 20) {
-                    ForEach(chordLibrary.keys.sorted(), id: \.self) { chordName in
-                        ChordButtonView(
-                            chordName: chordName,
-                            isSelected: keyboardHandler.activeChordName == chordName,
-                            shortcut: MusicTheory.defaultChordToShortcutMap[chordName],
-                            action: {
-                                keyboardHandler.playChordButton(chordName: chordName)
+    // MARK: - Group Configuration Panel
+    private var groupConfigPanel: some View {
+        HStack(spacing: 12) {
+            // Left: Group list
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Groups")
+                        .font(.headline)
+                    Spacer()
+                    Button(action: addGroup) {
+                        Image(systemName: "plus")
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(appData.performanceConfig.patternGroups.enumerated()), id: \.offset) { index, group in
+                            GroupRow(group: group, isSelected: index == keyboardHandler.currentGroupIndex) {
+                                keyboardHandler.currentGroupIndex = index
+                            } onRename: { newName in
+                                appData.performanceConfig.patternGroups[index].name = newName
+                            } onDelete: {
+                                removeGroup(at: index)
                             }
-                        )
+                        }
+                    }
+                    .padding(4)
+                }
+            }
+            .frame(minWidth: 220, maxWidth: 280)
+            .padding()
+            .background(Color.gray.opacity(0.05))
+            .cornerRadius(8)
+
+            Divider()
+
+            // Right: Selected group editor
+            VStack(alignment: .leading, spacing: 12) {
+                if appData.performanceConfig.patternGroups.indices.contains(keyboardHandler.currentGroupIndex) {
+                    let bindingGroupIndex = keyboardHandler.currentGroupIndex
+                    let group = appData.performanceConfig.patternGroups[bindingGroupIndex]
+
+                    HStack {
+                        Text("Editing Group: \(group.name)")
+                            .font(.title2)
+                        Spacer()
+                    }
+
+                    // Group Name (was Default Pattern field)
+                    VStack(alignment: .leading) {
+                        Text("Group Name")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("Group name", text: Binding(get: {
+                            return appData.performanceConfig.patternGroups[bindingGroupIndex].name
+                        }, set: { new in
+                            appData.performanceConfig.patternGroups[bindingGroupIndex].name = new
+                        }), onEditingChanged: { editing in
+                            keyboardHandler.isTextInputActive = editing
+                        })
+                        .focused($groupNameFocused)
+                        .onChange(of: groupNameFocused) { _, focused in
+                            keyboardHandler.isTextInputActive = focused
+                        }
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .frame(maxWidth: 360)
+                    }
+
+                    // Simple chord list for this group (string keys in patterns map, excluding __default__)
+                    VStack(alignment: .leading) {
+                        HStack {
+                            Text("Chords in Group")
+                                .font(.headline)
+                            Spacer()
+                            Button(action: { addChordEntry(to: bindingGroupIndex) }) {
+                                Image(systemName: "plus")
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(Array(appData.performanceConfig.patternGroups[bindingGroupIndex].patterns.keys.filter { $0 != "__default__" }.sorted()), id: \.self) { chordKey in
+                                    HStack {
+                                        Text(chordKey)
+                                            .font(.body)
+                                        Spacer()
+                                        TextField("pattern name", text: Binding(get: {
+                                            if let optional = appData.performanceConfig.patternGroups[bindingGroupIndex].patterns[chordKey], let value = optional {
+                                                return value
+                                            }
+                                            return ""
+                                        }, set: { new in
+                                            appData.performanceConfig.patternGroups[bindingGroupIndex].patterns[chordKey] = new.isEmpty ? nil : new
+                                        }), onEditingChanged: { editing in
+                                            keyboardHandler.isTextInputActive = editing
+                                        })
+                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                        .frame(width: 240)
+                                        Button(action: {
+                                            appData.performanceConfig.patternGroups[bindingGroupIndex].patterns.removeValue(forKey: chordKey)
+                                        }) {
+                                            Image(systemName: "trash")
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 300)
+                    }
+                } else {
+                    Text("No group selected")
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding()
+        }
+        .padding()
+    }
+
+    // MARK: - Group Helpers
+    private func addGroup() {
+        let newName = "New Group \(appData.performanceConfig.patternGroups.count + 1)"
+        let newGroup = PatternGroup(name: newName, patterns: ["__default__": nil])
+        appData.performanceConfig.patternGroups.append(newGroup)
+        keyboardHandler.currentGroupIndex = appData.performanceConfig.patternGroups.count - 1
+    }
+
+    private func removeGroup(at index: Int) {
+        guard appData.performanceConfig.patternGroups.indices.contains(index) else { return }
+        appData.performanceConfig.patternGroups.remove(at: index)
+        keyboardHandler.currentGroupIndex = max(0, keyboardHandler.currentGroupIndex - 1)
+    }
+
+    private func addChordEntry(to groupIndex: Int) {
+        guard appData.performanceConfig.patternGroups.indices.contains(groupIndex) else { return }
+        // Add a placeholder chord key so user can edit it
+        var i = 1
+        var key = "NEW_CHORD_\(i)"
+        while appData.performanceConfig.patternGroups[groupIndex].patterns.keys.contains(key) {
+            i += 1
+            key = "NEW_CHORD_\(i)"
+        }
+        appData.performanceConfig.patternGroups[groupIndex].patterns[key] = nil
+    }
+
+    // MARK: - Small subviews
+    struct GroupRow: View {
+        var group: PatternGroup
+        var isSelected: Bool
+        var onSelect: () -> Void
+        var onRename: (String) -> Void
+        var onDelete: () -> Void
+
+        var body: some View {
+            HStack {
+                Button(action: onSelect) {
+                    HStack {
+                        Text(group.name)
+                            .foregroundColor(isSelected ? .white : .primary)
+                        if isSelected {
+                            Image(systemName: "star.fill")
+                                .foregroundColor(.yellow)
+                        }
                     }
                 }
-                .padding()
-            } else {
-                Text("Loading chords...")
-                    .font(.title)
-                    .foregroundColor(.secondary)
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.plain)
             }
+            .padding(6)
+            .background(isSelected ? Color.blue.opacity(0.25) : Color.clear)
+            .cornerRadius(6)
         }
-        .focusable(false)
     }
     
     // MARK: - Setup

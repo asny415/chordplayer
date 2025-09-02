@@ -97,8 +97,8 @@ struct DrumSettings: Codable {
 }
 
 struct PatternGroup: Codable {
-    let name: String
-    let patterns: [String: String?] // String? to allow for null in JS
+    var name: String
+    var patterns: [String: String?] // String? to allow for null in JS
 }
 
 struct PerformanceConfig: Codable {
