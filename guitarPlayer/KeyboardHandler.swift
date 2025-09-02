@@ -69,10 +69,19 @@ class KeyboardHandler: ObservableObject {
         // Install synchronously when possible so the first key press is not missed during initialization.
         let installer = {
             self.eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                // If a text input is active, allow the event to propagate to the responder
+                // If the current first responder appears to be a text input (NSTextView/NSTextField), allow the event to propagate.
+                if let responder = NSApp.keyWindow?.firstResponder {
+                    let className = String(describing: type(of: responder))
+                    if className.contains("NSText") || className.contains("TextField") {
+                        return event
+                    }
+                }
+
+                // If a text input flag is explicitly set from SwiftUI, allow propagation
                 if self.isTextInputActive {
                     return event
                 }
+
                 self.handleKeyEvent(event: event)
                 // Consume the event so the system doesn't emit the default beep
                 return nil

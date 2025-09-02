@@ -125,6 +125,7 @@ struct ContentView: View {
     @EnvironmentObject var drumPlayer: DrumPlayer
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     @FocusState private var groupNameFocused: Bool
+    @FocusState private var chordSearchFocused: Bool
     @State private var chordSearchText: String = ""
     @State private var showChordEditSheet: Bool = false
     @State private var editingChordName: String = ""
@@ -313,9 +314,19 @@ struct ContentView: View {
 
                         // Add chord search and results (simple filtered list)
                         VStack(alignment: .leading, spacing: 6) {
-                            TextField("Search chords...", text: $chordSearchText)
+                            TextField("Search chords...", text: $chordSearchText, onEditingChanged: { editing in
+                                keyboardHandler.isTextInputActive = editing
+                            })
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .frame(maxWidth: 360)
+                                .focused($chordSearchFocused)
+                                .onChange(of: chordSearchFocused) { focused in
+                                    keyboardHandler.isTextInputActive = focused
+                                }
+                                .focused($chordSearchFocused)
+                                .onChange(of: chordSearchFocused) { _, focused in
+                                    keyboardHandler.isTextInputActive = focused
+                                }
 
                             // Show limited results to avoid rendering hundreds at once
                             ScrollView(.vertical, showsIndicators: true) {
