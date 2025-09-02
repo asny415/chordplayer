@@ -1,5 +1,9 @@
 {
   "4/4": {
+    "BASIC_4_4_EMPTY": {
+      "displayName": "轻微节奏",
+      "pattern": [{ "delay": "0", "notes": [42] }]
+    },
     "ROCK_4_4_BASIC": {
       "displayName": "咚打咚咚打 (推进摇滚)",
       "pattern": [
