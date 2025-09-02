@@ -1,7 +1,7 @@
 {
   "4/4": {
     "ROCK_4_4_BASIC": {
-      "displayName": "Rock 4/4 Basic",
+      "displayName": "咚打咚咚打 (推进摇滚)",
       "pattern": [
         {
           "delay": "0",
@@ -61,7 +61,7 @@
   },
   "3/4": {
     "WALTZ_3_4_BASIC": {
-      "displayName": "Waltz 3/4 Basic",
+      "displayName": "咚打哒 (基础华尔兹)",
       "pattern": [
         {
           "delay": "0",
@@ -88,7 +88,7 @@
   },
   "6/8": {
     "SHUFFLE_6_8_BASIC": {
-      "displayName": "Shuffle 6/8 Basic",
+      "displayName": "咚打咚 (基础Shuffle)",
       "pattern": [
         {
           "delay": "0",
