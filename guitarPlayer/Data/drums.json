@@ -3,59 +3,40 @@
     "ROCK_4_4_BASIC": {
       "displayName": "咚打咚咚打 (推进摇滚)",
       "pattern": [
-        {
-          "delay": "0",
-          "notes": [
-            36,
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            38,
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            36,
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            36,
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            38,
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            42
-          ]
-        }
+        { "delay": "0", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [38, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [38, 42] },
+        { "delay": "1/8", "notes": [42] }
+      ]
+    },
+    "POP_4_4_STRAIGHT": {
+      "displayName": "咚次打次咚次打次 (简单流行)",
+      "pattern": [
+        { "delay": "0", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [38, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [38, 42] },
+        { "delay": "1/8", "notes": [42] }
+      ]
+    },
+    "FUNK_4_4_GROOVE": {
+      "displayName": "咚次咚打次咚打 (放克律动)",
+      "pattern": [
+        { "delay": "0", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [38, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [38, 42] },
+        { "delay": "1/8", "notes": [42] }
       ]
     }
   },
@@ -63,26 +44,28 @@
     "WALTZ_3_4_BASIC": {
       "displayName": "咚打哒 (基础华尔兹)",
       "pattern": [
-        {
-          "delay": "0",
-          "notes": [
-            36,
-            42
-          ]
-        },
-        {
-          "delay": "1/4",
-          "notes": [
-            38,
-            42
-          ]
-        },
-        {
-          "delay": "1/4",
-          "notes": [
-            42
-          ]
-        }
+        { "delay": "0", "notes": [36, 42] },
+        { "delay": "1/4", "notes": [38, 42] },
+        { "delay": "1/4", "notes": [42] }
+      ]
+    },
+    "MARCH_3_4_STRAIGHT": {
+      "displayName": "咚打打 (进行曲)",
+      "pattern": [
+        { "delay": "0", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [38, 42] },
+        { "delay": "1/8", "notes": [38, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [42] }
+      ]
+    },
+    "BALLAD_3_4_LIGHT": {
+      "displayName": "咚 - 打 (轻柔民谣)",
+      "pattern": [
+        { "delay": "0", "notes": [36, 42] },
+        { "delay": "1/4", "notes": [42] },
+        { "delay": "1/4", "notes": [38, 42] }
       ]
     }
   },
@@ -90,45 +73,31 @@
     "SHUFFLE_6_8_BASIC": {
       "displayName": "咚打咚 (基础Shuffle)",
       "pattern": [
-        {
-          "delay": "0",
-          "notes": [
-            36,
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            38,
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            36,
-            42
-          ]
-        },
-        {
-          "delay": "1/8",
-          "notes": [
-            42
-          ]
-        }
+        { "delay": "0", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [38, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [42] }
+      ]
+    },
+    "BLUES_6_8_SWING": {
+      "displayName": "咚哒哒打咚哒哒 (布鲁斯摇摆)",
+      "pattern": [
+        { "delay": "0", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [38, 42] },
+        { "delay": "1/8", "notes": [42] },
+        { "delay": "1/8", "notes": [36, 42] },
+        { "delay": "1/8", "notes": [38, 42] }
+      ]
+    },
+    "BALLAD_6_8_OPEN": {
+      "displayName": "咚 - - 打 - - (开阔民谣)",
+      "pattern": [
+        { "delay": "0", "notes": [36, 42] },
+        { "delay": "1/4", "notes": [42] },
+        { "delay": "1/4", "notes": [38, 42] }
       ]
     }
   }
