@@ -172,7 +172,13 @@ class KeyboardHandler: ObservableObject {
                 if drumPlayer.isPlaying {
                     drumPlayer.stop()
                 } else {
-                    let drumPatternToPlay = appData.DRUM_PATTERN_MAP[currentTimeSignature] ?? drumSettings.defaultPattern
+                    let currentGroupSettings = appData.runtimeGroupSettings[currentGroupIndex]
+                    let drumPatternToPlay: String
+                    if let groupDrumPatternId = currentGroupSettings?.drumPatternId, !groupDrumPatternId.isEmpty {
+                        drumPatternToPlay = groupDrumPatternId
+                    } else {
+                        drumPatternToPlay = appData.DRUM_PATTERN_MAP[currentTimeSignature] ?? drumSettings.defaultPattern
+                    }
                     // Match JS DrumPlayer defaults: velocity 100, duration 200ms
                     drumPlayer.playPattern(patternName: drumPatternToPlay, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: 100, durationMs: 200)
                 }
