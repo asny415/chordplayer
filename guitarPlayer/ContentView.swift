@@ -338,26 +338,38 @@ struct ContentView: View {
                                     keyboardHandler.isTextInputActive = focused
                                 }
 
-                            // Show limited results to avoid rendering hundreds at once
+                            // Show limited results in a responsive grid so more chords are visible at once
                             ScrollView(.vertical, showsIndicators: true) {
-                                LazyVStack(alignment: .leading, spacing: 6) {
-                                    ForEach(filteredChordLibrary(prefix: chordSearchText).prefix(50), id: \.self) { chord in
-                                        HStack {
-                                            Text(chord)
-                                                .lineLimit(1)
-                                            Spacer()
-                                            Button(action: {
-                                                addChord(to: keyboardHandler.currentGroupIndex, chordName: chord)
-                                            }) {
-                                                Image(systemName: "plus")
+                                // adaptive columns: will fit as many columns as space allows
+                                let results = Array(filteredChordLibrary(prefix: chordSearchText).prefix(200))
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
+                                    ForEach(results, id: \.self) { chord in
+                                        Button(action: {
+                                            addChord(to: keyboardHandler.currentGroupIndex, chordName: chord)
+                                        }) {
+                                            HStack(spacing: 10) {
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text(chord)
+                                                        .font(.subheadline)
+                                                        .foregroundColor(.primary)
+                                                        .lineLimit(1)
+                                                    // optional secondary info placeholder
+                                                    Text("Add to group")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                Spacer()
+                                                Image(systemName: "plus.circle.fill")
+                                                    .font(.title2)
+                                                    .foregroundColor(.green)
                                             }
-                                            .buttonStyle(.plain)
+                                            .padding(8)
+                                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.03)))
                                         }
-                                        .padding(6)
-                                        .background(Color.gray.opacity(0.02))
-                                        .cornerRadius(6)
+                                        .buttonStyle(.plain)
                                     }
                                 }
+                                .padding(.top, 6)
                                 .frame(maxHeight: 220)
                             }
                         }
