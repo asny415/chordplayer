@@ -45,6 +45,10 @@
     }
   },
   "3/4": {
+    "BASIC_3_4_EMPTY": {
+      "displayName": "轻微节奏",
+      "pattern": [{ "delay": "0", "notes": [42] }]
+    },
     "WALTZ_3_4_BASIC": {
       "displayName": "咚打哒 (基础华尔兹)",
       "pattern": [
@@ -74,6 +78,10 @@
     }
   },
   "6/8": {
+    "BASIC_6_8_EMPTY": {
+      "displayName": "轻微节奏",
+      "pattern": [{ "delay": "0", "notes": [42] }]
+    },
     "SHUFFLE_6_8_BASIC": {
       "displayName": "咚打咚 (基础Shuffle)",
       "pattern": [
