@@ -132,6 +132,7 @@ struct ContentView: View {
     @State private var editingChordGroupIndex: Int? = nil
     @State private var editingShortcutBuffer: String = ""
     @State private var editingFingeringBuffer: String = ""
+    @State private var showChordDiagramCreator: Bool = false
     
     let keys = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     
@@ -163,6 +164,19 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showChordEditSheet) {
             chordEditSheet
+        }
+        .sheet(isPresented: $showChordDiagramCreator) {
+            ChordDiagramEditor(onSave: { name, def in
+                appData.chordLibrary = appData.chordLibrary ?? [:]
+                appData.chordLibrary?[name] = def
+                // Add into current group if present
+                addChord(to: keyboardHandler.currentGroupIndex, chordName: name)
+                showChordDiagramCreator = false
+            }, onCancel: {
+                showChordDiagramCreator = false
+            })
+            .environmentObject(appData)
+            .environmentObject(keyboardHandler)
         }
     }
     
@@ -304,8 +318,8 @@ struct ContentView: View {
                                 .font(.headline)
                             Spacer()
                             Button(action: {
-                                // Reset search and open pane
-                                chordSearchText = ""
+                                // Open chord diagram creator
+                                showChordDiagramCreator = true
                             }) {
                                 Image(systemName: "plus.circle")
                             }
@@ -320,11 +334,7 @@ struct ContentView: View {
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .frame(maxWidth: 360)
                                 .focused($chordSearchFocused)
-                                .onChange(of: chordSearchFocused) { focused in
-                                    keyboardHandler.isTextInputActive = focused
-                                }
-                                .focused($chordSearchFocused)
-                                .onChange(of: chordSearchFocused) { _, focused in
+                                .onChange(of: chordSearchFocused) { _old, focused in
                                     keyboardHandler.isTextInputActive = focused
                                 }
 
