@@ -265,7 +265,7 @@ struct GroupConfigPanelView: View {
                                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], spacing: 12) {
                                         ForEach(group.chordsOrder, id: \.self) { chordName in
                                             let shortcutDisplay = getShortcutForChord(chordName: chordName, group: group)
-                                            ChordButtonView(chordName: chordName, isSelected: false, shortcut: shortcutDisplay) {
+                                            ChordButtonView(chordName: chordName, isSelected: keyboardHandler.activeChordName == chordName, shortcut: shortcutDisplay) {
                                                 // play chord with a simple pattern (pluck all strings once)
                                                 let pattern: [MusicPatternEvent] = [MusicPatternEvent(delay: .double(0), notes: [1,2,3,4,5,6])]
                                                 let keyName = appData.KEY_CYCLE.indices.contains(keyboardHandler.currentKeyIndex) ? appData.KEY_CYCLE[keyboardHandler.currentKeyIndex] : "C"
