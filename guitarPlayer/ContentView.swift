@@ -376,15 +376,33 @@ struct ContentView: View {
                                             addChord(to: keyboardHandler.currentGroupIndex, chordName: chord)
                                         }) {
                                             HStack(spacing: 10) {
-                                                VStack(alignment: .leading, spacing: 2) {
+                                                VStack(alignment: .leading, spacing: 5) {
                                                     Text(chord)
                                                         .font(.subheadline)
                                                         .foregroundColor(.primary)
                                                         .lineLimit(1)
-                                                    // optional secondary info placeholder
-                                                    Text("Add to group")
-                                                        .font(.caption)
-                                                        .foregroundColor(.secondary)
+
+                                                    let fingeringArray = appData.chordLibrary?[chord] ?? []
+                                                    let fingeringString = fingeringArray.map { item -> String in
+                                                        switch item {
+                                                        case .string(let s):
+                                                            return s
+                                                        case .int(let i):
+                                                            return String(i)
+                                                        }
+                                                    }.joined(separator: "·")
+
+                                                    if !fingeringString.isEmpty {
+                                                        HStack(spacing: 4) {
+                                                            Image(systemName: "guitars")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                            Text(fingeringString)
+                                                                .font(.system(.caption, design: .monospaced))
+                                                                .tracking(-0.5)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
                                                 }
                                                 Spacer()
                                                 Image(systemName: "plus.circle.fill")
