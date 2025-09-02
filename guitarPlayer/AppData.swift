@@ -16,7 +16,7 @@ class AppData: ObservableObject {
 
     init() {
         // Initialize configuration properties with default values from JS files
-        self.performanceConfig = PerformanceConfig(
+            self.performanceConfig = PerformanceConfig(
             tempo: 120,
             timeSignature: "4/4",
             key: "C",
@@ -25,9 +25,12 @@ class AppData: ObservableObject {
             drumSettings: DrumSettings(playKey: "p", stopKey: "o", defaultPattern: "ROCK_4_4_BASIC"),
             keyMap: [:],
             patternGroups: [
-                PatternGroup(name: "Default Patterns (Intro/Arpeggio)", patterns: ["__default__": nil]),
-                PatternGroup(name: "Default Patterns (Verse/Picking)", patterns: ["__default__": nil]),
-                PatternGroup(name: "Default Patterns (Chorus/Strum)", patterns: ["__default__": nil])
+                // Simplified group names for clarity; original intent: Intro/Arpeggio
+                PatternGroup(name: "Intro", patterns: ["__default__": nil]),
+                // Simplified group name; original intent: Verse/Picking
+                PatternGroup(name: "Verse", patterns: ["__default__": nil]),
+                // Simplified group name; original intent: Chorus/Strum
+                PatternGroup(name: "Chorus", patterns: ["__default__": nil])
             ]
         )
 

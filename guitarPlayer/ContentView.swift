@@ -158,9 +158,12 @@ struct ContentView: View {
                 selection: $midiManager.selectedOutput,
                 items: [nil] + midiManager.availableOutputs,
                 display: { endpoint in
+                    // Provide a clear label when no endpoint is selected
                     endpoint.map { midiManager.displayName(for: $0) } ?? "None"
                 }
-            ).frame(width: 160)
+            )
+            .frame(width: 160)
+            .disabled(midiManager.availableOutputs.isEmpty) // disable when no outputs
             
             // Pickers Group
             HStack(spacing: 12) {
@@ -199,6 +202,7 @@ struct ContentView: View {
                         .font(.system(size: 36))
                         .foregroundColor(drumPlayer.isPlaying ? .red : .green)
                 }
+                .disabled(midiManager.availableOutputs.isEmpty && !drumPlayer.isPlaying) // disable play when no MIDI output available
                 .buttonStyle(.plain)
                 .focusable(false)
             }
