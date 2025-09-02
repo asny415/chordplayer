@@ -5,6 +5,10 @@ class AppData: ObservableObject {
     @Published var chordLibrary: ChordLibrary?
     @Published var drumPatternLibrary: DrumPatternLibrary?
     @Published var patternLibrary: PatternLibrary?
+    // Fingering library (temporary placeholder list until real resources added)
+    @Published var fingeringLibrary: [String]
+    // Runtime-only per-group settings (session-level, not persisted)
+    @Published var runtimeGroupSettings: [Int: GroupRuntimeSettings]
 
     // Configuration properties
     @Published var performanceConfig: PerformanceConfig
@@ -320,10 +324,28 @@ class AppData: ObservableObject {
             ],
             // Add more chord types as needed
         ]
+        // placeholder fingering names
+        self.fingeringLibrary = [
+            "Basic Arp",
+            "Downstroke",
+            "Alternate Pick",
+            "Fingerstyle 1",
+            "Fingerstyle 2",
+            "Brush Strum",
+            "Travis Picking",
+            "Hybrid Pick",
+            "Palm Mute",
+            "Rasgueado"
+        ]
 
-        loadData()
+    // runtime group settings (session only)
+    self.runtimeGroupSettings = [:]
+
+        // Load resources
+        self.loadData()
     }
 
+    // Load data files into libraries
     private func loadData() {
         chordLibrary = DataLoader.load(filename: "chords", as: ChordLibrary.self)
         drumPatternLibrary = DataLoader.load(filename: "drums", as: DrumPatternLibrary.self)
@@ -335,4 +357,11 @@ class AppData: ObservableObject {
         print("Loaded patternLibrary: \(String(describing: patternLibrary))")
         if let pl = patternLibrary { print("PatternLibrary keys: \(pl.keys.sorted().joined(separator: ", "))") }
     }
+
+}
+
+// Runtime-only settings for a group (not persisted)
+struct GroupRuntimeSettings {
+    var fingeringId: String?
+    var drumPatternId: String?
 }

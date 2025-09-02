@@ -286,48 +286,90 @@ struct ContentView: View {
                         .frame(maxWidth: 360)
                     }
 
-                    // Simple chord list for this group (string keys in patterns map, excluding __default__)
-                    VStack(alignment: .leading) {
+                    // Group-level defaults: Fingering and Drum Pattern (session only)
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Chords in Group")
+                            Text("Default Fingering")
                                 .font(.headline)
                             Spacer()
-                            Button(action: { addChordEntry(to: bindingGroupIndex) }) {
-                                Image(systemName: "plus")
-                            }
-                            .buttonStyle(.plain)
+                            Text("Based on global time signature: \(keyboardHandler.currentTimeSignature)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
 
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(Array(appData.performanceConfig.patternGroups[bindingGroupIndex].patterns.keys.filter { $0 != "__default__" }.sorted()), id: \.self) { chordKey in
-                                    HStack {
-                                        Text(chordKey)
-                                            .font(.body)
-                                        Spacer()
-                                        TextField("pattern name", text: Binding(get: {
-                                            if let optional = appData.performanceConfig.patternGroups[bindingGroupIndex].patterns[chordKey], let value = optional {
-                                                return value
-                                            }
-                                            return ""
-                                        }, set: { new in
-                                            appData.performanceConfig.patternGroups[bindingGroupIndex].patterns[chordKey] = new.isEmpty ? nil : new
-                                        }), onEditingChanged: { editing in
-                                            keyboardHandler.isTextInputActive = editing
-                                        })
-                                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                                        .frame(width: 240)
-                                        Button(action: {
-                                            appData.performanceConfig.patternGroups[bindingGroupIndex].patterns.removeValue(forKey: chordKey)
-                                        }) {
-                                            Image(systemName: "trash")
-                                        }
-                                        .buttonStyle(.plain)
+                        // Ensure runtime settings exist for this group
+                        let _ = {
+                            if appData.runtimeGroupSettings[bindingGroupIndex] == nil {
+                                appData.runtimeGroupSettings[bindingGroupIndex] = GroupRuntimeSettings()
+                            }
+                            return ()
+                        }()
+
+                        HStack(spacing: 12) {
+                            Picker("Fingering", selection: Binding(get: {
+                                appData.runtimeGroupSettings[bindingGroupIndex]?.fingeringId ?? ""
+                            }, set: { new in
+                                var settings = appData.runtimeGroupSettings[bindingGroupIndex] ?? GroupRuntimeSettings()
+                                settings.fingeringId = new.isEmpty ? nil : new
+                                appData.runtimeGroupSettings[bindingGroupIndex] = settings
+                            })) {
+                                Text("(none)").tag("")
+                                ForEach(appData.fingeringLibrary, id: \.self) { f in
+                                    Text(f).tag(f)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 240)
+
+                            Button(action: {
+                                // no-op preview placeholder for now
+                            }) {
+                                Image(systemName: "play.fill")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Preview fingering (not implemented)")
+                        }
+
+                        Divider()
+
+                        HStack {
+                            Text("Default Drum Pattern")
+                                .font(.headline)
+                            Spacer()
+                            Text("Based on global time signature: \(keyboardHandler.currentTimeSignature)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack(spacing: 12) {
+                            Picker("Drum Pattern", selection: Binding(get: {
+                                appData.runtimeGroupSettings[bindingGroupIndex]?.drumPatternId ?? ""
+                            }, set: { new in
+                                var settings = appData.runtimeGroupSettings[bindingGroupIndex] ?? GroupRuntimeSettings()
+                                settings.drumPatternId = new.isEmpty ? nil : new
+                                appData.runtimeGroupSettings[bindingGroupIndex] = settings
+                            })) {
+                                Text("(none)").tag("")
+                                if let drums = appData.drumPatternLibrary {
+                                    ForEach(drums.keys.sorted(), id: \.self) { key in
+                                        Text(key).tag(key)
                                     }
                                 }
                             }
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 240)
+
+                            Button(action: {
+                                // Play quick drum preview if desired
+                                if let pid = appData.runtimeGroupSettings[bindingGroupIndex]?.drumPatternId {
+                                    drumPlayer.playPattern(patternName: pid, tempo: keyboardHandler.currentTempo, timeSignature: keyboardHandler.currentTimeSignature, velocity: 100, durationMs: 800)
+                                }
+                            }) {
+                                Image(systemName: "play.fill")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Preview drum pattern")
                         }
-                        .frame(maxHeight: 300)
                     }
                 } else {
                     Text("No group selected")
