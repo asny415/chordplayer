@@ -355,15 +355,17 @@ struct GroupConfigPanelView: View {
 
                         HStack(spacing: 12) {
                             Picker("Drum Pattern", selection: Binding(get: {
-                                appData.runtimeGroupSettings[bindingGroupIndex]?.drumPatternId ?? appData.drumPatternLibrary?.keys.sorted().first ?? ""
+                                appData.runtimeGroupSettings[bindingGroupIndex]?.drumPatternId ?? ""
                             }, set: { new in
                                 var settings = appData.runtimeGroupSettings[bindingGroupIndex] ?? GroupRuntimeSettings()
                                 settings.drumPatternId = new
                                 appData.runtimeGroupSettings[bindingGroupIndex] = settings
                             })) {
-                                if let drums = appData.drumPatternLibrary {
-                                    ForEach(drums.keys.sorted(), id: \.self) { key in
-                                        Text(key).tag(key)
+                                // Filter drums by current time signature
+                                if let drumsForTimeSig = appData.drumPatternLibrary?[keyboardHandler.currentTimeSignature] {
+                                    ForEach(drumsForTimeSig.keys.sorted(), id: \.self) { key in
+                                        // Use displayName if available, otherwise fallback to key
+                                        Text(drumsForTimeSig[key]?.displayName ?? key).tag(key)
                                     }
                                 }
                             }

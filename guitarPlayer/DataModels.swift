@@ -37,7 +37,20 @@ struct DrumPatternEvent: Codable {
     let notes: [Int]
 }
 
-typealias DrumPatternLibrary = [String: [DrumPatternEvent]]
+// New struct to hold pattern data and display name
+struct DrumPattern: Codable {
+    let displayName: String
+    let pattern: [DrumPatternEvent] // The actual drum events
+
+    // Provide custom CodingKeys for flexibility if JSON keys differ
+    enum CodingKeys: String, CodingKey {
+        case displayName
+        case pattern
+    }
+}
+
+// Updated DrumPatternLibrary type: TimeSignature -> PatternName -> DrumPattern
+typealias DrumPatternLibrary = [String: [String: DrumPattern]]
 
 // For patterns.json
 enum StringOrDouble: Codable {

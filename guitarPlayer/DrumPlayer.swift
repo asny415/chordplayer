@@ -29,8 +29,8 @@ class DrumPlayer: ObservableObject {
     func playPattern(patternName: String, tempo: Double = 120.0, timeSignature: String = "4/4", velocity: UInt8 = 100, durationMs: Int = 200) {
         stop() // Stop any existing pattern
 
-        guard let pattern = appData.drumPatternLibrary?[patternName] else {
-            print("[DrumPlayer] Pattern definition for \(patternName) not found.")
+        guard let drumPattern = appData.drumPatternLibrary?[timeSignature]?[patternName] else {
+            print("[DrumPlayer] Pattern definition for \(patternName) in time signature \(timeSignature) not found.")
             return
         }
 
@@ -40,7 +40,7 @@ class DrumPlayer: ObservableObject {
         var physicalTime: Double = 0
         var schedule: [(timestampMs: Double, notes: [Int])] = []
 
-        for event in pattern {
+        for event in drumPattern.pattern {
             // reuse JS-like _getDelayInMs semantics via metronome parsing
             var delayMs: Double = 0
             // event.delay in DrumPatternEvent is String
@@ -70,7 +70,7 @@ class DrumPlayer: ObservableObject {
         }
 
         // store schedule and timing
-        self.currentPatternEvents = pattern
+        self.currentPatternEvents = drumPattern.pattern
         self.currentPatternIndex = 0
 
         // Save computed schedule and start looping

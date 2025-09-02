@@ -60,6 +60,22 @@ class KeyboardHandler: ObservableObject {
                 }
                 self.appData.performanceConfig.timeSignature = new
                 print("[KeyboardHandler] timeSignature changed -> \(new)")
+
+                // NEW LOGIC: Update drum patterns for all groups based on new time signature
+                for i in 0..<self.appData.performanceConfig.patternGroups.count {
+                    // Get the first available drum pattern for the new time signature
+                    if let newDrumPattern = self.appData.drumPatternLibrary?[new]?.keys.sorted().first {
+                        var settings = self.appData.runtimeGroupSettings[i] ?? GroupRuntimeSettings()
+                        settings.drumPatternId = newDrumPattern
+                        self.appData.runtimeGroupSettings[i] = settings
+                    } else {
+                        // If no pattern found for the new time signature, set to nil or a default "no pattern" state
+                        // For now, we'll set to nil, which will trigger the default logic in GroupConfigPanelView
+                        var settings = self.appData.runtimeGroupSettings[i] ?? GroupRuntimeSettings()
+                        settings.drumPatternId = nil
+                        self.appData.runtimeGroupSettings[i] = settings
+                    }
+                }
             }
             .store(in: &cancellables)
     }
