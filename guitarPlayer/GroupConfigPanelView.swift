@@ -264,8 +264,8 @@ struct GroupConfigPanelView: View {
                                 ScrollView(.vertical) {
                                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], spacing: 12) {
                                         ForEach(group.chordsOrder, id: \.self) { chordName in
-                                            let assign = group.chordAssignments[chordName]
-                                            ChordButtonView(chordName: chordName, isSelected: false, shortcut: assign?.shortcutKey) {
+                                            let shortcutDisplay = getShortcutForChord(chordName: chordName, group: group)
+                                            ChordButtonView(chordName: chordName, isSelected: false, shortcut: shortcutDisplay) {
                                                 // play chord with a simple pattern (pluck all strings once)
                                                 let pattern: [MusicPatternEvent] = [MusicPatternEvent(delay: .double(0), notes: [1,2,3,4,5,6])]
                                                 let keyName = appData.KEY_CYCLE.indices.contains(keyboardHandler.currentKeyIndex) ? appData.KEY_CYCLE[keyboardHandler.currentKeyIndex] : "C"
@@ -275,7 +275,7 @@ struct GroupConfigPanelView: View {
                                                 Button("Edit") {
                                                     editingChordName = chordName
                                                     editingChordGroupIndex = gi
-                                                    editingShortcutBuffer = assign?.shortcutKey ?? ""
+                                                    editingShortcutBuffer = group.chordAssignments[chordName]?.shortcutKey ?? ""
                                                     showChordEditSheet = true
                                                 }
                                                 Button("Remove") {
@@ -466,6 +466,26 @@ struct GroupConfigPanelView: View {
         } else {
             Text("No chord")
         }
+    }
+
+    private func getShortcutForChord(chordName: String, group: PatternGroup) -> String? {
+        // 1. Check for a local, per-group override first.
+        if let localShortcut = group.chordAssignments[chordName]?.shortcutKey, !localShortcut.isEmpty {
+            return localShortcut.uppercased()
+        }
+
+        // 2. Check user-defined global keyMap.
+        if let globalKey = appData.performanceConfig.keyMap.first(where: { $0.value == chordName })?.key {
+            return globalKey.uppercased()
+        }
+
+        // 3. Fallback to the default, hardcoded mapping from MusicTheory.
+        if let defaultShortcut = MusicTheory.defaultChordToShortcutMap[chordName] {
+            return defaultShortcut
+        }
+
+        // 4. No shortcut found.
+        return nil
     }
 
     // MARK: - Group Helpers
