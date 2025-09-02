@@ -62,16 +62,29 @@ struct ChordButtonView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(isSelected ? Color.blue : Color.gray.opacity(0.15))
             )
+            // The "Glow" is an outer border that animates.
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.blue, lineWidth: 4)
+                    .blur(radius: 4)
+                    .opacity(isSelected ? 1 : 0) // Fade in/out
+            )
+            // A standard inner border for definition
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(isSelected ? Color.blue.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
             )
-            .shadow(color: isSelected ? Color.blue.opacity(0.4) : Color.black.opacity(0.2), radius: isSelected ? 8 : 3, x: 0, y: isSelected ? 4 : 1)
+            .shadow(
+                color: isSelected ? Color.blue.opacity(0.4) : Color.black.opacity(0.2),
+                radius: isSelected ? 10 : 3, // Enhanced physicality
+                x: 0,
+                y: isSelected ? 5 : 1      // Enhanced physicality
+            )
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .scaleEffect(isSelected ? 1.05 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
+        .scaleEffect(isSelected ? 1.08 : 1.0) // Enhanced physicality
+        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isSelected)
     }
 }
 
