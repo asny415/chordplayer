@@ -173,6 +173,12 @@ struct GroupConfigPanelView: View {
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .frame(maxWidth: 360)
                     }
+                    .onAppear {
+                        // Dispatch asynchronously to ensure this runs after the system's initial focus setting
+                        DispatchQueue.main.async {
+                            groupNameFocused = false
+                        }
+                    }
 
                     // Group-level defaults: Fingering and Drum Pattern (session only)
                     VStack(alignment: .leading, spacing: 12) {
