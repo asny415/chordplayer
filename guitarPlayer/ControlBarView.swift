@@ -136,6 +136,18 @@ struct ControlBarView: View {
                         appData.performanceConfig.drumPattern = appData.drumPatternLibrary?[newTimeSig]?.keys.first
                     }
                 }
+
+                StyledPicker(
+                    title: "Quantize",
+                    selection: Binding<String>(
+                        get: { appData.performanceConfig.quantize ?? QuantizationMode.none.rawValue },
+                        set: { appData.performanceConfig.quantize = $0 }
+                    ),
+                    items: QuantizationMode.allCases.map { $0.rawValue },
+                    display: { rawValue in
+                        QuantizationMode(rawValue: rawValue)?.displayName ?? rawValue
+                    }
+                )
             }
             
             Spacer()

@@ -39,7 +39,7 @@ class GuitarPlayer: ObservableObject {
             }
         }
 
-        let activeChordNotes: [Int] = midiNotes.filter { $0 != -1 }
+        let _: [Int] = midiNotes.filter { $0 != -1 }
         
         panic() // Stop previous notes before playing new ones
 
@@ -73,20 +73,20 @@ class GuitarPlayer: ObservableObject {
             }
 
             // Find the root string and its MIDI note
-            var rootStringIndex: Int?
-            var rootMidiNote: Int?
+            var rootInfo: (stringIndex: Int, midiNote: Int)?
             for (index, note) in midiNotes.enumerated() {
                 if note != -1 {
-                    rootStringIndex = index
-                    rootMidiNote = note
+                    rootInfo = (stringIndex: index, midiNote: note)
                     break
                 }
             }
 
-            guard let unwrappedRootStringIndex = rootStringIndex, let unwrappedRootMidiNote = rootMidiNote else {
+            guard let unwrappedRootInfo = rootInfo else {
                 print("[GuitarPlayer] Could not determine root note for chord \(chordName).")
                 return // Cannot proceed without a root note
             }
+            let unwrappedRootStringIndex = unwrappedRootInfo.stringIndex
+            let _ = unwrappedRootInfo.midiNote
 
             for noteValue in filteredPatternNotes { // Iterate over filtered notes
                 var resolvedNote: (note: Int, stringIndex: Int)?

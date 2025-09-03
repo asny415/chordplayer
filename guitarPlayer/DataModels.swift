@@ -150,6 +150,14 @@ enum QuantizationMode: String, Codable, CaseIterable {
     case none = "NONE"
     case measure = "MEASURE"
     case halfMeasure = "HALF_MEASURE"
+
+    var displayName: String {
+        switch self {
+        case .none: return "None"
+        case .measure: return "Measure"
+        case .halfMeasure: return "Half Measure"
+        }
+    }
 }
 
 struct DrumSettings: Codable {
