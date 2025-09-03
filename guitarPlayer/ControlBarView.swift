@@ -76,32 +76,35 @@ struct ControlBarView: View {
     var body: some View {
         HStack(spacing: 16) {
             // --- DRUM CONTROL GROUP ---
-            HStack(spacing: 8) {
-                Button(action: {
-                    if drumPlayer.isPlaying {
-                        drumPlayer.stop()
-                    } else {
-                        drumPlayer.playPattern(tempo: keyboardHandler.currentTempo, velocity: 100, durationMs: 200)
+            VStack(alignment: .leading, spacing: 4) {
+                ControlStripLabel(title: "Drum Machine")
+                HStack(spacing: 8) {
+                    Button(action: {
+                        if drumPlayer.isPlaying {
+                            drumPlayer.stop()
+                        } else {
+                            drumPlayer.playPattern(tempo: keyboardHandler.currentTempo, velocity: 100, durationMs: 200)
+                        }
+                    }) {
+                        Image(systemName: drumPlayer.isPlaying ? "stop.fill" : "play.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(drumPlayer.isPlaying ? .red : .green)
+                            .frame(width: 28, height: 28)
                     }
-                }) {
-                    Image(systemName: drumPlayer.isPlaying ? "stop.fill" : "play.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(drumPlayer.isPlaying ? .red : .green)
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .disabled(midiManager.selectedOutput == nil && !drumPlayer.isPlaying)
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .disabled(midiManager.selectedOutput == nil && !drumPlayer.isPlaying)
 
-                StyledPicker(
-                    title: "", // Title is now implicit
-                    selection: drumPatternBinding,
-                    items: availableDrumPatterns,
-                    display: { patternKey in
-                        appData.drumPatternLibrary?[appData.performanceConfig.timeSignature]?[patternKey]?.displayName ?? patternKey
-                    }
-                )
-                .frame(width: 180)
+                    StyledPicker(
+                        title: "", // Title is implicit via the group label
+                        selection: drumPatternBinding,
+                        items: availableDrumPatterns,
+                        display: { patternKey in
+                            appData.drumPatternLibrary?[appData.performanceConfig.timeSignature]?[patternKey]?.displayName ?? patternKey
+                        }
+                    )
+                    .frame(width: 180)
+                }
             }
             
             // --- GLOBAL MUSIC SETTINGS ---
