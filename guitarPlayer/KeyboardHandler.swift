@@ -61,21 +61,7 @@ class KeyboardHandler: ObservableObject {
                 self.appData.performanceConfig.timeSignature = new
                 print("[KeyboardHandler] timeSignature changed -> \(new)")
 
-                // NEW LOGIC: Update drum patterns for all groups based on new time signature
-                for i in 0..<self.appData.performanceConfig.patternGroups.count {
-                    // Get the first available drum pattern for the new time signature
-                    if let newDrumPattern = self.appData.drumPatternLibrary?[new]?.keys.sorted().first {
-                        var settings = self.appData.runtimeGroupSettings[i] ?? GroupRuntimeSettings()
-                        settings.drumPatternId = newDrumPattern
-                        self.appData.runtimeGroupSettings[i] = settings
-                    } else {
-                        // If no pattern found for the new time signature, set to nil or a default "no pattern" state
-                        // For now, we'll set to nil, which will trigger the default logic in GroupConfigPanelView
-                        var settings = self.appData.runtimeGroupSettings[i] ?? GroupRuntimeSettings()
-                        settings.drumPatternId = nil
-                        self.appData.runtimeGroupSettings[i] = settings
-                    }
-                }
+                
             }
             .store(in: &cancellables)
     }
@@ -166,28 +152,24 @@ class KeyboardHandler: ObservableObject {
         }
 
         // Drum controls
-        if let drumSettings = appData.performanceConfig.drumSettings {
-            if keyName == drumSettings.playKey {
-                // Toggle behavior: start if stopped, stop if playing
-                if drumPlayer.isPlaying {
-                    drumPlayer.stop()
+        if keyName == "p" { // Assuming 'p' is the play key
+            // Toggle behavior: start if stopped, stop if playing
+            if drumPlayer.isPlaying {
+                drumPlayer.stop()
+            } else {
+                // Get the first drum pattern for the current time signature
+                if let drumsForTimeSig = appData.drumPatternLibrary?[currentTimeSignature],
+                   let firstDrumPatternKey = drumsForTimeSig.keys.sorted().first {
+                    drumPlayer.playPattern(patternName: firstDrumPatternKey, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: 100, durationMs: 200)
                 } else {
-                    let currentGroupSettings = appData.runtimeGroupSettings[currentGroupIndex]
-                    let drumPatternToPlay: String
-                    if let groupDrumPatternId = currentGroupSettings?.drumPatternId, !groupDrumPatternId.isEmpty {
-                        drumPatternToPlay = groupDrumPatternId
-                    } else {
-                        drumPatternToPlay = appData.DRUM_PATTERN_MAP[currentTimeSignature] ?? drumSettings.defaultPattern
-                    }
-                    // Match JS DrumPlayer defaults: velocity 100, duration 200ms
-                    drumPlayer.playPattern(patternName: drumPatternToPlay, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: 100, durationMs: 200)
+                    print("No drum patterns found for time signature: \(currentTimeSignature)")
                 }
-                return
             }
-            if keyName == drumSettings.stopKey {
-                drumPlayer.stop() // Corrected method call
-                return
-            }
+            return
+        }
+        if keyName == "o" { // Assuming 'o' is the stop key
+            drumPlayer.stop()
+            return
         }
 
         // Key transposition

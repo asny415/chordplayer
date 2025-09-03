@@ -14,7 +14,7 @@ class AppData: ObservableObject {
     @Published var performanceConfig: PerformanceConfig
     let KEY_CYCLE: [String]
     let TIME_SIGNATURE_CYCLE: [String]
-    let DRUM_PATTERN_MAP: [String: String]
+    
     let CONFIG: AppConfig
     let DEFAULT_PATTERNS: [String: [String: [String: [String: String]]]] // Add this
 
@@ -26,7 +26,7 @@ class AppData: ObservableObject {
             key: "C",
             quantize: QuantizationMode.measure.rawValue, // Use rawValue for enum
             quantizeToggleKey: "q",
-            drumSettings: DrumSettings(playKey: "p", stopKey: "o", defaultPattern: "ROCK_4_4_BASIC"),
+            
             keyMap: [:],
             patternGroups: [
                 // Simplified group names for clarity; original intent: Intro/Arpeggio
@@ -42,11 +42,7 @@ class AppData: ObservableObject {
             "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
         ]
         self.TIME_SIGNATURE_CYCLE = ["4/4", "3/4", "6/8"]
-        self.DRUM_PATTERN_MAP = [
-            "4/4": "ROCK_4_4_BASIC",
-            "3/4": "WALTZ_3_4_BASIC",
-            "6/8": "SHUFFLE_6_8_BASIC",
-        ]
+        
         self.CONFIG = AppConfig(
             midiPortName: "IAC驱动程序 总线1",
             note: 60,
@@ -363,5 +359,5 @@ class AppData: ObservableObject {
 // Runtime-only settings for a group (not persisted)
 struct GroupRuntimeSettings {
     var fingeringId: String?
-    var drumPatternId: String?
+    
 }

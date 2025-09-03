@@ -344,45 +344,7 @@ struct GroupConfigPanelView: View {
 
                         Divider()
 
-                        HStack {
-                            Text("Default Drum Pattern")
-                                .font(.headline)
-                            Spacer()
-                            Text("Based on global time signature: \(keyboardHandler.currentTimeSignature)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        HStack(spacing: 12) {
-                            Picker("Drum Pattern", selection: Binding(get: {
-                                appData.runtimeGroupSettings[bindingGroupIndex]?.drumPatternId ?? ""
-                            }, set: { new in
-                                var settings = appData.runtimeGroupSettings[bindingGroupIndex] ?? GroupRuntimeSettings()
-                                settings.drumPatternId = new
-                                appData.runtimeGroupSettings[bindingGroupIndex] = settings
-                            })) {
-                                // Filter drums by current time signature
-                                if let drumsForTimeSig = appData.drumPatternLibrary?[keyboardHandler.currentTimeSignature] {
-                                    ForEach(drumsForTimeSig.keys.sorted(), id: \.self) { key in
-                                        // Use displayName if available, otherwise fallback to key
-                                        Text(drumsForTimeSig[key]?.displayName ?? key).tag(key)
-                                    }
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .frame(maxWidth: 240)
-
-                            Button(action: {
-                                // Play quick drum preview if desired
-                                if let pid = appData.runtimeGroupSettings[bindingGroupIndex]?.drumPatternId {
-                                    drumPlayer.playPattern(patternName: pid, tempo: keyboardHandler.currentTempo, timeSignature: keyboardHandler.currentTimeSignature, velocity: 100, durationMs: 800)
-                                }
-                            }) {
-                                Image(systemName: "play.fill")
-                            }
-                            .buttonStyle(.plain)
-                            .help("Preview drum pattern")
-                        }
+                        
                     }
                 } else {
                     Text("No group selected")
@@ -423,13 +385,7 @@ struct GroupConfigPanelView: View {
                 }
             }
 
-            // Ensure default drum pattern
-            if settings.drumPatternId == nil || settings.drumPatternId!.isEmpty {
-                if let defaultDrum = appData.drumPatternLibrary?.keys.sorted().first {
-                    settings.drumPatternId = defaultDrum
-                    changed = true
-                }
-            }
+            
 
             if changed {
                 appData.runtimeGroupSettings[newIndex] = settings
