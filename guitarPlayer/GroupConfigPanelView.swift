@@ -154,31 +154,43 @@ struct GroupConfigPanelView: View {
                         Spacer()
                     }
 
-                    // Group Name (was Default Pattern field)
-                    VStack(alignment: .leading) {
-                        Text("Group Name")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                    // Combined Group Settings Bar
+                    HStack(spacing: 16) {
+                        // Group Name TextField
                         TextField("Group name", text: Binding(get: {
-                            return appData.performanceConfig.patternGroups[bindingGroupIndex].name
+                            appData.performanceConfig.patternGroups[bindingGroupIndex].name
                         }, set: { new in
                             appData.performanceConfig.patternGroups[bindingGroupIndex].name = new
                         }), onEditingChanged: { editing in
                             keyboardHandler.isTextInputActive = editing
                         })
                         .focused($groupNameFocused)
-                        .onChange(of: groupNameFocused) { _, focused in
-                            keyboardHandler.isTextInputActive = focused
-                        }
                         .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .frame(maxWidth: 360)
-                    }
-                    .onAppear {
-                        // Dispatch asynchronously to ensure this runs after the system's initial focus setting
-                        DispatchQueue.main.async {
-                            groupNameFocused = false
+                        .onAppear {
+                            DispatchQueue.main.async {
+                                groupNameFocused = false
+                            }
                         }
+
+                        // Default Fingering Picker
+                        Picker("Default Fingering", selection: Binding(get: {
+                            appData.runtimeGroupSettings[bindingGroupIndex]?.fingeringId ?? appData.fingeringLibrary.first ?? ""
+                        }, set: { new in
+                            var settings = appData.runtimeGroupSettings[bindingGroupIndex] ?? GroupRuntimeSettings()
+                            settings.fingeringId = new
+                            appData.runtimeGroupSettings[bindingGroupIndex] = settings
+                        })) {
+                            ForEach(appData.fingeringLibrary, id: \.self) { f in
+                                Text(f).tag(f)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        
+                        Spacer() // Pushes controls to the left
                     }
+                    .padding()
+                    .background(Color.black.opacity(0.1))
+                    .cornerRadius(8)
 
                     // Group-level defaults: Fingering and Drum Pattern (session only)
                     VStack(alignment: .leading, spacing: 12) {
@@ -313,42 +325,7 @@ struct GroupConfigPanelView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
-                        HStack {
-                            Text("Default Fingering")
-                                .font(.headline)
-                            Spacer()
-                            Text("Based on global time signature: \(keyboardHandler.currentTimeSignature)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        // NOTE: avoid mutating @Published properties during view body evaluation.
-                        // Initialization of runtimeGroupSettings should happen in response to user actions or in setup code.
-                        HStack(spacing: 12) {
-                            Picker("Fingering", selection: Binding(get: {
-                                appData.runtimeGroupSettings[bindingGroupIndex]?.fingeringId ?? appData.fingeringLibrary.first ?? ""
-                            }, set: { new in
-                                var settings = appData.runtimeGroupSettings[bindingGroupIndex] ?? GroupRuntimeSettings()
-                                settings.fingeringId = new
-                                appData.runtimeGroupSettings[bindingGroupIndex] = settings
-                            })) {
-                                ForEach(appData.fingeringLibrary, id: \.self) { f in
-                                    Text(f).tag(f)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .frame(maxWidth: 240)
-
-                            Button(action: {
-                                // no-op preview placeholder for now
-                            }) {
-                                Image(systemName: "play.fill")
-                            }
-                            .buttonStyle(.plain)
-                            .help("Preview fingering (not implemented)")
-                        }
-
-                        Divider()
+                        
 
                         
                     }
