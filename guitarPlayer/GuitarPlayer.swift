@@ -54,28 +54,56 @@ class GuitarPlayer: ObservableObject {
             let eventBaseTimeMs = schedulingStartUptimeMs + (delayFraction * wholeNoteSeconds * 1000.0)
 
             var notesToSchedule: [(note: UInt8, stringIndex: Int)] = []
+            
+            // Find the root string and its MIDI note
+            var rootStringIndex: Int?
+            var rootMidiNote: Int?
+            for (index, note) in midiNotes.enumerated() {
+                if note != -1 {
+                    rootStringIndex = index
+                    rootMidiNote = note
+                    break
+                }
+            }
+
+            guard let unwrappedRootStringIndex = rootStringIndex, let unwrappedRootMidiNote = rootMidiNote else {
+                print("[GuitarPlayer] Could not determine root note for chord \(chordName).")
+                return // Cannot proceed without a root note
+            }
+
             for noteValue in event.notes {
                 var resolvedNote: (note: Int, stringIndex: Int)?
 
                 switch noteValue {
-                case .int(let stringNumber):
-                    let stringIndex = stringNumber - 1
+                case .int(let stringNumber): // This is a direct string number (1-6)
+                    let stringIndex = stringNumber - 1 // Convert to 0-5 index
                     if stringIndex >= 0 && stringIndex < midiNotes.count && midiNotes[stringIndex] != -1 {
                         resolvedNote = (note: midiNotes[stringIndex], stringIndex: stringIndex)
                     }
                 case .string(let symbol):
-                    var index = 0
                     if symbol.starts(with: "ROOT") {
                         let numPart = symbol.replacingOccurrences(of: "ROOT", with: "").replacingOccurrences(of: "-", with: "")
-                        if numPart.isEmpty { index = 0 }
-                        else if let num = Int(numPart) { index = num }
-                    }
-                    
-                    if index >= 0 && index < activeChordNotes.count {
-                        let noteToFind = activeChordNotes[index]
-                        if let stringIndex = midiNotes.firstIndex(of: noteToFind) {
-                            resolvedNote = (note: noteToFind, stringIndex: stringIndex)
+                        var offset: Int = 0 // Offset from the root string
+                        if !numPart.isEmpty, let num = Int(numPart) {
+                            offset = num
                         }
+                        
+                        let targetStringIndex = unwrappedRootStringIndex + offset
+                        
+                        // Ensure targetStringIndex is within valid bounds (0-5)
+                        if targetStringIndex >= 0 && targetStringIndex < midiNotes.count {
+                            let note = midiNotes[targetStringIndex]
+                            if note != -1 {
+                                resolvedNote = (note: note, stringIndex: targetStringIndex)
+                            } else {
+                                print("[GuitarPlayer] Warning: Pattern requested note on muted string at index \(targetStringIndex) (ROOT+\(offset)).")
+                            }
+                        } else {
+                            print("[GuitarPlayer] Warning: Pattern requested note on string index \(targetStringIndex) (ROOT+\(offset)) which is out of bounds.")
+                        }
+                    } else {
+                        // Handle other string symbols if any, or log an error
+                        print("[GuitarPlayer] Warning: Unrecognized string symbol in pattern: \(symbol)")
                     }
                 }
                 
