@@ -172,6 +172,24 @@ class KeyboardHandler: ObservableObject {
             return
         }
 
+        // Drum pattern switching (Command + 1-9)
+        if isCommandDown, let number = Int(keyName), number >= 1 && number <= 9 {
+            if let drumsForTimeSig = appData.drumPatternLibrary?[currentTimeSignature] {
+                let sortedDrumPatternKeys = drumsForTimeSig.keys.sorted()
+                let patternIndex = number - 1 // 0-indexed
+                if sortedDrumPatternKeys.indices.contains(patternIndex) {
+                    let patternName = sortedDrumPatternKeys[patternIndex]
+                    drumPlayer.playPattern(patternName: patternName, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: 100, durationMs: 200)
+                    print("Switched to drum pattern: \(patternName)")
+                } else {
+                    print("No drum pattern at index \(number) for time signature: \(currentTimeSignature)")
+                }
+            } else {
+                print("No drum patterns found for time signature: \(currentTimeSignature)")
+            }
+            return
+        }
+
         // Key transposition
         if keyName == "equal" || keyName == "plus" || characters == "=" {
             currentKeyIndex = (currentKeyIndex + 1) % appData.KEY_CYCLE.count
