@@ -94,8 +94,8 @@ class KeyboardHandler: ObservableObject {
         if let specificId = group.chordAssignments[chordName]?.fingeringId, !specificId.isEmpty {
             patternId = specificId
         } else {
-            // 2. Fall back to the group's default fingering.
-            patternId = appData.runtimeGroupSettings[currentGroupIndex]?.fingeringId
+            // 2. Fall back to the group's default fingering (new pattern field).
+            patternId = group.pattern
         }
         
         guard let finalPatternId = patternId, !finalPatternId.isEmpty else {

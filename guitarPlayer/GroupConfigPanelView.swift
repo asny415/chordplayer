@@ -175,11 +175,9 @@ struct GroupConfigPanelView: View {
                         // Default Fingering Picker
                         let patternsForTimeSig = appData.patternLibrary?[appData.performanceConfig.timeSignature] ?? []
                         Picker("Default Fingering", selection: Binding(get: {
-                            appData.runtimeGroupSettings[bindingGroupIndex]?.fingeringId ?? patternsForTimeSig.first?.id ?? ""
+                            appData.performanceConfig.patternGroups[bindingGroupIndex].pattern ?? patternsForTimeSig.first?.id ?? ""
                         }, set: { new in
-                            var settings = appData.runtimeGroupSettings[bindingGroupIndex] ?? GroupRuntimeSettings()
-                            settings.fingeringId = new
-                            appData.runtimeGroupSettings[bindingGroupIndex] = settings
+                            appData.performanceConfig.patternGroups[bindingGroupIndex].pattern = new
                         })) {
                             ForEach(patternsForTimeSig, id: \.id) { p in
                                 Text(p.name).tag(p.id)
@@ -361,26 +359,7 @@ struct GroupConfigPanelView: View {
             .environmentObject(appData)
             .environmentObject(keyboardHandler)
         }
-        .onChange(of: keyboardHandler.currentGroupIndex) { _, newIndex in
-            guard appData.performanceConfig.patternGroups.indices.contains(newIndex) else { return }
-
-            var settings = appData.runtimeGroupSettings[newIndex] ?? GroupRuntimeSettings()
-            var changed = false
-
-            // Ensure default fingering is set for the group when it becomes active
-            if settings.fingeringId == nil || settings.fingeringId!.isEmpty {
-                if let defaultFingeringId = (appData.patternLibrary?[appData.performanceConfig.timeSignature] ?? []).first?.id {
-                    settings.fingeringId = defaultFingeringId
-                    changed = true
-                }
-            }
-
-            
-
-            if changed {
-                appData.runtimeGroupSettings[newIndex] = settings
-            }
-        }
+        
     }
 
     // MARK: - Chord Edit Sheet
@@ -477,7 +456,14 @@ struct GroupConfigPanelView: View {
     // MARK: - Group Helpers
     private func addGroup() {
         let newName = "New Group \(appData.performanceConfig.patternGroups.count + 1)"
-        let newGroup = PatternGroup(name: newName, patterns: ["__default__": nil])
+        var initialPattern: String? = nil
+        if let patternsForTimeSig = appData.patternLibrary?[appData.performanceConfig.timeSignature],
+           let firstPattern = patternsForTimeSig.first {
+            initialPattern = firstPattern.id
+        } else if let fallbackPattern = appData.patternLibrary?["4/4"]?.first {
+            initialPattern = fallbackPattern.id
+        }
+        let newGroup = PatternGroup(name: newName, patterns: [:], pattern: initialPattern)
         appData.performanceConfig.patternGroups.append(newGroup)
         keyboardHandler.currentGroupIndex = appData.performanceConfig.patternGroups.count - 1
     }

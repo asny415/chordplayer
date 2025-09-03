@@ -161,14 +161,16 @@ struct DrumSettings: Codable {
 struct PatternGroup: Codable {
     var name: String
     var patterns: [String: String?] // String? to allow for null in JS
+    var pattern: String? // New field for default fingering ID
     // Ordered list of chord names added to this group (preserves display order)
     var chordsOrder: [String]
     // Per-chord metadata (fingering override, shortcut key)
     var chordAssignments: [String: ChordAssignment]
 
-    init(name: String, patterns: [String: String?], chordsOrder: [String] = [], chordAssignments: [String: ChordAssignment] = [:]) {
+    init(name: String, patterns: [String: String?], pattern: String? = nil, chordsOrder: [String] = [], chordAssignments: [String: ChordAssignment] = [:]) {
         self.name = name
         self.patterns = patterns
+        self.pattern = pattern // Initialize new field
         self.chordsOrder = chordsOrder
         self.chordAssignments = chordAssignments
     }
@@ -177,6 +179,7 @@ struct PatternGroup: Codable {
     enum CodingKeys: String, CodingKey {
         case name
         case patterns
+        case pattern // Add new field to CodingKeys
         case chordsOrder
         case chordAssignments
     }
@@ -185,6 +188,7 @@ struct PatternGroup: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.name = try container.decode(String.self, forKey: .name)
         self.patterns = try container.decode([String: String?].self, forKey: .patterns)
+        self.pattern = try container.decodeIfPresent(String.self, forKey: .pattern) // Decode new field
         self.chordsOrder = try container.decodeIfPresent([String].self, forKey: .chordsOrder) ?? []
         self.chordAssignments = try container.decodeIfPresent([String: ChordAssignment].self, forKey: .chordAssignments) ?? [:]
     }
@@ -193,6 +197,7 @@ struct PatternGroup: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
         try container.encode(patterns, forKey: .patterns)
+        try container.encodeIfPresent(pattern, forKey: .pattern) // Encode new field
         try container.encode(chordsOrder, forKey: .chordsOrder)
         try container.encode(chordAssignments, forKey: .chordAssignments)
     }

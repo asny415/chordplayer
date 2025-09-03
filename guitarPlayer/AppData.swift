@@ -6,9 +6,6 @@ class AppData: ObservableObject {
     @Published var drumPatternLibrary: DrumPatternLibrary?
     @Published var patternLibrary: PatternLibrary?
     
-    // Runtime-only per-group settings (session-level, not persisted)
-    @Published var runtimeGroupSettings: [Int: GroupRuntimeSettings]
-
     // Configuration properties
     @Published var performanceConfig: PerformanceConfig
     let KEY_CYCLE: [String]
@@ -30,11 +27,11 @@ class AppData: ObservableObject {
             keyMap: [:],
             patternGroups: [
                 // Simplified group names for clarity; original intent: Intro/Arpeggio
-                PatternGroup(name: "Intro", patterns: ["__default__": nil]),
+                PatternGroup(name: "Intro", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC"),
                 // Simplified group name; original intent: Verse/Picking
-                PatternGroup(name: "Verse", patterns: ["__default__": nil]),
+                PatternGroup(name: "Verse", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC"),
                 // Simplified group name; original intent: Chorus/Strum
-                PatternGroup(name: "Chorus", patterns: ["__default__": nil])
+                PatternGroup(name: "Chorus", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC")
             ]
         )
 
@@ -51,10 +48,10 @@ class AppData: ObservableObject {
             channel: 0
         )
 
-        self.runtimeGroupSettings = [:]
-
         // Load resources
         self.loadData()
+        // After loading data, ensure default patterns are valid
+        self.initializeDefaultPatterns()
     }
 
     // Load data files into libraries
@@ -70,10 +67,37 @@ class AppData: ObservableObject {
         if let pl = patternLibrary { print("PatternLibrary keys: \(pl.keys.sorted().joined(separator: ", "))") }
     }
 
-}
+    // Ensures that each group's default pattern is a valid ID from the loaded patternLibrary.
+    private func initializeDefaultPatterns() {
+        guard let patternLibrary = self.patternLibrary else { return }
 
-// Runtime-only settings for a group (not persisted)
-struct GroupRuntimeSettings {
-    var fingeringId: String?
-    
+        for i in 0..<performanceConfig.patternGroups.count {
+            var group = performanceConfig.patternGroups[i]
+            let timeSig = performanceConfig.timeSignature // Use current global time signature for fallback
+
+            // If the current pattern is invalid or nil, try to find a valid one.
+            if group.pattern == nil || !isValidPatternId(group.pattern!, forTimeSignature: timeSig, in: patternLibrary) {
+                // Try to find a default pattern for the current time signature
+                if let defaultPattern = patternLibrary[timeSig]?.first {
+                    group.pattern = defaultPattern.id
+                } else {
+                    // Fallback to "4/4" if no patterns for current time signature
+                    if let fallbackPattern = patternLibrary["4/4"]?.first {
+                        group.pattern = fallbackPattern.id
+                    } else {
+                        // If even "4/4" has no patterns, set to nil (should not happen if patterns.json is valid)
+                        group.pattern = nil
+                        print("Warning: No valid default pattern found for group '\(group.name)' and time signature '\(timeSig)' or '4/4'.")
+                    }
+                }
+            }
+            performanceConfig.patternGroups[i] = group
+        }
+    }
+
+    // Helper to check if a pattern ID is valid for a given time signature
+    private func isValidPatternId(_ id: String, forTimeSignature timeSig: String, in library: PatternLibrary) -> Bool {
+        return library[timeSig]?.contains(where: { $0.id == id }) ?? false
+    }
+
 }
