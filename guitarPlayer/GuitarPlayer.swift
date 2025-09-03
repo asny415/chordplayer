@@ -55,6 +55,23 @@ class GuitarPlayer: ObservableObject {
 
             var notesToSchedule: [(note: UInt8, stringIndex: Int)] = []
             
+            // Filter out notes that are on muted strings based on the current chord definition
+            let filteredPatternNotes = event.notes.filter { noteValue in
+                switch noteValue {
+                case .int(let stringNumber): // This is a direct string number (1-6)
+                    let stringIndex = stringNumber - 1 // Convert to 0-5 index
+                    // Only include if the string index is valid and the MIDI note for that string is not -1 (i.e., not muted)
+                    return stringIndex >= 0 && stringIndex < midiNotes.count && midiNotes[stringIndex] != -1
+                case .string(let symbol):
+                    // For "ROOT" notes, we need to check if the *resolved* string will be muted.
+                    // This is more complex as it depends on the rootStringIndex and offset.
+                    // For now, we'll allow ROOT notes to pass through this filter and handle muting
+                    // when resolving the actual MIDI note, as it's already done there.
+                    // The primary concern is direct string numbers.
+                    return symbol.starts(with: "ROOT") // Allow ROOT notes to be processed further
+                }
+            }
+
             // Find the root string and its MIDI note
             var rootStringIndex: Int?
             var rootMidiNote: Int?
@@ -71,7 +88,7 @@ class GuitarPlayer: ObservableObject {
                 return // Cannot proceed without a root note
             }
 
-            for noteValue in event.notes {
+            for noteValue in filteredPatternNotes { // Iterate over filtered notes
                 var resolvedNote: (note: Int, stringIndex: Int)?
 
                 switch noteValue {

@@ -57,6 +57,12 @@ class KeyboardHandler: ObservableObject {
                 self.appData.performanceConfig.timeSignature = new
             }
             .store(in: &cancellables)
+
+        $currentTempo
+            .sink { [weak self] newTempo in
+                self?.appData.performanceConfig.tempo = newTempo
+            }
+            .store(in: &cancellables)
     }
 
     private func setupEventMonitor() {
