@@ -157,13 +157,8 @@ class KeyboardHandler: ObservableObject {
             if drumPlayer.isPlaying {
                 drumPlayer.stop()
             } else {
-                // Get the first drum pattern for the current time signature
-                if let drumsForTimeSig = appData.drumPatternLibrary?[currentTimeSignature],
-                   let firstDrumPatternKey = drumsForTimeSig.keys.sorted().first {
-                    drumPlayer.playPattern(patternName: firstDrumPatternKey, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: 100, durationMs: 200)
-                } else {
-                    print("No drum patterns found for time signature: \(currentTimeSignature)")
-                }
+                // Play using the globally selected pattern
+                drumPlayer.playPattern(tempo: currentTempo, velocity: 100, durationMs: 200)
             }
             return
         }
@@ -179,8 +174,14 @@ class KeyboardHandler: ObservableObject {
                 let patternIndex = number - 1 // 0-indexed
                 if sortedDrumPatternKeys.indices.contains(patternIndex) {
                     let patternName = sortedDrumPatternKeys[patternIndex]
-                    drumPlayer.playPattern(patternName: patternName, tempo: currentTempo, timeSignature: currentTimeSignature, velocity: 100, durationMs: 200)
+                    // Update the global configuration
+                    appData.performanceConfig.drumPattern = patternName
                     print("Switched to drum pattern: \(patternName)")
+                    
+                    // If the drum is already playing, restart it with the new pattern to switch seamlessly
+                    if drumPlayer.isPlaying {
+                        drumPlayer.playPattern(tempo: currentTempo, velocity: 100, durationMs: 200)
+                    }
                 } else {
                     print("No drum pattern at index \(number) for time signature: \(currentTimeSignature)")
                 }

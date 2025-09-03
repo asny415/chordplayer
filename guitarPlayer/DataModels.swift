@@ -161,7 +161,8 @@ struct PerformanceConfig: Codable {
     var key: String
     var quantize: String? // Optional because it can be undefined in JS
     var quantizeToggleKey: String? // Optional
-    
+    var drumPattern: String?
+
     var keyMap: [String: String] // Assuming keyMap is always present, can be empty
     var patternGroups: [PatternGroup]
 }

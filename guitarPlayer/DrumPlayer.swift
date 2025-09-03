@@ -37,7 +37,12 @@ class DrumPlayer: ObservableObject {
         self.loopCount = 0
     }
 
-    func playPattern(patternName: String, tempo: Double = 120.0, timeSignature: String = "4/4", velocity: UInt8 = 100, durationMs: Int = 200) {
+    func playPattern(tempo: Double = 120.0, velocity: UInt8 = 100, durationMs: Int = 200) {
+        let timeSignature = appData.performanceConfig.timeSignature
+        guard let patternName = appData.performanceConfig.drumPattern else {
+            print("[DrumPlayer] No drum pattern selected in appData.")
+            return
+        }
         guard let drumPattern = appData.drumPatternLibrary?[timeSignature]?[patternName] else {
             print("[DrumPlayer] Pattern definition for \(patternName) in time signature \(timeSignature) not found.")
             return

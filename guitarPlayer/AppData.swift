@@ -26,6 +26,7 @@ class AppData: ObservableObject {
             key: "C",
             quantize: QuantizationMode.measure.rawValue, // Use rawValue for enum
             quantizeToggleKey: "q",
+            drumPattern: "ROCK_4_4_BASIC",
             
             keyMap: [:],
             patternGroups: [
