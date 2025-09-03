@@ -53,6 +53,62 @@ struct DrumPattern: Codable {
 typealias DrumPatternLibrary = [String: [String: DrumPattern]]
 
 // For patterns.json
+// Represents a value in the "notes" array, which can be a string like "ROOT" or an int for a physical string.
+typealias NoteValue = StringOrInt
+
+struct PatternEvent: Codable, Hashable {
+    let delay: String
+    let notes: [NoteValue]
+    let delta: Double? // Optional delta for strumming
+
+    // Implementing Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(delay)
+        // NoteValue is not hashable by default, need to handle it.
+        // For simplicity, we can combine hashes of string/int representations.
+        for note in notes {
+            switch note {
+            case .string(let s):
+                hasher.combine(s)
+            case .int(let i):
+                hasher.combine(i)
+            }
+        }
+        hasher.combine(delta)
+    }
+
+    static func == (lhs: PatternEvent, rhs: PatternEvent) -> Bool {
+        return lhs.delay == rhs.delay && lhs.notes.count == rhs.notes.count && lhs.delta == rhs.delta // Simplified equality
+    }
+}
+
+struct GuitarPattern: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let pattern: [PatternEvent]
+
+    // Implementing Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(name)
+        hasher.combine(pattern)
+    }
+
+    static func == (lhs: GuitarPattern, rhs: GuitarPattern) -> Bool {
+        return lhs.id == rhs.id
+    }
+}
+
+// The library is a dictionary from Time Signature (e.g., "4/4") to a list of patterns.
+typealias PatternLibrary = [String: [GuitarPattern]]
+
+// Keep MusicPatternEvent for other parts of the app that might use it, e.g., the simple preview player.
+// But we need to make it compatible with the old structure if needed.
+struct MusicPatternEvent: Codable {
+    let delay: StringOrDouble
+    let notes: [Int]
+}
+
 enum StringOrDouble: Codable {
     case string(String)
     case int(Int)
@@ -87,13 +143,6 @@ enum StringOrDouble: Codable {
         }
     }
 }
-
-struct MusicPatternEvent: Codable {
-    let delay: StringOrDouble
-    let notes: [Int]
-}
-
-typealias PatternLibrary = [String: [MusicPatternEvent]]
 
 // MARK: - Configuration Models
 

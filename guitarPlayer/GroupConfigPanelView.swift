@@ -173,15 +173,16 @@ struct GroupConfigPanelView: View {
                         }
 
                         // Default Fingering Picker
+                        let patternsForTimeSig = appData.patternLibrary?[appData.performanceConfig.timeSignature] ?? []
                         Picker("Default Fingering", selection: Binding(get: {
-                            appData.runtimeGroupSettings[bindingGroupIndex]?.fingeringId ?? appData.fingeringLibrary.first ?? ""
+                            appData.runtimeGroupSettings[bindingGroupIndex]?.fingeringId ?? patternsForTimeSig.first?.id ?? ""
                         }, set: { new in
                             var settings = appData.runtimeGroupSettings[bindingGroupIndex] ?? GroupRuntimeSettings()
                             settings.fingeringId = new
                             appData.runtimeGroupSettings[bindingGroupIndex] = settings
                         })) {
-                            ForEach(appData.fingeringLibrary, id: \.self) { f in
-                                Text(f).tag(f)
+                            ForEach(patternsForTimeSig, id: \.id) { p in
+                                Text(p.name).tag(p.id)
                             }
                         }
                         .pickerStyle(.menu)
@@ -298,9 +299,15 @@ struct GroupConfigPanelView: View {
                                             let shortcutDisplay = getShortcutForChord(chordName: chordName, group: group)
                                             ChordButtonView(chordName: chordName, isSelected: keyboardHandler.activeChordName == chordName, shortcut: shortcutDisplay) {
                                                 // play chord with a simple pattern (pluck all strings once)
-                                                let pattern: [MusicPatternEvent] = [MusicPatternEvent(delay: .double(0), notes: [1,2,3,4,5,6])]
+                                                let simpleStrumPattern = GuitarPattern(
+                                                    id: "__preview_strum__",
+                                                    name: "Preview Strum",
+                                                    pattern: [
+                                                        PatternEvent(delay: "0", notes: [.int(6), .int(5), .int(4), .int(3), .int(2), .int(1)], delta: 15.0)
+                                                    ]
+                                                )
                                                 let keyName = appData.KEY_CYCLE.indices.contains(keyboardHandler.currentKeyIndex) ? appData.KEY_CYCLE[keyboardHandler.currentKeyIndex] : "C"
-                                                guitarPlayer.playChord(chordName: chordName, pattern: pattern, tempo: keyboardHandler.currentTempo, key: keyName, velocity: UInt8(100))
+                                                guitarPlayer.playChord(chordName: chordName, pattern: simpleStrumPattern, tempo: keyboardHandler.currentTempo, key: keyName, velocity: UInt8(100))
                                             }
                                             .contextMenu {
                                                 Button("Edit") {
@@ -360,10 +367,10 @@ struct GroupConfigPanelView: View {
             var settings = appData.runtimeGroupSettings[newIndex] ?? GroupRuntimeSettings()
             var changed = false
 
-            // Ensure default fingering
+            // Ensure default fingering is set for the group when it becomes active
             if settings.fingeringId == nil || settings.fingeringId!.isEmpty {
-                if let defaultFingering = appData.fingeringLibrary.first {
-                    settings.fingeringId = defaultFingering
+                if let defaultFingeringId = (appData.patternLibrary?[appData.performanceConfig.timeSignature] ?? []).first?.id {
+                    settings.fingeringId = defaultFingeringId
                     changed = true
                 }
             }
@@ -402,10 +409,11 @@ struct GroupConfigPanelView: View {
                     Text("Fingering")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    let patternsForTimeSig = appData.patternLibrary?[appData.performanceConfig.timeSignature] ?? []
                     Picker("Fingering", selection: $editingFingeringBuffer) {
-                        Text("(none)").tag("")
-                        ForEach(appData.fingeringLibrary, id: \.self) { f in
-                            Text(f).tag(f)
+                        Text("(group default)").tag("")
+                        ForEach(patternsForTimeSig, id: \.id) { f in
+                            Text(f.name).tag(f.id)
                         }
                     }
                     .pickerStyle(.menu)
