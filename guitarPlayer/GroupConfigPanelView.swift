@@ -1,5 +1,18 @@
 import SwiftUI
 
+// MARK: - Conflict Data Structure
+struct ConflictData {
+    let newChord: String
+    let newShortcut: String
+    let conflictingChords: [String]
+    let groupIndex: Int
+}
+
+enum ConflictResolutionChoice {
+    case replace
+    case cancel
+}
+
 struct ChordButtonView: View {
     let chordName: String
     let isSelected: Bool
@@ -41,112 +54,78 @@ struct ChordButtonView: View {
     
     var body: some View {
         Button(action: action) {
-            chordButtonContent
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
-        .scaleEffect(isSelected ? 1.08 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isSelected)
-    }
-    
-    @ViewBuilder
-    private var chordButtonContent: some View {
-        ZStack(alignment: .topTrailing) {
-            mainContent
-            shortcutButton
-        }
-        .frame(minWidth: 100, minHeight: 80)
-        .background(backgroundView)
-        .overlay(glowOverlay)
-        .overlay(borderOverlay)
-        .shadow(
-            color: isSelected ? Color.blue.opacity(0.4) : Color.black.opacity(0.2),
-            radius: isSelected ? 10 : 3,
-            x: 0,
-            y: isSelected ? 5 : 1
-        )
-    }
-    
-    @ViewBuilder
-    private var mainContent: some View {
-        VStack {
-            Text(displayName.0)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundColor(isSelected ? .white : .primary)
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-            
-            if !displayName.1.isEmpty {
-                Text(displayName.1)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-            }
-        }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 5)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    
-    @ViewBuilder
-    private var shortcutButton: some View {
-        Button(action: { onShortcutClick(chordName) }) {
-            ZStack {
-                if let shortcut = shortcut {
-                    Text(GroupConfigPanelView.formatShortcutDisplay(shortcut))
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.7))
-                        .padding(5)
-                        .background(Color.black.opacity(0.25))
-                        .clipShape(Circle())
-                        .padding(4)
-                } else {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(.gray.opacity(0.6))
-                        .padding(4)
+            ZStack(alignment: .topTrailing) {
+                // Main content
+                VStack {
+                    Text(displayName.0)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundColor(isSelected ? .white : .primary)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    
+                    if !displayName.1.isEmpty {
+                        Text(displayName.1)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                    }
                 }
-
-                if isCapturingShortcut {
-                    Circle()
-                        .stroke(Color.accentColor, lineWidth: 2)
-                        .frame(width: 30, height: 30)
-                        .scaleEffect(1.2)
-                        .opacity(0.8)
-                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isCapturingShortcut)
+                .padding(.vertical, 10)
+                .padding(.horizontal, 5)
+                .frame(minWidth: 120, minHeight: 80)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isSelected ? Color.blue : Color.gray.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                        )
+                )
+                
+                // Shortcut key overlay / Placeholder (now always a button)
+                Button(action: { onShortcutClick(chordName) }) {
+                    ZStack {
+                        if let shortcut = shortcut {
+                            Text(ChordButtonView.formatShortcutDisplay(shortcut))
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(5)
+                                .background(Color.black.opacity(0.25))
+                                .clipShape(Circle())
+                                .padding(4)
+                        } else {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(5)
+                                .background(Color.black.opacity(0.25))
+                                .clipShape(Circle())
+                                .padding(4)
+                        }
+                    }
                 }
+                .buttonStyle(.plain)
+                .opacity(isCapturingShortcut ? 0.5 : 1.0)
             }
         }
         .buttonStyle(.plain)
-        .padding(4)
     }
     
-    @ViewBuilder
-    private var backgroundView: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(isSelected ? Color.blue : Color.gray.opacity(0.15))
-    }
-    
-    @ViewBuilder
-    private var glowOverlay: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .stroke(Color.blue, lineWidth: 4)
-            .blur(radius: 4)
-            .opacity(isSelected ? 1 : 0)
-    }
-    
-    @ViewBuilder
-    private var borderOverlay: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .stroke(isSelected ? Color.blue.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
+    // MARK: - Shortcut Display Formatting
+    static func formatShortcutDisplay(_ shortcut: String) -> String {
+        // If the shortcut already contains modifier symbols, return as is
+        if shortcut.contains("⌘") || shortcut.contains("⌃") || shortcut.contains("⌥") || shortcut.contains("⇧") {
+            return shortcut
+        }
+        
+        // For backward compatibility, if it's a simple key without modifiers, just uppercase it
+        return shortcut.uppercased()
     }
 }
 
 struct GroupConfigPanelView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
-    @EnvironmentObject var guitarPlayer: GuitarPlayer
-    @EnvironmentObject var drumPlayer: DrumPlayer
-
+    
     @FocusState private var groupNameFocused: Bool
     @FocusState private var chordSearchFocused: Bool
     @State private var chordSearchText: String = ""
@@ -156,373 +135,521 @@ struct GroupConfigPanelView: View {
     @State private var editingShortcutBuffer: String = ""
     @State private var editingFingeringBuffer: String = ""
     @State private var showChordDiagramCreator: Bool = false
-    @State private var capturingShortcutForChord: String? = nil // NEW STATE
+    @State private var capturingShortcutForChord: String? = nil
+    @State private var showConflictAlert = false
+    @State private var conflictData: ConflictData? = nil
 
     var body: some View {
         HStack(spacing: 12) {
-            // Left: Group list
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Groups")
-                        .font(.headline)
-                    Spacer()
-                    Button(action: addGroup) {
-                        Image(systemName: "plus")
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(appData.performanceConfig.patternGroups.enumerated()), id: \.offset) { index, group in
-                            GroupRow(group: group, isSelected: index == keyboardHandler.currentGroupIndex) {
-                                keyboardHandler.currentGroupIndex = index
-                            } onRename: { newName in
-                                appData.performanceConfig.patternGroups[index].name = newName
-                            } onDelete: {
-                                removeGroup(at: index)
-                            }
-                        }
-                    }
-                    .padding(4)
-                }
-                .background(FrameLogger(name: "leftGroupList"))
-            }
-            .frame(minWidth: 220, maxWidth: 280)
-            .padding()
-            .background(Color.gray.opacity(0.05))
-            .cornerRadius(8)
-
+            groupListView
             Divider()
-
-            // Right: Selected group editor
-            VStack(alignment: .leading, spacing: 12) {
-                // ensure the editor content doesn't get visually overlapped by the controlBar above
-                if appData.performanceConfig.patternGroups.indices.contains(keyboardHandler.currentGroupIndex) {
-                    let bindingGroupIndex = keyboardHandler.currentGroupIndex
-                    let group = appData.performanceConfig.patternGroups[bindingGroupIndex]
-
-                    HStack {
-                        Text("Editing Group: \(group.name)")
-                            .font(.title2)
-                        Spacer()
-                    }
-
-                    // Combined Group Settings Bar
-                    HStack(spacing: 16) {
-                        // Group Name TextField
-                        TextField("Group name", text: Binding(get: {
-                            appData.performanceConfig.patternGroups[bindingGroupIndex].name
-                        }, set: { new in
-                            appData.performanceConfig.patternGroups[bindingGroupIndex].name = new
-                        }), onEditingChanged: { editing in
-                            keyboardHandler.isTextInputActive = editing
-                        })
-                        .focused($groupNameFocused)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .onAppear {
-                            DispatchQueue.main.async {
-                                groupNameFocused = false
-                            }
-                        }
-
-                        // Default Fingering Picker
-                        let patternsForTimeSig = appData.patternLibrary?[appData.performanceConfig.timeSignature] ?? []
-                        Picker("Default Fingering", selection: Binding(get: {
-                            appData.performanceConfig.patternGroups[bindingGroupIndex].pattern ?? patternsForTimeSig.first?.id ?? ""
-                        }, set: { new in
-                            appData.performanceConfig.patternGroups[bindingGroupIndex].pattern = new
-                        })) {
-                            ForEach(patternsForTimeSig, id: \.id) { p in
-                                Text(p.name).tag(p.id)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        
-                        Spacer() // Pushes controls to the left
-                    }
-                    .padding()
-                    .background(Color.black.opacity(0.1))
-                    .cornerRadius(8)
-
-                    // Group-level defaults: Fingering and Drum Pattern (session only)
-                    VStack(alignment: .leading, spacing: 12) {
-                        // --- Chord management area ---
-                        HStack {
-                            Text("Chords")
-                                .font(.headline)
-                            Spacer()
-                            Button(action: {
-                                // Open chord diagram creator
-                                showChordDiagramCreator = true
-                            }) {
-                                Image(systemName: "plus.circle")
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        // Add chord search and results (simple filtered list)
-                        VStack(alignment: .leading, spacing: 6) {
-                            TextField("Search chords...", text: $chordSearchText, onEditingChanged: { editing in
-                                keyboardHandler.isTextInputActive = editing
-                            })
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .frame(maxWidth: 360)
-                                .focused($chordSearchFocused)
-                                .onChange(of: chordSearchFocused) { _old, focused in
-                                    keyboardHandler.isTextInputActive = focused
-                                }
-                                .background(FrameLogger(name: "searchTextField"))
-
-                            // Show limited results in a responsive grid so more chords are visible at once
-                            ScrollView(.vertical, showsIndicators: true) {
-                                // adaptive columns: will fit as many columns as space allows
-                                let results = Array(filteredChordLibrary(prefix: chordSearchText).prefix(200))
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
-                                    ForEach(results, id: \.self) { chord in
-                                        Button(action: {
-                                            addChord(to: keyboardHandler.currentGroupIndex, chordName: chord)
-                                        }) {
-                                            HStack(spacing: 10) {
-                                                VStack(alignment: .leading, spacing: 5) {
-                                                    Text(chord)
-                                                        .font(.subheadline)
-                                                        .foregroundColor(.primary)
-                                                        .lineLimit(1)
-
-                                                    let fingeringArray = appData.chordLibrary?[chord] ?? []
-                                                    let fingeringString = fingeringArray.map { item -> String in
-                                                        switch item {
-                                                        case .string(let s):
-                                                            return s
-                                                        case .int(let i):
-                                                            return String(i)
-                                                        }
-                                                    }.joined(separator: "·")
-
-                                                    if !fingeringString.isEmpty {
-                                                        HStack(spacing: 4) {
-                                                            Image(systemName: "guitars")
-                                                                .font(.caption2)
-                                                                .foregroundColor(.secondary)
-                                                            Text(fingeringString)
-                                                                .font(.system(.caption, design: .monospaced))
-                                                                .tracking(-0.5)
-                                                                .foregroundColor(.secondary)
-                                                        }
-                                                    }
-                                                }
-                                                Spacer()
-                                                Image(systemName: "plus.circle.fill")
-                                                    .font(.title2)
-                                                    .foregroundColor(.accentColor)
-                                            }
-                                            .padding(12)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10).fill(.regularMaterial)
-                                            )
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                                .padding(.top, 6)
-                            }
-                            .frame(maxHeight: 220)
-                            .background(FrameLogger(name: "searchResults"))
-                        }
-
-                        Divider()
-
-                        // Chords grid for the group
-                        VStack(alignment: .leading) {
-                            Text("Group Chords")
-                                .font(.headline)
-
-                            if appData.performanceConfig.patternGroups.indices.contains(keyboardHandler.currentGroupIndex) {
-                                let gi = keyboardHandler.currentGroupIndex
-                                let group = appData.performanceConfig.patternGroups[gi]
-                                ScrollView(.vertical) {
-                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], spacing: 12) {
-                                        ForEach(group.chordsOrder, id: \.self) { chordName in
-                                            let shortcutDisplay = getShortcutForChord(chordName: chordName, group: group)
-                                            ChordButtonView(
-                                                chordName: chordName,
-                                                isSelected: keyboardHandler.activeChordName == chordName,
-                                                shortcut: shortcutDisplay,
-                                                action: { // This is the action for playing the chord
-                                                    // play chord with a simple pattern (pluck all strings once)
-                                                    let simpleStrumPattern = GuitarPattern(
-                                                        id: "__preview_strum__",
-                                                        name: "Preview Strum",
-                                                        pattern: [
-                                                            PatternEvent(delay: "0", notes: [.int(6), .int(5), .int(4), .int(3), .int(2), .int(1)], delta: 15.0)
-                                                        ]
-                                                    )
-                                                    let keyName = appData.KEY_CYCLE.indices.contains(keyboardHandler.currentKeyIndex) ? appData.KEY_CYCLE[keyboardHandler.currentKeyIndex] : "C"
-                                                    guitarPlayer.playChord(chordName: chordName, pattern: simpleStrumPattern, tempo: keyboardHandler.currentTempo, key: keyName, velocity: UInt8(100))
-                                                },
-                                                onShortcutClick: { clickedChordName in // NEW ACTION FOR SHORTCUT CAPTURE
-                                                    // If we are already capturing for this chord, cancel it
-                                                    if capturingShortcutForChord == clickedChordName {
-                                                        capturingShortcutForChord = nil
-                                                        keyboardHandler.stopCapturingShortcut() // Need to implement this in KeyboardHandler
-                                                    } else {
-                                                        // Start capturing for this chord
-                                                        capturingShortcutForChord = clickedChordName
-                                                        keyboardHandler.startCapturingShortcut(for: clickedChordName) // Need to implement this in KeyboardHandler
-                                                    }
-                                                },
-                                                isCapturingShortcut: capturingShortcutForChord == chordName // NEW PROPERTY
-                                            )
-                                            .contextMenu {
-                                                Button("Edit") {
-                                                    editingChordName = chordName
-                                                    editingChordGroupIndex = gi
-                                                    editingShortcutBuffer = group.chordAssignments[chordName]?.shortcutKey ?? ""
-                                                    showChordEditSheet = true
-                                                }
-                                                Button("Remove") {
-                                                    removeChord(named: chordName, from: gi)
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .padding(.top, 6)
-                                }
-                                .padding(.top, 8)
-                                .frame(maxHeight: 300)
-                                .background(FrameLogger(name: "groupChords"))
-                            } else {
-                                Text("No group selected")
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        
-
-                        
-                    }
-                } else {
-                    Text("No group selected")
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-            }
-            .padding()
+            groupEditorView
         }
-        .padding()
         .sheet(isPresented: $showChordEditSheet) {
             chordEditSheet
         }
         .sheet(isPresented: $showChordDiagramCreator) {
-            ChordDiagramEditor(onSave: { name, def in
-                appData.chordLibrary = appData.chordLibrary ?? [:]
-                appData.chordLibrary?[name] = def
-                // Add into current group if present
-                addChord(to: keyboardHandler.currentGroupIndex, chordName: name)
-                showChordDiagramCreator = false
-            }, onCancel: {
-                showChordDiagramCreator = false
-            })
-            .environmentObject(appData)
-            .environmentObject(keyboardHandler)
+            chordDiagramCreatorSheet
         }
         .onAppear {
-            keyboardHandler.onShortcutCaptured = { chordName, capturedKey in
-                // Find the current group index
-                let gi = self.keyboardHandler.currentGroupIndex
-                guard self.appData.performanceConfig.patternGroups.indices.contains(gi) else { return }
-
-                var group = self.appData.performanceConfig.patternGroups[gi]
-                var assignment = group.chordAssignments[chordName] ?? ChordAssignment()
-                assignment.shortcutKey = capturedKey.isEmpty ? nil : capturedKey // Set to nil if empty
-                group.chordAssignments[chordName] = assignment
-                self.appData.performanceConfig.patternGroups[gi] = group
-
-                // Reset capture state in GroupConfigPanelView
-                self.capturingShortcutForChord = nil
-            }
+            setupShortcutCapture()
         }
         .onDisappear {
-            keyboardHandler.onShortcutCaptured = nil // Clean up
+            keyboardHandler.onShortcutCaptured = nil
+        }
+        .alert("快捷键冲突", isPresented: $showConflictAlert) {
+            conflictAlertButtons
+        } message: {
+            conflictAlertMessage
+        }
+    }
+    
+    // MARK: - Sub Views
+    private var groupListView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Groups")
+                    .font(.headline)
+                Spacer()
+                Button(action: addGroup) {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.plain)
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(appData.performanceConfig.patternGroups.enumerated()), id: \.offset) { index, group in
+                        GroupRow(group: group, isSelected: index == keyboardHandler.currentGroupIndex) {
+                            keyboardHandler.currentGroupIndex = index
+                        } onRename: { newName in
+                            appData.performanceConfig.patternGroups[index].name = newName
+                        } onDelete: {
+                            removeGroup(at: index)
+                        }
+                    }
+                }
+                .padding(4)
+            }
+            .background(FrameLogger(name: "leftGroupList"))
+        }
+        .frame(minWidth: 220, maxWidth: 280)
+        .padding()
+        .background(Color.gray.opacity(0.05))
+        .cornerRadius(8)
+    }
+    
+    private var groupEditorView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if appData.performanceConfig.patternGroups.indices.contains(keyboardHandler.currentGroupIndex) {
+                let bindingGroupIndex = keyboardHandler.currentGroupIndex
+                let group = appData.performanceConfig.patternGroups[bindingGroupIndex]
+
+                groupHeaderView(group: group, bindingGroupIndex: bindingGroupIndex)
+                groupSettingsView(bindingGroupIndex: bindingGroupIndex)
+                chordManagementView(bindingGroupIndex: bindingGroupIndex)
+            } else {
+                Text("No groups available")
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+    
+    private func groupHeaderView(group: PatternGroup, bindingGroupIndex: Int) -> some View {
+        HStack {
+            Text("Editing Group: \(group.name)")
+                .font(.title2)
+            Spacer()
+        }
+    }
+    
+    private func groupSettingsView(bindingGroupIndex: Int) -> some View {
+        HStack(spacing: 16) {
+            // Group Name TextField
+            TextField("Group name", text: Binding(get: {
+                appData.performanceConfig.patternGroups[bindingGroupIndex].name
+            }, set: { new in
+                appData.performanceConfig.patternGroups[bindingGroupIndex].name = new
+            }), onEditingChanged: { editing in
+                keyboardHandler.isTextInputActive = editing
+            })
+            .focused($groupNameFocused)
+            .textFieldStyle(RoundedBorderTextFieldStyle())
+            .onAppear {
+                DispatchQueue.main.async {
+                    groupNameFocused = false
+                }
+            }
+
+            // Default Fingering Picker
+            let patternsForTimeSig = appData.patternLibrary?[appData.performanceConfig.timeSignature] ?? []
+            Picker("Default Fingering", selection: Binding(get: {
+                appData.performanceConfig.patternGroups[bindingGroupIndex].pattern ?? patternsForTimeSig.first?.id ?? ""
+            }, set: { new in
+                appData.performanceConfig.patternGroups[bindingGroupIndex].pattern = new
+            })) {
+                ForEach(patternsForTimeSig, id: \.id) { p in
+                    Text(p.name).tag(p.id)
+                }
+            }
+            .pickerStyle(.menu)
+            
+            Spacer()
+        }
+        .padding()
+        .background(Color.black.opacity(0.1))
+        .cornerRadius(8)
+    }
+    
+    private func chordManagementView(bindingGroupIndex: Int) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // --- Chord management area ---
+            HStack {
+                Text("Chords")
+                    .font(.headline)
+                Spacer()
+                Button(action: {
+                    showChordDiagramCreator = true
+                }) {
+                    Image(systemName: "plus.circle")
+                }
+                .buttonStyle(.plain)
+            }
+
+            chordSearchAndResultsView(bindingGroupIndex: bindingGroupIndex)
+            assignedChordsView(bindingGroupIndex: bindingGroupIndex)
+        }
+    }
+    
+    private func chordSearchAndResultsView(bindingGroupIndex: Int) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField("Search chords...", text: $chordSearchText, onEditingChanged: { editing in
+                keyboardHandler.isTextInputActive = editing
+            })
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .frame(maxWidth: 360)
+                .focused($chordSearchFocused)
+                .onChange(of: chordSearchFocused) { _old, focused in
+                    keyboardHandler.isTextInputActive = focused
+                }
+                .background(FrameLogger(name: "searchTextField"))
+
+            chordResultsGridView(bindingGroupIndex: bindingGroupIndex)
+        }
+    }
+    
+    private func chordResultsGridView(bindingGroupIndex: Int) -> some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            let results = Array(filteredChordLibrary(prefix: chordSearchText).prefix(200))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
+                ForEach(results, id: \.self) { chord in
+                    chordResultButton(chord: chord, bindingGroupIndex: bindingGroupIndex)
+                }
+            }
+            .padding(4)
+        }
+        .frame(maxHeight: 300)
+        .background(FrameLogger(name: "chordResultsGrid"))
+    }
+    
+    private func chordResultButton(chord: String, bindingGroupIndex: Int) -> some View {
+        Button(action: {
+            addChord(to: keyboardHandler.currentGroupIndex, chordName: chord)
+        }) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(chord)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+
+                    let fingeringArray = appData.chordLibrary?[chord] ?? []
+                    let fingeringString = fingeringArray.map { item -> String in
+                        switch item {
+                        case .string(let s):
+                            return s
+                        case .int(let i):
+                            return String(i)
+                        }
+                    }.joined(separator: "·")
+
+                    if !fingeringString.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "guitars")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(fingeringString)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                Spacer()
+            }
+            .padding(8)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func assignedChordsView(bindingGroupIndex: Int) -> some View {
+        let group = appData.performanceConfig.patternGroups[bindingGroupIndex]
+        
+        if group.chordAssignments.isEmpty {
+            return AnyView(EmptyView())
         }
         
-    }
+        return AnyView(
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Assigned Chords")
+                    .font(.headline)
 
-    // MARK: - Chord Edit Sheet
-    @ViewBuilder
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
+                        ForEach(Array(group.chordAssignments.keys.sorted()), id: \.self) { chordName in
+                            assignedChordButton(
+                                chordName: chordName,
+                                group: group,
+                                bindingGroupIndex: bindingGroupIndex
+                            )
+                        }
+                    }
+                    .padding(4)
+                }
+                .frame(maxHeight: 200)
+                .background(FrameLogger(name: "assignedChordsGrid"))
+            }
+        )
+    }
+    
+    private func assignedChordButton(chordName: String, group: PatternGroup, bindingGroupIndex: Int) -> some View {
+        ChordButtonView(
+            chordName: chordName,
+            isSelected: false,
+            shortcut: getShortcutForChord(chordName: chordName, group: group),
+            action: {
+                keyboardHandler.playChordButton(chordName: chordName)
+            },
+            onShortcutClick: { chordName in
+                capturingShortcutForChord = chordName
+                keyboardHandler.startCapturingShortcut(for: chordName)
+            },
+            isCapturingShortcut: capturingShortcutForChord == chordName
+        )
+        .contextMenu {
+            Button("Edit") {
+                editingChordGroupIndex = bindingGroupIndex
+                editingChordName = chordName
+                showChordEditSheet = true
+            }
+            Button("Remove", role: .destructive) {
+                removeChord(from: bindingGroupIndex, chordName: chordName)
+            }
+        }
+    }
+    
+    // MARK: - Sheet Views
     private var chordEditSheet: some View {
         if let gi = editingChordGroupIndex {
             let chordName = editingChordName
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Edit Chord")
-                    .font(.title2)
-
-                Text("Chord: \(chordName)")
-
-                VStack(alignment: .leading) {
-                    Text("Shortcut Key")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    TextField("Enter key", text: $editingShortcutBuffer, onEditingChanged: { editing in
-                        keyboardHandler.isTextInputActive = editing
-                    })
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .frame(width: 200)
-                }
-
-                VStack(alignment: .leading) {
-                    Text("Fingering")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    let patternsForTimeSig = appData.patternLibrary?[appData.performanceConfig.timeSignature] ?? []
-                    Picker("Fingering", selection: $editingFingeringBuffer) {
-                        Text("(group default)").tag("")
-                        ForEach(patternsForTimeSig, id: \.id) { f in
-                            Text(f.name).tag(f.id)
+            let group = appData.performanceConfig.patternGroups[gi]
+            let assignment = group.chordAssignments[chordName] ?? ChordAssignment()
+            
+            return AnyView(
+                VStack(spacing: 20) {
+                    Text("Edit Chord: \(chordName)")
+                        .font(.title2)
+                        .padding()
+                    
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Shortcut Key Section
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Shortcut Key")
+                                .font(.headline)
+                            
+                            HStack {
+                                if let currentShortcut = assignment.shortcutKey, !currentShortcut.isEmpty {
+                                    Text("Current: \(ChordButtonView.formatShortcutDisplay(currentShortcut))")
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("No shortcut assigned")
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Button(action: {
+                                    capturingShortcutForChord = chordName
+                                    keyboardHandler.startCapturingShortcut(for: chordName)
+                                }) {
+                                    Text(capturingShortcutForChord == chordName ? "Press key..." : "Set Shortcut")
+                                }
+                                .disabled(capturingShortcutForChord != nil)
+                            }
+                        }
+                        
+                        // Fingering Section
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Fingering Pattern")
+                                .font(.headline)
+                            
+                            TextField("Pattern ID", text: $editingFingeringBuffer)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .onAppear {
+                                    editingFingeringBuffer = assignment.fingeringId ?? ""
+                                }
                         }
                     }
-                    .pickerStyle(.menu)
-                    .frame(width: 240)
-                }
-
-                HStack {
-                    Button("Save") {
-                        if let gidx = editingChordGroupIndex {
-                            var g = appData.performanceConfig.patternGroups[gidx]
-                            var a = g.chordAssignments[editingChordName] ?? ChordAssignment()
-                            a.shortcutKey = editingShortcutBuffer.isEmpty ? nil : editingShortcutBuffer
-                            a.fingeringId = editingFingeringBuffer.isEmpty ? nil : editingFingeringBuffer
-                            g.chordAssignments[editingChordName] = a
-                            appData.performanceConfig.patternGroups[gidx] = g
+                    .padding()
+                    
+                    Spacer()
+                    
+                    HStack {
+                        Button("Cancel") {
+                            showChordEditSheet = false
+                            editingChordGroupIndex = nil
+                            editingChordName = ""
                         }
-                        showChordEditSheet = false
-                        editingChordGroupIndex = nil
+                        
+                        Spacer()
+                        
+                        Button("Save") {
+                            var updatedGroup = appData.performanceConfig.patternGroups[gi]
+                            var updatedAssignment = updatedGroup.chordAssignments[chordName] ?? ChordAssignment()
+                            updatedAssignment.fingeringId = editingFingeringBuffer.isEmpty ? nil : editingFingeringBuffer
+                            updatedGroup.chordAssignments[chordName] = updatedAssignment
+                            appData.performanceConfig.patternGroups[gi] = updatedGroup
+                            
+                            showChordEditSheet = false
+                            editingChordGroupIndex = nil
+                            editingChordName = ""
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    Button("Cancel") {
-                        showChordEditSheet = false
-                        editingChordGroupIndex = nil
-                    }
+                    .padding()
                 }
-            }
-            .padding()
-            .frame(minWidth: 360)
-            .onAppear {
-                if appData.performanceConfig.patternGroups.indices.contains(gi) {
-                    let g = appData.performanceConfig.patternGroups[gi]
-                    let assign = g.chordAssignments[chordName]
-                    editingShortcutBuffer = assign?.shortcutKey ?? ""
-                    editingFingeringBuffer = assign?.fingeringId ?? ""
-                }
-            }
+                .frame(width: 400, height: 300)
+            )
         } else {
-            Text("No chord")
+            return AnyView(EmptyView())
+        }
+    }
+    
+    private var chordDiagramCreatorSheet: some View {
+        ChordDiagramEditor(onSave: { name, def in
+            appData.chordLibrary = appData.chordLibrary ?? [:]
+            appData.chordLibrary?[name] = def
+            addChord(to: keyboardHandler.currentGroupIndex, chordName: name)
+            showChordDiagramCreator = false
+        }, onCancel: {
+            showChordDiagramCreator = false
+        })
+        .environmentObject(appData)
+        .environmentObject(keyboardHandler)
+    }
+    
+    // MARK: - Alert Views
+    @ViewBuilder
+    private var conflictAlertButtons: some View {
+        if let data = conflictData {
+            Button("替换 (\(data.conflictingChords.joined(separator: ", ")))") {
+                resolveConflict(choice: .replace)
+            }
+            Button("取消", role: .cancel) {
+                resolveConflict(choice: .cancel)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var conflictAlertMessage: some View {
+        if let data = conflictData {
+            Text("快捷键 \"\(ChordButtonView.formatShortcutDisplay(data.newShortcut))\" 已经被以下和弦使用：\n\n\(data.conflictingChords.joined(separator: ", "))\n\n选择 \"替换\" 将移除这些和弦的快捷键，并分配给 \"\(data.newChord)\"。")
+        }
+    }
+    
+    // MARK: - Setup Methods
+    private func setupShortcutCapture() {
+        keyboardHandler.onShortcutCaptured = { chordName, capturedKey in
+            let gi = self.keyboardHandler.currentGroupIndex
+            guard self.appData.performanceConfig.patternGroups.indices.contains(gi) else { return }
+
+            // Check for conflicts before setting the shortcut
+            if !capturedKey.isEmpty {
+                let conflictingChords = self.findConflictingChords(
+                    for: capturedKey, 
+                    excluding: chordName, 
+                    in: self.appData.performanceConfig.patternGroups[gi]
+                )
+                
+                if !conflictingChords.isEmpty {
+                    self.showConflictWarning(
+                        newChord: chordName,
+                        newShortcut: capturedKey,
+                        conflictingChords: conflictingChords,
+                        groupIndex: gi
+                    )
+                    self.capturingShortcutForChord = nil
+                    return
+                }
+            }
+
+            var group = self.appData.performanceConfig.patternGroups[gi]
+            var assignment = group.chordAssignments[chordName] ?? ChordAssignment()
+            assignment.shortcutKey = capturedKey.isEmpty ? nil : capturedKey
+            group.chordAssignments[chordName] = assignment
+            self.appData.performanceConfig.patternGroups[gi] = group
+
+            self.capturingShortcutForChord = nil
         }
     }
 
+    // MARK: - Conflict Detection and Resolution
+    private func findConflictingChords(for shortcut: String, excluding excludeChord: String, in group: PatternGroup) -> [String] {
+        var conflicts: [String] = []
+        
+        for (chordName, assignment) in group.chordAssignments {
+            if chordName != excludeChord && assignment.shortcutKey == shortcut {
+                conflicts.append(chordName)
+            }
+        }
+        
+        return conflicts
+    }
+    
+    private func showConflictWarning(newChord: String, newShortcut: String, conflictingChords: [String], groupIndex: Int) {
+        conflictData = ConflictData(
+            newChord: newChord,
+            newShortcut: newShortcut,
+            conflictingChords: conflictingChords,
+            groupIndex: groupIndex
+        )
+        showConflictAlert = true
+    }
+    
+    private func resolveConflict(choice: ConflictResolutionChoice) {
+        guard let data = conflictData else { return }
+        
+        switch choice {
+        case .replace:
+            // Remove shortcut from conflicting chords and assign to new chord
+            var group = appData.performanceConfig.patternGroups[data.groupIndex]
+            
+            // Remove shortcuts from conflicting chords
+            for chordName in data.conflictingChords {
+                if var assignment = group.chordAssignments[chordName] {
+                    assignment.shortcutKey = nil
+                    group.chordAssignments[chordName] = assignment
+                }
+            }
+            
+            // Assign shortcut to new chord
+            var newAssignment = group.chordAssignments[data.newChord] ?? ChordAssignment()
+            newAssignment.shortcutKey = data.newShortcut
+            group.chordAssignments[data.newChord] = newAssignment
+            
+            appData.performanceConfig.patternGroups[data.groupIndex] = group
+            
+        case .cancel:
+            // Do nothing, just close the alert
+            break
+        }
+        
+        // Clean up
+        conflictData = nil
+        showConflictAlert = false
+    }
+
+    // MARK: - Helper Methods
+    private func filteredChordLibrary(prefix: String) -> [String] {
+        let allChords = Array(appData.chordLibrary?.keys ?? [String: [StringOrInt]]().keys)
+        if prefix.isEmpty {
+            return allChords.sorted()
+        }
+        return allChords.filter { $0.localizedCaseInsensitiveContains(prefix) }.sorted()
+    }
+    
+    private func addChord(to groupIndex: Int, chordName: String) {
+        guard appData.performanceConfig.patternGroups.indices.contains(groupIndex) else { return }
+        
+        var group = appData.performanceConfig.patternGroups[groupIndex]
+        if group.chordAssignments[chordName] == nil {
+            group.chordAssignments[chordName] = ChordAssignment()
+            appData.performanceConfig.patternGroups[groupIndex] = group
+        }
+    }
+    
+    private func removeChord(from groupIndex: Int, chordName: String) {
+        guard appData.performanceConfig.patternGroups.indices.contains(groupIndex) else { return }
+        
+        var group = appData.performanceConfig.patternGroups[groupIndex]
+        group.chordAssignments.removeValue(forKey: chordName)
+        appData.performanceConfig.patternGroups[groupIndex] = group
+    }
+    
     private func getShortcutForChord(chordName: String, group: PatternGroup) -> String? {
         // 1. Check for a local, per-group override first.
         if let localShortcut = group.chordAssignments[chordName]?.shortcutKey, !localShortcut.isEmpty {
@@ -542,17 +669,6 @@ struct GroupConfigPanelView: View {
         // 4. No shortcut found.
         return nil
     }
-    
-    // MARK: - Shortcut Display Formatting
-    static func formatShortcutDisplay(_ shortcut: String) -> String {
-        // If the shortcut already contains modifier symbols, return as is
-        if shortcut.contains("⌘") || shortcut.contains("⌃") || shortcut.contains("⌥") || shortcut.contains("⇧") {
-            return shortcut
-        }
-        
-        // For backward compatibility, if it's a simple key without modifiers, just uppercase it
-        return shortcut.uppercased()
-    }
 
     // MARK: - Group Helpers
     private func addGroup() {
@@ -564,77 +680,59 @@ struct GroupConfigPanelView: View {
         } else if let fallbackPattern = appData.patternLibrary?["4/4"]?.first {
             initialPattern = fallbackPattern.id
         }
-        let newGroup = PatternGroup(name: newName, patterns: [:], pattern: initialPattern)
+        
+        let newGroup = PatternGroup(
+            name: newName,
+            patterns: [:],
+            pattern: initialPattern,
+            chordAssignments: [:]
+        )
         appData.performanceConfig.patternGroups.append(newGroup)
         keyboardHandler.currentGroupIndex = appData.performanceConfig.patternGroups.count - 1
     }
-
+    
     private func removeGroup(at index: Int) {
         guard appData.performanceConfig.patternGroups.indices.contains(index) else { return }
         appData.performanceConfig.patternGroups.remove(at: index)
-        keyboardHandler.currentGroupIndex = max(0, keyboardHandler.currentGroupIndex - 1)
-    }
-
-    private func addChord(to groupIndex: Int, chordName: String) {
-        guard appData.performanceConfig.patternGroups.indices.contains(groupIndex) else { return }
-        var group = appData.performanceConfig.patternGroups[groupIndex]
-        // Avoid duplicates
-        if group.chordsOrder.contains(chordName) { return }
-        group.chordsOrder.append(chordName)
-        group.chordAssignments[chordName] = ChordAssignment(fingeringId: nil, shortcutKey: nil)
-        appData.performanceConfig.patternGroups[groupIndex] = group
-    }
-
-    private func removeChord(named chordName: String, from groupIndex: Int) {
-        guard appData.performanceConfig.patternGroups.indices.contains(groupIndex) else { return }
-        var group = appData.performanceConfig.patternGroups[groupIndex]
-        group.chordsOrder.removeAll { $0 == chordName }
-        group.chordAssignments.removeValue(forKey: chordName)
-        appData.performanceConfig.patternGroups[groupIndex] = group
-    }
-
-    private func filteredChordLibrary(prefix: String) -> [String] {
-        // Use the app's chordLibrary keys, fallback to empty list
-        guard let library = appData.chordLibrary else { return [] }
-        if prefix.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return Array(library.keys).sorted()
+        
+        // Adjust current group index if necessary
+        if keyboardHandler.currentGroupIndex >= appData.performanceConfig.patternGroups.count {
+            keyboardHandler.currentGroupIndex = max(0, appData.performanceConfig.patternGroups.count - 1)
         }
-        let lower = prefix.lowercased()
-        return library.keys.filter { $0.lowercased().contains(lower) }.sorted()
     }
+}
 
-    // MARK: - Small subviews
-    struct GroupRow: View {
-        var group: PatternGroup
-        var isSelected: Bool
-        var onSelect: () -> Void
-        var onRename: (String) -> Void
-        var onDelete: () -> Void
+// MARK: - GroupRow View
+struct GroupRow: View {
+    var group: PatternGroup
+    var isSelected: Bool
+    var onSelect: () -> Void
+    var onRename: (String) -> Void
+    var onDelete: () -> Void
 
-        var body: some View {
-            HStack {
-                Button(action: onSelect) {
-                    HStack {
-                        Text(group.name)
-                            .foregroundColor(isSelected ? .white : .primary)
-                        if isSelected {
-                            Image(systemName: "star.fill")
-                                .foregroundColor(.yellow)
-                        }
+    var body: some View {
+        HStack {
+            Button(action: onSelect) {
+                HStack {
+                    Text(group.name)
+                        .foregroundColor(isSelected ? .white : .primary)
+                    if isSelected {
+                        Image(systemName: "star.fill")
+                            .foregroundColor(.yellow)
                     }
                 }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.plain)
             }
-            .padding(6)
-            .background(isSelected ? Color.blue.opacity(0.25) : Color.clear)
-            .cornerRadius(6)
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.plain)
         }
+        .padding(6)
+        .background(isSelected ? Color.blue.opacity(0.25) : Color.clear)
+        .cornerRadius(6)
     }
 }
