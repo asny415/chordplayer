@@ -9,6 +9,18 @@ struct ChordButtonView: View {
     let isCapturingShortcut: Bool // To indicate if this button is currently capturing
     
     private var displayName: (String, String) {
+        if chordName.hasSuffix("_Major7") {
+            let root = chordName.replacingOccurrences(of: "_Major7", with: "")
+                .replacingOccurrences(of: "_Sharp", with: "#")
+                .replacingOccurrences(of: "_", with: "")
+            return (root, "Major7")
+        }
+        if chordName.hasSuffix("_Minor7") {
+            let root = chordName.replacingOccurrences(of: "_Minor7", with: "")
+                .replacingOccurrences(of: "_Sharp", with: "#")
+                .replacingOccurrences(of: "_", with: "")
+            return (root, "Minor7")
+        }
         if chordName.hasSuffix("_Major") {
             let root = chordName.replacingOccurrences(of: "_Major", with: "")
                 .replacingOccurrences(of: "_Sharp", with: "#")
