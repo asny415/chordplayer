@@ -89,90 +89,61 @@ struct GroupConfigPanelView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     
-    // Local optional state for List selection, to fix the binding issue.
-    @State private var listSelection: Int?
+    @Binding var activeGroupIndex: Int?
     
-    @State private var chordSearchText: String = ""
     @State private var showChordEditSheet: Bool = false
     @State private var editingChordName: String = ""
-    @State private var editingChordGroupIndex: Int? = nil
     @State private var showChordDiagramCreator: Bool = false
     @State private var capturingShortcutForChord: String? = nil
     @State private var showConflictAlert = false
     @State private var conflictData: ConflictData? = nil
+    
+    // State for the new Chord Library modal
+    @State private var showChordLibrary = false
 
     var body: some View {
-        HSplitView {
-            groupListView
-                .frame(minWidth: 220, maxWidth: 280)
-            
-            groupEditorView
-                .frame(maxWidth: .infinity)
-        }
-        .padding()
-        .sheet(isPresented: $showChordEditSheet) { chordEditSheet }
-        .sheet(isPresented: $showChordDiagramCreator) { chordDiagramCreatorSheet }
-        .onAppear(perform: setupOnAppear)
-        .onDisappear { keyboardHandler.onShortcutCaptured = nil }
-        .alert("Shortcut Conflict", isPresented: $showConflictAlert, presenting: conflictData) { data in
-            Button("Replace (\(data.conflictingChords.joined(separator: ", ")))") {
-                resolveConflict(choice: .replace)
+        groupEditorView
+            .padding()
+            .sheet(isPresented: $showChordEditSheet) { chordEditSheet }
+            .sheet(isPresented: $showChordDiagramCreator) { chordDiagramCreatorSheet }
+            .sheet(isPresented: $showChordLibrary) {
+                ChordLibraryView { chordName in
+                    if let groupIndex = activeGroupIndex {
+                        addChord(to: groupIndex, chordName: chordName)
+                    }
+                    showChordLibrary = false // Dismiss after adding
+                }
             }
-            Button("Cancel", role: .cancel) {
-                resolveConflict(choice: .cancel)
+            .onAppear(perform: setupOnAppear)
+            .onDisappear { keyboardHandler.onShortcutCaptured = nil }
+            .alert("Shortcut Conflict", isPresented: $showConflictAlert, presenting: conflictData) { data in
+                Button("Replace (\(data.conflictingChords.joined(separator: ", ")))") {
+                    resolveConflict(choice: .replace)
+                }
+                Button("Cancel", role: .cancel) {
+                    resolveConflict(choice: .cancel)
+                }
+            } message: { data in
+                Text("The shortcut \"\(ChordButtonView.formatShortcutDisplay(data.newShortcut))\" is already used by: \n\n\(data.conflictingChords.joined(separator: ", "))\n\nAssigning it to \"\(data.newChord)\" will remove it from the other chords.")
             }
-        } message: { data in
-            Text("The shortcut \"\(ChordButtonView.formatShortcutDisplay(data.newShortcut))\" is already used by: \n\n\(data.conflictingChords.joined(separator: ", "))\n\nAssigning it to \"\(data.newChord)\" will remove it from the other chords.")
-        }
-        // Sync local selection with the global KeyboardHandler state
-        .onChange(of: listSelection) { _, newValue in
-            if let newValue = newValue {
-                keyboardHandler.currentGroupIndex = newValue
+            // Sync active group index with keyboard handler
+            .onChange(of: activeGroupIndex) { _, newValue in
+                keyboardHandler.currentGroupIndex = newValue ?? 0
             }
-        }
-        .onReceive(keyboardHandler.$currentGroupIndex) { newIndex in
-            listSelection = newIndex
-        }
     }
     
     private func setupOnAppear() {
-        listSelection = keyboardHandler.currentGroupIndex
+        keyboardHandler.currentGroupIndex = activeGroupIndex ?? 0
         setupShortcutCapture()
     }
     
     // MARK: - Sub Views
-    private var groupListView: some View {
-        VStack {
-            HStack {
-                Text("Chord Groups")
-                    .font(.title2).bold()
-                Spacer()
-                Button(action: addGroup) { Label("Add Group", systemImage: "plus") }
-                    .labelStyle(.iconOnly)
-            }
-            .padding(.bottom, 8)
-            
-            List(selection: $listSelection) { // Use local optional selection
-                ForEach(Array(appData.performanceConfig.patternGroups.indices), id: \.self) {
-                    index in
-                    GroupRow(group: appData.performanceConfig.patternGroups[index],
-                             isSelected: index == keyboardHandler.currentGroupIndex,
-                             onDelete: { removeGroup(at: index) })
-                        .tag(index) // Tag is now matched with optional selection
-                }
-            }
-            .listStyle(.inset(alternatesRowBackgrounds: true))
-        }
-    }
-    
     private var groupEditorView: some View {
         ScrollView {
-            if appData.performanceConfig.patternGroups.indices.contains(keyboardHandler.currentGroupIndex) {
-                let bindingGroupIndex = keyboardHandler.currentGroupIndex
-                
+            if let groupIndex = activeGroupIndex, appData.performanceConfig.patternGroups.indices.contains(groupIndex) {
                 VStack(alignment: .leading, spacing: 24) {
-                    groupSettingsView(bindingGroupIndex: bindingGroupIndex)
-                    chordManagementView(bindingGroupIndex: bindingGroupIndex)
+                    groupSettingsView(bindingGroupIndex: groupIndex)
+                    chordManagementView(bindingGroupIndex: groupIndex)
                 }
                 .padding(.vertical)
             } else {
@@ -204,49 +175,13 @@ struct GroupConfigPanelView: View {
         Section(header: Text("Assigned Chords").font(.headline)) {
             assignedChordsView(bindingGroupIndex: bindingGroupIndex)
             
-            VStack(alignment: .leading) {
-                Text("Add Chords").font(.subheadline).bold()
-                TextField("Search chords...", text: $chordSearchText)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(.bottom, 8)
-                chordResultsGridView(bindingGroupIndex: bindingGroupIndex)
+            // Button to open the chord library
+            Button(action: { showChordLibrary = true }) {
+                Label("Add Chords from Library", systemImage: "plus.circle.fill")
             }
+            .buttonStyle(.borderedProminent)
+            .padding(.top)
         }
-    }
-    
-    private func chordResultsGridView(bindingGroupIndex: Int) -> some View {
-        ScrollView(.vertical) {
-            let results = filteredChordLibrary(prefix: chordSearchText)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], spacing: 12) {
-                ForEach(results, id: \.self) {
-                    chord in
-                    chordResultButton(chord: chord, bindingGroupIndex: bindingGroupIndex)
-                }
-            }
-        }
-        .frame(maxHeight: 250)
-    }
-    
-    private func chordResultButton(chord: String, bindingGroupIndex: Int) -> some View {
-        Button(action: { addChord(to: bindingGroupIndex, chordName: chord) }) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(chord).font(.headline)
-                    Text(appData.chordLibrary?[chord]?.map { item in
-                        if case .string(let s) = item { return s }
-                        if case .int(let i) = item { return String(i) }
-                        return ""
-                    }.joined(separator: "·") ?? "")
-                    .font(.caption).foregroundColor(.secondary)
-                }
-                Spacer()
-                Image(systemName: "plus.circle.fill")
-            }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
-        }
-        .buttonStyle(.plain)
     }
     
     private func assignedChordsView(bindingGroupIndex: Int) -> some View {
@@ -275,7 +210,7 @@ struct GroupConfigPanelView: View {
             isCapturingShortcut: capturingShortcutForChord == chordName
         )
         .contextMenu {
-            Button("Edit Details") {                editingChordGroupIndex = bindingGroupIndex
+            Button("Edit Details") {
                 editingChordName = chordName
                 showChordEditSheet = true
             }
@@ -288,7 +223,7 @@ struct GroupConfigPanelView: View {
     // MARK: - Sheet Views
     private var chordEditSheet: some View {
         // Simplified for brevity, logic remains the same
-        if let gi = editingChordGroupIndex {
+        if let gi = activeGroupIndex {
             let chordName = editingChordName
             return AnyView(
                 VStack {
@@ -310,7 +245,9 @@ struct GroupConfigPanelView: View {
         ChordDiagramEditor(onSave: { name, def in
             appData.chordLibrary = appData.chordLibrary ?? [:]
             appData.chordLibrary?[name] = def
-            addChord(to: keyboardHandler.currentGroupIndex, chordName: name)
+            if let groupIndex = activeGroupIndex {
+                addChord(to: groupIndex, chordName: name)
+            }
             showChordDiagramCreator = false
         }, onCancel: { showChordDiagramCreator = false })
     }
@@ -320,11 +257,7 @@ struct GroupConfigPanelView: View {
     private func findConflictingChords(for shortcut: String, excluding: String, in group: PatternGroup) -> [String] { /* ... */ return [] }
     private func showConflictWarning(newChord: String, newShortcut: String, conflictingChords: [String], groupIndex: Int) { /* ... */ }
     private func resolveConflict(choice: ConflictResolutionChoice) { /* ... */ }
-    private func filteredChordLibrary(prefix: String) -> [String] {
-        let allChords = Array(appData.chordLibrary?.keys ?? [String: [StringOrInt]]().keys)
-        if prefix.isEmpty { return allChords.sorted() }
-        return allChords.filter { $0.localizedCaseInsensitiveContains(prefix) }.sorted()
-    }
+
     private func addChord(to groupIndex: Int, chordName: String) {
         guard appData.performanceConfig.patternGroups.indices.contains(groupIndex) else { return }
         var group = appData.performanceConfig.patternGroups[groupIndex]
@@ -340,31 +273,4 @@ struct GroupConfigPanelView: View {
         appData.performanceConfig.patternGroups[groupIndex] = group
     }
     private func getShortcutForChord(chordName: String, group: PatternGroup) -> String? { return nil }
-    private func addGroup() {
-        let newName = "New Group \(appData.performanceConfig.patternGroups.count + 1)"
-        let newGroup = PatternGroup(name: newName, patterns: [:], pattern: nil, chordAssignments: [:])
-        appData.performanceConfig.patternGroups.append(newGroup)
-        keyboardHandler.currentGroupIndex = appData.performanceConfig.patternGroups.count - 1
-    }
-    private func removeGroup(at index: Int) {
-        guard appData.performanceConfig.patternGroups.indices.contains(index) else { return }
-        appData.performanceConfig.patternGroups.remove(at: index)
-        if keyboardHandler.currentGroupIndex >= appData.performanceConfig.patternGroups.count {
-            keyboardHandler.currentGroupIndex = max(0, appData.performanceConfig.patternGroups.count - 1)
-        }
-    }
-}
-
-// MARK: - GroupRow View
-struct GroupRow: View {
-    var group: PatternGroup
-    var isSelected: Bool
-    var onDelete: () -> Void
-
-    var body: some View {
-        Label(group.name, systemImage: isSelected ? "folder.fill" : "folder")
-            .contextMenu {
-                Button("Delete Group", role: .destructive, action: onDelete)
-            }
-    }
 }

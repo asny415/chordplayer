@@ -9,21 +9,22 @@ struct ContentView: View {
     @EnvironmentObject var metronome: Metronome
 
     @State private var showingCreateSheet = false
+    @State private var activeGroupIndex: Int? = 0
 
     var body: some View {
         NavigationSplitView {
-            // MARK: - Sidebar for Presets
+            // MARK: - Column 1: Sidebar for Presets
             PresetSidebar(showingCreateSheet: $showingCreateSheet)
                 .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 400)
 
         } content: {
-            // MARK: - Main Controls
-            MainControlsView()
+            // MARK: - Column 2: Preset Workspace (Global Controls + Group List)
+            PresetWorkspaceView(activeGroupIndex: $activeGroupIndex)
                 .navigationSplitViewColumnWidth(min: 400, ideal: 450, max: 600)
 
         } detail: {
-            // MARK: - Group and Chord Editor
-            GroupConfigPanelView()
+            // MARK: - Column 3: Group Config Panel (Inspector)
+            GroupConfigPanelView(activeGroupIndex: $activeGroupIndex)
         }
         .preferredColorScheme(.dark)
         .frame(minWidth: 1200, minHeight: 700)
@@ -125,19 +126,6 @@ private struct PresetRow: View {
         .onTapGesture(perform: onSelect)
     }
 }
-
-
-// MARK: - Main Controls View (Replaces ControlBarView)
-private struct MainControlsView: View {
-    var body: some View {
-        ScrollView {
-            ControlBarView() // We will refactor ControlBarView itself next
-                .padding()
-        }
-        .background(Color.black.opacity(0.1))
-    }
-}
-
 
 // MARK: - Preview
 struct ContentView_Previews: PreviewProvider {
