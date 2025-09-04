@@ -51,6 +51,8 @@ struct ControlBarView: View {
     @EnvironmentObject var drumPlayer: DrumPlayer
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     
+    @State private var showAutoSaveDebug = false
+    
     // A computed property for the drum patterns available for the current time signature
     private var availableDrumPatterns: [String] {
         guard let patterns = appData.drumPatternLibrary?[appData.performanceConfig.timeSignature] else {
@@ -184,11 +186,26 @@ struct ControlBarView: View {
                     }
                 )
                 .frame(width: 160)
+                
+                // Auto Save Debug Button
+                Button(action: {
+                    showAutoSaveDebug = true
+                }) {
+                    Image(systemName: "externaldrive.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.cyan)
+                }
+                .buttonStyle(.plain)
+                .help("自动保存调试")
             }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(Color.black.opacity(0.2))
         .focusable(false)
+        .sheet(isPresented: $showAutoSaveDebug) {
+            AutoSaveDebugView()
+                .environmentObject(appData)
+        }
     }
 }
