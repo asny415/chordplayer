@@ -191,8 +191,8 @@ struct ControlBarView: View {
             }
         }
         .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(Color.black.opacity(0.2))
+        .padding(.vertical, 10)
+        .background(Color.black.opacity(0.15))
         .focusable(false)
         .sheet(isPresented: $showPresetManager) {
             PresetManagerView()

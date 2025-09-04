@@ -34,8 +34,8 @@ struct PresetQuickAccessView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.controlBackgroundColor))
-                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                .fill(Color(NSColor.controlBackgroundColor).opacity(0.8))
+                .shadow(color: .black.opacity(0.05), radius: 1, x: 0, y: 1)
         )
         .sheet(isPresented: $showingPresetManager) {
             PresetManagerView()

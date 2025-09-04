@@ -16,8 +16,19 @@ struct ContentView: View {
             // Main background color
             Color.black.opacity(0.9).ignoresSafeArea()
             
-                VStack(alignment: .leading, spacing: 10) {
-                // MARK: - Top Control Bar
+                VStack(alignment: .leading, spacing: 0) {
+                // MARK: - Preset Quick Access (Top)
+                PresetQuickAccessView()
+                    .environmentObject(appData)
+                    .padding(.horizontal)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                    .background(Color.gray.opacity(0.05))
+                
+                Divider()
+                    .padding(.horizontal)
+                
+                // MARK: - Control Bar
                 ControlBarView()
                     .padding()
                     .background(Color.gray.opacity(0.1))
@@ -26,7 +37,7 @@ struct ContentView: View {
                 
                 // MARK: - Group Configuration Panel
                 GroupConfigPanelView()
-                                .padding(.bottom, 12)
+                    .padding(.bottom, 12)
         }
         .preferredColorScheme(.dark)
         .frame(minWidth: 900, minHeight: 600) // Increased minWidth for more horizontal space

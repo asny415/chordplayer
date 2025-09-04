@@ -141,10 +141,6 @@ struct GroupConfigPanelView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // Preset快速访问
-            PresetQuickAccessView()
-                .environmentObject(appData)
-            
             HStack(alignment: .top, spacing: 12) {
                 groupListView
                 Divider()
