@@ -41,85 +41,103 @@ struct ChordButtonView: View {
     
     var body: some View {
         Button(action: action) {
-            ZStack(alignment: .topTrailing) {
-                // Main content
-                VStack {
-                    Text(displayName.0)
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(isSelected ? .white : .primary)
-                        .minimumScaleFactor(0.5)
-                        .lineLimit(1)
-                    
-                    if !displayName.1.isEmpty {
-                        Text(displayName.1)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                    }
-                }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 5)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                // Shortcut key overlay / Placeholder (now always a button)
-                Button(action: { onShortcutClick(chordName) }) {
-                    ZStack { // Use ZStack to layer content
-                        if let shortcut = shortcut {
-                            Text(shortcut.uppercased())
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.7))
-                                .padding(5)
-                                .background(Color.black.opacity(0.25))
-                                .clipShape(Circle())
-                                .padding(4)
-                        } else {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.gray.opacity(0.6))
-                                .padding(4)
-                        }
-
-                        // Visual feedback for capturing state
-                        if isCapturingShortcut {
-                            Circle()
-                                .stroke(Color.accentColor, lineWidth: 2)
-                                .frame(width: 30, height: 30) // Adjust size as needed
-                                .scaleEffect(1.2) // Make it slightly larger
-                                .opacity(0.8)
-                                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isCapturingShortcut)
-                        }
-                    }
-                }
-                .buttonStyle(.plain) // Ensure it's a plain button
-                .padding(4) // Padding to match the original shortcut padding
-            }
-            .frame(minWidth: 100, minHeight: 80)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.blue : Color.gray.opacity(0.15))
-            )
-            // The "Glow" is an outer border that animates.
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.blue, lineWidth: 4)
-                    .blur(radius: 4)
-                    .opacity(isSelected ? 1 : 0) // Fade in/out
-            )
-            // A standard inner border for definition
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.blue.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
-            )
-            .shadow(
-                color: isSelected ? Color.blue.opacity(0.4) : Color.black.opacity(0.2),
-                radius: isSelected ? 10 : 3, // Enhanced physicality
-                x: 0,
-                y: isSelected ? 5 : 1      // Enhanced physicality
-            )
+            chordButtonContent
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .scaleEffect(isSelected ? 1.08 : 1.0) // Enhanced physicality
+        .scaleEffect(isSelected ? 1.08 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isSelected)
+    }
+    
+    @ViewBuilder
+    private var chordButtonContent: some View {
+        ZStack(alignment: .topTrailing) {
+            mainContent
+            shortcutButton
+        }
+        .frame(minWidth: 100, minHeight: 80)
+        .background(backgroundView)
+        .overlay(glowOverlay)
+        .overlay(borderOverlay)
+        .shadow(
+            color: isSelected ? Color.blue.opacity(0.4) : Color.black.opacity(0.2),
+            radius: isSelected ? 10 : 3,
+            x: 0,
+            y: isSelected ? 5 : 1
+        )
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
+        VStack {
+            Text(displayName.0)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundColor(isSelected ? .white : .primary)
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+            
+            if !displayName.1.isEmpty {
+                Text(displayName.1)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    @ViewBuilder
+    private var shortcutButton: some View {
+        Button(action: { onShortcutClick(chordName) }) {
+            ZStack {
+                if let shortcut = shortcut {
+                    Text(GroupConfigPanelView.formatShortcutDisplay(shortcut))
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(5)
+                        .background(Color.black.opacity(0.25))
+                        .clipShape(Circle())
+                        .padding(4)
+                } else {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.gray.opacity(0.6))
+                        .padding(4)
+                }
+
+                if isCapturingShortcut {
+                    Circle()
+                        .stroke(Color.accentColor, lineWidth: 2)
+                        .frame(width: 30, height: 30)
+                        .scaleEffect(1.2)
+                        .opacity(0.8)
+                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isCapturingShortcut)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(4)
+    }
+    
+    @ViewBuilder
+    private var backgroundView: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(isSelected ? Color.blue : Color.gray.opacity(0.15))
+    }
+    
+    @ViewBuilder
+    private var glowOverlay: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .stroke(Color.blue, lineWidth: 4)
+            .blur(radius: 4)
+            .opacity(isSelected ? 1 : 0)
+    }
+    
+    @ViewBuilder
+    private var borderOverlay: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .stroke(isSelected ? Color.blue.opacity(0.5) : Color.gray.opacity(0.2), lineWidth: 1)
     }
 }
 
@@ -508,12 +526,12 @@ struct GroupConfigPanelView: View {
     private func getShortcutForChord(chordName: String, group: PatternGroup) -> String? {
         // 1. Check for a local, per-group override first.
         if let localShortcut = group.chordAssignments[chordName]?.shortcutKey, !localShortcut.isEmpty {
-            return localShortcut.uppercased()
+            return localShortcut
         }
 
         // 2. Check user-defined global keyMap.
         if let globalKey = appData.performanceConfig.keyMap.first(where: { $0.value == chordName })?.key {
-            return globalKey.uppercased()
+            return globalKey
         }
 
         // 3. Fallback to the default, hardcoded mapping from MusicTheory.
@@ -523,6 +541,17 @@ struct GroupConfigPanelView: View {
 
         // 4. No shortcut found.
         return nil
+    }
+    
+    // MARK: - Shortcut Display Formatting
+    static func formatShortcutDisplay(_ shortcut: String) -> String {
+        // If the shortcut already contains modifier symbols, return as is
+        if shortcut.contains("⌘") || shortcut.contains("⌃") || shortcut.contains("⌥") || shortcut.contains("⇧") {
+            return shortcut
+        }
+        
+        // For backward compatibility, if it's a simple key without modifiers, just uppercase it
+        return shortcut.uppercased()
     }
 
     // MARK: - Group Helpers

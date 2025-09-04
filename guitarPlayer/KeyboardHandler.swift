@@ -79,6 +79,52 @@ class KeyboardHandler: ObservableObject {
         isCapturingShortcut = false
         targetChordForShortcutCapture = nil
     }
+    
+    // MARK: - Shortcut Key Formatting
+    private func formatShortcutKey(event: NSEvent) -> String {
+        guard let characters = event.charactersIgnoringModifiers else { return "" }
+        
+        let isControlDown = event.modifierFlags.contains(.control)
+        let isShiftDown = event.modifierFlags.contains(.shift)
+        let isOptionDown = event.modifierFlags.contains(.option)
+        let isCommandDown = event.modifierFlags.contains(.command)
+        
+        // Get the base key name
+        let keyName: String
+        switch event.keyCode {
+        case 126: keyName = "up"
+        case 125: keyName = "down"
+        case 24: keyName = "equal"
+        case 27: keyName = "minus"
+        case 49: keyName = "space"
+        case 18: keyName = "1"
+        case 19: keyName = "2"
+        case 20: keyName = "3"
+        case 21: keyName = "4"
+        case 23: keyName = "5"
+        case 22: keyName = "6"
+        case 26: keyName = "7"
+        case 28: keyName = "8"
+        case 25: keyName = "9"
+        case 17: keyName = "t"
+        case 12: keyName = "q"
+        default: keyName = characters.lowercased()
+        }
+        
+        // Build modifier string
+        var modifiers: [String] = []
+        if isCommandDown { modifiers.append("⌘") }
+        if isControlDown { modifiers.append("⌃") }
+        if isOptionDown { modifiers.append("⌥") }
+        if isShiftDown { modifiers.append("⇧") }
+        
+        // Combine modifiers with key
+        if modifiers.isEmpty {
+            return keyName.uppercased()
+        } else {
+            return modifiers.joined(separator: "") + "+" + keyName.uppercased()
+        }
+    }
 
     private func setupEventMonitor() {
         let installer = {
@@ -138,7 +184,7 @@ class KeyboardHandler: ObservableObject {
         // --- NEW LOGIC FOR SHORTCUT CAPTURE ---
         if isCapturingShortcut {
             if let chordName = targetChordForShortcutCapture {
-                let capturedKey = characters.lowercased() // Or event.keyCode for more precise key
+                let capturedKey = formatShortcutKey(event: event)
                 onShortcutCaptured?(chordName, capturedKey)
                 stopCapturingShortcut() // Stop capture after one key
             }
@@ -263,9 +309,11 @@ class KeyboardHandler: ObservableObject {
         let currentGroupIndex = self.currentGroupIndex // Get the active group index
         if appData.performanceConfig.patternGroups.indices.contains(currentGroupIndex) {
             let activeGroup = appData.performanceConfig.patternGroups[currentGroupIndex]
+            // Create the full shortcut string for comparison
+            let currentShortcut = formatShortcutKey(event: event)
             // Iterate through chordAssignments in the active group to find a match
             if let foundChordName = activeGroup.chordAssignments.first(where: { (key, value) in
-                return value.shortcutKey?.lowercased() == keyName
+                return value.shortcutKey == currentShortcut
             })?.key {
                 chordName = foundChordName
             }
