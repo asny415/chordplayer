@@ -256,7 +256,7 @@ struct GroupConfigPanelView: View {
     // MARK: - Logic (Setup, Conflict, Helpers, etc.)
     
     private func setupShortcutCapture() {
-        keyboardHandler.onShortcutCaptured = { shortcut in
+        keyboardHandler.onShortcutCaptured = { (shortcut: String) in
             guard let chordName = capturingShortcutForChord, let groupIndex = activeGroupIndex else { return }
             
             let conflictingChords = findConflictingChords(for: shortcut, excluding: chordName, in: appData.performanceConfig.patternGroups[groupIndex])
