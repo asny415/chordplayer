@@ -4,6 +4,7 @@ import SwiftUI
 struct PresetManagerView: View {
     @EnvironmentObject var appData: AppData
     @StateObject private var presetManager = PresetManager.shared
+    @Environment(\.dismiss) private var dismiss
     
     @State private var showingCreateSheet = false
     @State private var showingEditSheet = false
@@ -80,7 +81,7 @@ struct PresetManagerView: View {
         }
         .sheet(isPresented: $showingEditSheet) {
             if let selectedPreset = selectedPreset {
-                PresetEditView(preset: selectedPreset)
+                PresetCreateView()
                     .environmentObject(appData)
                     .environmentObject(presetManager)
             }
@@ -135,6 +136,17 @@ struct PresetManagerView: View {
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(8)
             }
+            
+            // 关闭按钮
+            Button(action: {
+                dismiss()
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Close")
         }
         .padding()
     }
