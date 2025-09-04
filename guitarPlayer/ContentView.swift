@@ -5,54 +5,39 @@ import CoreMIDI
 
 struct ContentView: View {
     @EnvironmentObject var appData: AppData
-    @EnvironmentObject var midiManager: MidiManager
-    @EnvironmentObject var metronome: Metronome
-    @EnvironmentObject var guitarPlayer: GuitarPlayer
-    @EnvironmentObject var drumPlayer: DrumPlayer
     @EnvironmentObject var keyboardHandler: KeyboardHandler
-    
+    @EnvironmentObject var metronome: Metronome
+
+    @State private var showingCreateSheet = false
+
     var body: some View {
-    ZStack {
-            // Main background color
-            Color.black.opacity(0.9).ignoresSafeArea()
-            
-                VStack(alignment: .leading, spacing: 0) {
-                // MARK: - Preset Quick Access (Top)
-                PresetQuickAccessView()
-                    .environmentObject(appData)
-                    .padding(.horizontal)
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
-                    .background(Color.gray.opacity(0.05))
-                
-                Divider()
-                    .padding(.horizontal)
-                
-                // MARK: - Control Bar
-                ControlBarView()
-                    .padding()
-                    .background(Color.gray.opacity(0.1))
-                
-                Divider()
-                
-                // MARK: - Group Configuration Panel
-                GroupConfigPanelView()
-                    .padding(.bottom, 12)
+        NavigationSplitView {
+            // MARK: - Sidebar for Presets
+            PresetSidebar(showingCreateSheet: $showingCreateSheet)
+                .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 400)
+
+        } content: {
+            // MARK: - Main Controls
+            MainControlsView()
+                .navigationSplitViewColumnWidth(min: 400, ideal: 450, max: 600)
+
+        } detail: {
+            // MARK: - Group and Chord Editor
+            GroupConfigPanelView()
         }
         .preferredColorScheme(.dark)
-        .frame(minWidth: 900, minHeight: 600) // Increased minWidth for more horizontal space
+        .frame(minWidth: 1200, minHeight: 700)
         .onAppear(perform: setupInitialState)
+        .sheet(isPresented: $showingCreateSheet) {
+            PresetCreateView()
+        }
         // Clicking on empty area should clear focus so global shortcuts work again
-        .contentShape(Rectangle())
         .onTapGesture {
             NSApp.keyWindow?.makeFirstResponder(nil)
             keyboardHandler.isTextInputActive = false
         }
     }
-}
-
     
-    // MARK: - Setup
     private func setupInitialState() {
         DispatchQueue.main.async {
             keyboardHandler.currentTimeSignature = appData.performanceConfig.timeSignature
@@ -67,6 +52,92 @@ struct ContentView: View {
         }
     }
 }
+
+// MARK: - Preset Sidebar View
+private struct PresetSidebar: View {
+    @EnvironmentObject var appData: AppData
+    @StateObject private var presetManager = PresetManager.shared
+    @Binding var showingCreateSheet: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            List(selection: .constant(presetManager.currentPreset?.id)) {
+                Section(header: Text("Presets")) {
+                    ForEach(presetManager.presets) { preset in
+                        PresetRow(preset: preset,
+                                  isCurrent: preset.id == presetManager.currentPreset?.id,
+                                  onSelect: { appData.loadPreset(preset) })
+                    }
+                }
+            }
+            .listStyle(.sidebar)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: { showingCreateSheet = true }) {
+                        Label("New Preset", systemImage: "plus")
+                    }
+                }
+            }
+            
+            Divider()
+            
+            // Current Preset Status Footer
+            VStack(alignment: .leading, spacing: 4) {
+                let current = presetManager.currentPresetOrUnnamed
+                let isUnnamed = presetManager.isUnnamedPreset(current)
+                
+                Text("Current")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                HStack {
+                    Image(systemName: isUnnamed ? "circle.dotted" : "checkmark.circle.fill")
+                        .foregroundColor(isUnnamed ? .orange : .green)
+                    Text(current.name).bold()
+                }
+            }
+            .padding()
+        }
+    }
+}
+
+// MARK: - Preset Row
+private struct PresetRow: View {
+    let preset: Preset
+    let isCurrent: Bool
+    let onSelect: () -> Void
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "folder")
+                .foregroundColor(.accentColor)
+            VStack(alignment: .leading) {
+                Text(preset.name)
+                    .fontWeight(isCurrent ? .bold : .regular)
+                if let desc = preset.description, !desc.isEmpty {
+                    Text(desc)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onSelect)
+    }
+}
+
+
+// MARK: - Main Controls View (Replaces ControlBarView)
+private struct MainControlsView: View {
+    var body: some View {
+        ScrollView {
+            ControlBarView() // We will refactor ControlBarView itself next
+                .padding()
+        }
+        .background(Color.black.opacity(0.1))
+    }
+}
+
 
 // MARK: - Preview
 struct ContentView_Previews: PreviewProvider {

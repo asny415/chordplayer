@@ -1,46 +1,6 @@
 import SwiftUI
 import CoreMIDI
 
-// MARK: - Reusable Views
-
-struct ControlStripLabel: View {
-    let title: String
-    
-    var body: some View {
-        Text(title)
-            .font(.caption)
-            .foregroundColor(.secondary)
-            .padding(.bottom, -4) // Adjust spacing
-    }
-}
-
-struct StyledPicker<T: Hashable>: View {
-    let title: String
-    @Binding var selection: T
-    let items: [T]
-    let display: (T) -> String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if !title.isEmpty {
-                ControlStripLabel(title: title)
-            }
-            Picker(title, selection: $selection) {
-                ForEach(items, id: \.self) { item in
-                    Text(display(item)).tag(item)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.black.opacity(0.15))
-            .cornerRadius(8)
-            .accentColor(.cyan)
-        }
-    }
-}
-
 // MARK: - Main Control Bar View
 
 struct ControlBarView: View {
@@ -50,8 +10,6 @@ struct ControlBarView: View {
     @EnvironmentObject var guitarPlayer: GuitarPlayer
     @EnvironmentObject var drumPlayer: DrumPlayer
     @EnvironmentObject var keyboardHandler: KeyboardHandler
-    
-    @State private var showPresetManager = false
     
     // A computed property for the drum patterns available for the current time signature
     private var availableDrumPatterns: [String] {
@@ -76,11 +34,10 @@ struct ControlBarView: View {
     }
 
     var body: some View {
-        HStack(spacing: 16) {
+        Form {
             // --- DRUM CONTROL GROUP ---
-            VStack(alignment: .leading, spacing: 4) {
-                ControlStripLabel(title: "Drum Machine")
-                HStack(spacing: 8) {
+            Section(header: Text("Drum Machine")) {
+                HStack {
                     Button(action: {
                         if drumPlayer.isPlaying {
                             drumPlayer.stop()
@@ -89,41 +46,36 @@ struct ControlBarView: View {
                         }
                     }) {
                         Image(systemName: drumPlayer.isPlaying ? "stop.fill" : "play.fill")
-                            .font(.system(size: 24))
+                            .font(.title2)
                             .foregroundColor(drumPlayer.isPlaying ? .red : .green)
-                            .frame(width: 28, height: 28)
+                            .contentTransition(.symbolEffect(.replace))
                     }
                     .buttonStyle(.plain)
                     .focusable(false)
                     .disabled(midiManager.selectedOutput == nil && !drumPlayer.isPlaying)
 
-                    StyledPicker(
-                        title: "", // Title is implicit via the group label
-                        selection: drumPatternBinding,
-                        items: availableDrumPatterns,
-                        display: { patternKey in
-                            appData.drumPatternLibrary?[appData.performanceConfig.timeSignature]?[patternKey]?.displayName ?? patternKey
+                    Picker("Pattern", selection: drumPatternBinding) {
+                        ForEach(availableDrumPatterns, id: \.self) { patternKey in
+                            Text(appData.drumPatternLibrary?[appData.performanceConfig.timeSignature]?[patternKey]?.displayName ?? patternKey).tag(patternKey)
                         }
-                    )
-                    .frame(width: 180)
+                    }
+                    .pickerStyle(.menu)
                 }
             }
             
             // --- GLOBAL MUSIC SETTINGS ---
-            HStack(spacing: 12) {
-                StyledPicker(
-                    title: "Key",
-                    selection: $appData.performanceConfig.key,
-                    items: appData.KEY_CYCLE,
-                    display: { $0 }
-                )
+            Section(header: Text("Global Settings")) {
+                Picker("Key", selection: $appData.performanceConfig.key) {
+                    ForEach(appData.KEY_CYCLE, id: \.self) { item in
+                        Text(item).tag(item)
+                    }
+                }
                 
-                StyledPicker(
-                    title: "Time Sig",
-                    selection: $appData.performanceConfig.timeSignature,
-                    items: appData.TIME_SIGNATURE_CYCLE,
-                    display: { $0 }
-                )
+                Picker("Time Sig", selection: $appData.performanceConfig.timeSignature) {
+                    ForEach(appData.TIME_SIGNATURE_CYCLE, id: \.self) { item in
+                        Text(item).tag(item)
+                    }
+                }
                 .onChange(of: appData.performanceConfig.timeSignature) { _, newTimeSig in
                     // When time signature changes, select a default pattern for the new signature
                     switch newTimeSig {
@@ -139,65 +91,48 @@ struct ControlBarView: View {
                     }
                 }
 
-                StyledPicker(
-                    title: "Quantize",
-                    selection: Binding<String>(
-                        get: { appData.performanceConfig.quantize ?? QuantizationMode.none.rawValue },
-                        set: { appData.performanceConfig.quantize = $0 }
-                    ),
-                    items: QuantizationMode.allCases.map { $0.rawValue },
-                    display: { rawValue in
-                        QuantizationMode(rawValue: rawValue)?.displayName ?? rawValue
-                    }
-                )
-            }
-            
-            Spacer()
-            
-            // --- MIDI OUTPUT & TEMPO ---
-            HStack(spacing: 16) {
-                // Tempo Control
-                VStack(alignment: .leading, spacing: 4) {
-                    ControlStripLabel(title: "BPM: \(Int(appData.performanceConfig.tempo))")
-                    HStack(spacing: 8) {
-                        Slider(
-                            value: $appData.performanceConfig.tempo,
-                            in: 60...240,
-                            step: 1,
-                            onEditingChanged: { _ in metronome.tempo = appData.performanceConfig.tempo }
-                        )
-                        Stepper("BPM",
-                            value: $appData.performanceConfig.tempo,
-                            in: 60...240,
-                            step: 1,
-                            onEditingChanged: { _ in metronome.tempo = appData.performanceConfig.tempo }
-                        ).labelsHidden()
+                Picker("Quantize", selection: Binding<String>(
+                    get: { appData.performanceConfig.quantize ?? QuantizationMode.none.rawValue },
+                    set: { appData.performanceConfig.quantize = $0 }
+                )) {
+                    ForEach(QuantizationMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode.rawValue)
                     }
                 }
-                .frame(width: 180)
-                
-                // MIDI Output
-                StyledPicker(
-                    title: "MIDI Output",
-                    selection: $midiManager.selectedOutput,
-                    items: [nil] + midiManager.availableOutputs,
-                    display: { endpoint in
-                        endpoint.map { midiManager.displayName(for: $0) } ?? "None"
+            }
+            
+            // --- MIDI OUTPUT & TEMPO ---
+            Section(header: Text("Tempo & MIDI")) {
+                VStack {
+                    HStack {
+                        Text("BPM")
+                        Spacer()
+                        Text("\(Int(appData.performanceConfig.tempo))")
+                            .foregroundColor(.secondary)
                     }
-                )
-                .frame(width: 160)
+                    Slider(
+                        value: $appData.performanceConfig.tempo,
+                        in: 60...240,
+                        step: 1,
+                        onEditingChanged: { _ in metronome.tempo = appData.performanceConfig.tempo }
+                    )
+                    Stepper("BPM",
+                        value: $appData.performanceConfig.tempo,
+                        in: 60...240,
+                        step: 1,
+                        onEditingChanged: { _ in metronome.tempo = appData.performanceConfig.tempo }
+                    ).labelsHidden()
+                }
                 
-                
+                Picker("MIDI Output", selection: $midiManager.selectedOutput) {
+                    Text("None").tag(MIDIEndpointRef?.none)
+                    ForEach(midiManager.availableOutputs, id: \.self) { endpoint in
+                        Text(midiManager.displayName(for: endpoint)).tag(MIDIEndpointRef?.some(endpoint))
+                    }
+                }
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
-        .background(Color.black.opacity(0.15))
+        .formStyle(.grouped)
         .focusable(false)
-        .sheet(isPresented: $showPresetManager) {
-            PresetManagerView()
-                .environmentObject(appData)
-        }
     }
 }
-
