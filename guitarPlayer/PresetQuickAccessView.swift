@@ -11,24 +11,32 @@ struct PresetQuickAccessView: View {
     @State private var isExpanded = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             // 头部
             headerView
             
             if isExpanded {
-                // 当前preset显示
-                currentPresetView
+                Divider()
+                    .padding(.horizontal)
                 
-                // 快速访问列表
-                quickAccessList
-                
-                // 操作按钮
-                actionButtons
+                VStack(alignment: .leading, spacing: 12) {
+                    // 当前preset显示
+                    currentPresetView
+                    
+                    // 快速访问列表
+                    quickAccessList
+                    
+                    // 操作按钮
+                    actionButtons
+                }
+                .padding()
             }
         }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(NSColor.controlBackgroundColor))
+                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        )
         .sheet(isPresented: $showingPresetManager) {
             PresetManagerView()
                 .environmentObject(appData)
@@ -52,45 +60,89 @@ struct PresetQuickAccessView: View {
     private var headerView: some View {
         HStack {
             Button(action: { isExpanded.toggle() }) {
-                HStack(spacing: 8) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Image(systemName: "folder.fill")
-                        .foregroundColor(.blue)
-                    
-                    Text("Presets")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
+                HStack(spacing: 12) {
+                    // Preset Icon with Status
                     let currentPreset = presetManager.currentPresetOrUnnamed
-                    Text("• \(currentPreset.name)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    let isUnnamed = presetManager.isUnnamedPreset(currentPreset)
+                    
+                    ZStack {
+                        Circle()
+                            .fill(isUnnamed ? Color.orange.opacity(0.2) : Color.blue.opacity(0.2))
+                            .frame(width: 32, height: 32)
+                        
+                        Image(systemName: isUnnamed ? "folder" : "folder.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(isUnnamed ? .orange : .blue)
+                    }
+                    
+                    // Preset Info
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Presets")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        HStack(spacing: 8) {
+                            Text(currentPreset.name)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            // Status Badge
+                            Text(isUnnamed ? "Unsaved" : "Active")
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(isUnnamed ? Color.orange.opacity(0.2) : Color.green.opacity(0.2))
+                                )
+                                .foregroundColor(isUnnamed ? .orange : .green)
+                        }
+                    }
+                    
+                    // Quick Stats
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(Int(currentPreset.performanceConfig.tempo)) BPM")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("\(currentPreset.performanceConfig.key) • \(currentPreset.performanceConfig.timeSignature)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
             .buttonStyle(.plain)
             
             Spacer()
             
-            // 快速操作按钮
+            // Expand/Collapse Arrow
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .rotationEffect(.degrees(isExpanded ? 0 : 0))
+                .animation(.easeInOut(duration: 0.2), value: isExpanded)
+            
+            // Quick Action Buttons
             HStack(spacing: 8) {
                 Button(action: { showingCreateSheet = true }) {
-                    Image(systemName: "plus")
-                        .font(.caption)
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.blue)
                 }
                 .buttonStyle(.plain)
                 .help("Create New Preset")
                 
                 Button(action: { showingPresetManager = true }) {
-                    Image(systemName: "folder.badge.gearshape")
-                        .font(.caption)
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
                 .help("Manage Presets")
             }
         }
+        .padding()
     }
     
     private var currentPresetView: some View {
@@ -184,48 +236,103 @@ struct PresetQuickAccessRow: View {
     @State private var isHovered = false
     
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: isCurrent ? "checkmark.circle.fill" : "folder")
-                .foregroundColor(isCurrent ? .green : .blue)
-                .font(.caption)
-            
-            VStack(alignment: .leading, spacing: 1) {
-                Text(preset.name)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
+        HStack(spacing: 12) {
+            // Preset Icon
+            ZStack {
+                Circle()
+                    .fill(isCurrent ? Color.green.opacity(0.2) : Color.blue.opacity(0.2))
+                    .frame(width: 28, height: 28)
                 
-                HStack(spacing: 8) {
-                    Text("\(Int(preset.performanceConfig.tempo)) BPM")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                Image(systemName: isCurrent ? "checkmark.circle.fill" : "folder.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(isCurrent ? .green : .blue)
+            }
+            
+            // Preset Info
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(preset.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
                     
-                    Text(preset.performanceConfig.key)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    if isCurrent {
+                        Text("Current")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(Color.green.opacity(0.2))
+                            )
+                            .foregroundColor(.green)
+                    }
+                }
+                
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "metronome")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("\(Int(preset.performanceConfig.tempo)) BPM")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                     
-                    Text(preset.performanceConfig.timeSignature)
+                    HStack(spacing: 4) {
+                        Image(systemName: "music.note")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(preset.performanceConfig.key)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(preset.performanceConfig.timeSignature)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                if let description = preset.description, !description.isEmpty {
+                    Text(description)
                         .font(.caption2)
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
                 }
             }
             
             Spacer()
             
+            // Load Button
             Button(action: onLoad) {
-                Image(systemName: "arrow.down.circle")
-                    .font(.caption)
-                    .foregroundColor(.blue)
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 16))
+                    Text("Load")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(.blue)
             }
             .buttonStyle(.plain)
-            .opacity(isHovered ? 1.0 : 0.6)
+            .opacity(isHovered ? 1.0 : 0.7)
             .help("Load Preset")
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isCurrent ? Color.green.opacity(0.1) : Color.clear)
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isCurrent ? Color.green.opacity(0.1) : (isHovered ? Color.blue.opacity(0.05) : Color.clear))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isCurrent ? Color.green.opacity(0.3) : (isHovered ? Color.blue.opacity(0.2) : Color.clear), lineWidth: 1)
         )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {

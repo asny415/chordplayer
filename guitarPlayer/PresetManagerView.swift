@@ -110,32 +110,56 @@ struct PresetManagerView: View {
     
     private var headerView: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Preset Manager")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                
-                Text("Manage your guitar configurations")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 12) {
+                    Image(systemName: "folder.badge.gearshape")
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Preset Manager")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text("Manage your guitar configurations")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
             
             Spacer()
             
-            // 当前preset指示器
+            // 当前preset状态卡片
             let currentPreset = presetManager.currentPresetOrUnnamed
             let isUnnamed = presetManager.isUnnamedPreset(currentPreset)
-            HStack(spacing: 8) {
-                Image(systemName: isUnnamed ? "circle" : "checkmark.circle.fill")
-                    .foregroundColor(isUnnamed ? .secondary : .green)
-                Text("Current: \(currentPreset.name)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            HStack(spacing: 10) {
+                Image(systemName: isUnnamed ? "circle.dotted" : "checkmark.circle.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(isUnnamed ? .orange : .green)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Current Preset")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                    
+                    Text(currentPreset.name)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(isUnnamed ? Color.secondary.opacity(0.1) : Color.green.opacity(0.1))
-            .cornerRadius(8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isUnnamed ? Color.orange.opacity(0.1) : Color.green.opacity(0.1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isUnnamed ? Color.orange.opacity(0.3) : Color.green.opacity(0.3), lineWidth: 1)
+                    )
+            )
             
             // 关闭按钮
             Button(action: {
@@ -144,37 +168,75 @@ struct PresetManagerView: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
                     .foregroundColor(.secondary)
+                    .opacity(0.7)
             }
             .buttonStyle(.plain)
             .help("Close")
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    // 悬停效果
+                }
+            }
         }
-        .padding()
+        .padding(20)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(NSColor.controlBackgroundColor),
+                    Color(NSColor.controlBackgroundColor).opacity(0.8)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
     }
     
     private var searchAndSortBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
             // 搜索框
-            HStack {
+            HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
+                
                 TextField("Search presets...", text: $searchText)
                     .textFieldStyle(.plain)
+                    .font(.subheadline)
+                
+                if !searchText.isEmpty {
+                    Button(action: {
+                        searchText = ""
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+                    )
             )
+            .frame(maxWidth: 300)
             
             Spacer()
             
             // 排序选择器
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+                
                 Text("Sort by:")
-                    .font(.caption)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                     .foregroundColor(.secondary)
                 
                 Picker("Sort", selection: $sortOption) {
@@ -183,11 +245,23 @@ struct PresetManagerView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .frame(width: 120)
+                .frame(width: 140)
+                .font(.subheadline)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+                    )
+            )
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
     }
     
     private var emptyStateView: some View {
@@ -256,34 +330,86 @@ struct PresetManagerView: View {
     private var bottomActionBar: some View {
         HStack {
             // 统计信息
-            Text("\(filteredAndSortedPresets.count) preset\(filteredAndSortedPresets.count == 1 ? "" : "s")")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack(spacing: 8) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.blue)
+                
+                Text("\(filteredAndSortedPresets.count) preset\(filteredAndSortedPresets.count == 1 ? "" : "s")")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                
+                if !searchText.isEmpty {
+                    Text("(filtered)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
             
             Spacer()
             
             // 操作按钮
             HStack(spacing: 12) {
-                Button("Create New") {
+                Button(action: {
                     showingCreateSheet = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Create New")
+                            .fontWeight(.medium)
+                    }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
                 
-                Button("Import") {
+                Button(action: {
                     // TODO: 实现导入功能
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Import")
+                            .fontWeight(.medium)
+                    }
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.regular)
                 .disabled(true)
                 
-                Button("Export") {
+                Button(action: {
                     // TODO: 实现导出功能
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Export")
+                            .fontWeight(.medium)
+                    }
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.regular)
                 .disabled(true)
             }
         }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
+        .padding(20)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(NSColor.controlBackgroundColor).opacity(0.8),
+                    Color(NSColor.controlBackgroundColor)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .overlay(
+            Rectangle()
+                .fill(Color(NSColor.separatorColor).opacity(0.5))
+                .frame(height: 1),
+            alignment: .top
+        )
     }
     
     // MARK: - 方法
@@ -305,114 +431,134 @@ struct PresetRowView: View {
     let onShowDetails: () -> Void
     
     @State private var isHovered = false
+    @State private var isPressed = false
     
     var body: some View {
-        HStack(spacing: 12) {
-            // 图标和状态
-            VStack {
-                Image(systemName: isCurrent ? "checkmark.circle.fill" : "folder.fill")
-                    .font(.title2)
-                    .foregroundColor(isCurrent ? .green : .blue)
+        HStack(spacing: 16) {
+            // 状态指示器和图标
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(isCurrent ? Color.green.opacity(0.2) : Color.blue.opacity(0.2))
+                        .frame(width: 32, height: 32)
+                    
+                    Image(systemName: isCurrent ? "checkmark.circle.fill" : "folder.fill")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(isCurrent ? .green : .blue)
+                }
                 
                 if isCurrent {
-                    Text("Current")
+                    Text("Active")
                         .font(.caption2)
+                        .fontWeight(.semibold)
                         .foregroundColor(.green)
-                        .fontWeight(.medium)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(4)
                 }
             }
-            .frame(width: 40)
+            .frame(width: 50)
             
             // Preset信息
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
+                // 标题和日期
                 HStack {
-                    Text(preset.name)
-                        .font(.headline)
-                        .fontWeight(.medium)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(preset.name)
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+                        
+                        if let description = preset.description, !description.isEmpty {
+                            Text(description)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
                     
                     Spacer()
                     
-                    Text(formatDate(preset.updatedAt))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Updated")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        
+                        Text(formatDate(preset.updatedAt))
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
-                if let description = preset.description, !description.isEmpty {
-                    Text(description)
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                }
-                
-                // 配置摘要
-                HStack(spacing: 16) {
-                    Label("\(Int(preset.performanceConfig.tempo)) BPM", systemImage: "metronome")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Label(preset.performanceConfig.key, systemImage: "music.note")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Label(preset.performanceConfig.timeSignature, systemImage: "clock")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Label("\(preset.performanceConfig.patternGroups.count) groups", systemImage: "folder")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                // 配置标签
+                HStack(spacing: 12) {
+                    ConfigTag(icon: "metronome", text: "\(Int(preset.performanceConfig.tempo)) BPM", color: .blue)
+                    ConfigTag(icon: "music.note", text: preset.performanceConfig.key, color: .purple)
+                    ConfigTag(icon: "clock", text: preset.performanceConfig.timeSignature, color: .orange)
+                    ConfigTag(icon: "folder", text: "\(preset.performanceConfig.patternGroups.count) groups", color: .green)
                 }
             }
             
             Spacer()
             
-            // 操作按钮
-            HStack(spacing: 8) {
-                Button(action: onShowDetails) {
-                    Image(systemName: "info.circle")
-                        .font(.title3)
-                }
-                .buttonStyle(.plain)
-                .help("Show Details")
-                
-                Button(action: onLoad) {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.title3)
-                        .foregroundColor(.blue)
-                }
-                .buttonStyle(.plain)
-                .help("Load Preset")
-                
-                Button(action: onEdit) {
-                    Image(systemName: "pencil.circle")
-                        .font(.title3)
-                        .foregroundColor(.orange)
-                }
-                .buttonStyle(.plain)
-                .help("Edit Preset")
-                
-                Button(action: onDelete) {
-                    Image(systemName: "trash.circle")
-                        .font(.title3)
-                        .foregroundColor(.red)
-                }
-                .buttonStyle(.plain)
-                .help("Delete Preset")
+            // 操作按钮组
+            HStack(spacing: 4) {
+                ActionButton(icon: "info.circle", color: .secondary, action: onShowDetails, help: "Show Details")
+                ActionButton(icon: "arrow.down.circle", color: .blue, action: onLoad, help: "Load Preset")
+                ActionButton(icon: "pencil.circle", color: .orange, action: onEdit, help: "Edit Preset")
+                ActionButton(icon: "trash.circle", color: .red, action: onDelete, help: "Delete Preset")
             }
-            .opacity(isHovered ? 1.0 : 0.6)
+            .opacity(isHovered ? 1.0 : 0.0)
+            .animation(.easeInOut(duration: 0.2), value: isHovered)
         }
-        .padding()
+        .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isCurrent ? Color.blue.opacity(0.1) : Color(NSColor.controlBackgroundColor))
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    isCurrent ? 
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.blue.opacity(0.08), Color.blue.opacity(0.04)]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ) :
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color(NSColor.controlBackgroundColor), Color(NSColor.controlBackgroundColor).opacity(0.8)]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(isCurrent ? Color.blue.opacity(0.3) : Color(NSColor.separatorColor), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            isCurrent ? 
+                            Color.blue.opacity(0.3) : 
+                            Color(NSColor.separatorColor).opacity(0.5), 
+                            lineWidth: isCurrent ? 2 : 1
+                        )
+                )
+                .shadow(
+                    color: isCurrent ? Color.blue.opacity(0.1) : Color.black.opacity(0.05),
+                    radius: isCurrent ? 8 : 4,
+                    x: 0,
+                    y: isCurrent ? 4 : 2
                 )
         )
+        .scaleEffect(isPressed ? 0.98 : 1.0)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {
                 isHovered = hovering
+            }
+        }
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isPressed = false
+                }
             }
         }
     }
@@ -422,6 +568,60 @@ struct PresetRowView: View {
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - 辅助视图
+
+struct ConfigTag: View {
+    let icon: String
+    let text: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption2)
+                .foregroundColor(color)
+            
+            Text(text)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.1))
+        .cornerRadius(6)
+    }
+}
+
+struct ActionButton: View {
+    let icon: String
+    let color: Color
+    let action: () -> Void
+    let help: String
+    
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(isHovered ? .white : color)
+                .frame(width: 32, height: 32)
+                .background(
+                    Circle()
+                        .fill(isHovered ? color : color.opacity(0.1))
+                )
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isHovered = hovering
+            }
+        }
     }
 }
 
