@@ -20,6 +20,10 @@ class KeyboardHandler: ObservableObject {
     // When true, global keyboard handler should ignore events (TextField is active)
     @Published var isTextInputActive: Bool = false
 
+    @Published var isCapturingShortcut: Bool = false // NEW STATE
+    var targetChordForShortcutCapture: String? = nil // NEW PROPERTY
+    var onShortcutCaptured: ((String, String) -> Void)? // NEW CALLBACK
+
     private var eventMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
     private var activeChordClearWorkItem: DispatchWorkItem?
@@ -63,6 +67,17 @@ class KeyboardHandler: ObservableObject {
                 self?.appData.performanceConfig.tempo = newTempo
             }
             .store(in: &cancellables)
+    }
+
+    func startCapturingShortcut(for chordName: String) {
+        isCapturingShortcut = true
+        targetChordForShortcutCapture = chordName
+        // Optionally, provide visual feedback here, e.g., via a published property
+    }
+
+    func stopCapturingShortcut() {
+        isCapturingShortcut = false
+        targetChordForShortcutCapture = nil
     }
 
     private func setupEventMonitor() {
@@ -119,6 +134,17 @@ class KeyboardHandler: ObservableObject {
 
     func handleKeyEvent(event: NSEvent) {
         guard let characters = event.charactersIgnoringModifiers else { return }
+
+        // --- NEW LOGIC FOR SHORTCUT CAPTURE ---
+        if isCapturingShortcut {
+            if let chordName = targetChordForShortcutCapture {
+                let capturedKey = characters.lowercased() // Or event.keyCode for more precise key
+                onShortcutCaptured?(chordName, capturedKey)
+                stopCapturingShortcut() // Stop capture after one key
+            }
+            return // Consume the event, don't process for musical actions
+        }
+        // --- END NEW LOGIC ---
 
         let isControlDown = event.modifierFlags.contains(.control)
         let isShiftDown = event.modifierFlags.contains(.shift)
@@ -232,11 +258,27 @@ class KeyboardHandler: ObservableObject {
         }
 
         var chordName: String? = nil
-        if let mappedChord = appData.performanceConfig.keyMap[keyName] {
-            chordName = mappedChord
-        } else {
-            let simulatedKey = JSKey(name: characters, meta: isCommandDown, alt: isOptionDown, ctrl: isControlDown, shift: isShiftDown)
-            chordName = MusicTheory.getChordFromDefaultMapping(key: simulatedKey)
+
+        // NEW LOGIC: Prioritize shortcut from the currently active group
+        let currentGroupIndex = self.currentGroupIndex // Get the active group index
+        if appData.performanceConfig.patternGroups.indices.contains(currentGroupIndex) {
+            let activeGroup = appData.performanceConfig.patternGroups[currentGroupIndex]
+            // Iterate through chordAssignments in the active group to find a match
+            if let foundChordName = activeGroup.chordAssignments.first(where: { (key, value) in
+                return value.shortcutKey?.lowercased() == keyName
+            })?.key {
+                chordName = foundChordName
+            }
+        }
+
+        // Existing logic (fallback if not found in active group's shortcuts)
+        if chordName == nil { // Only proceed if chordName hasn't been found yet
+            if let mappedChord = appData.performanceConfig.keyMap[keyName] {
+                chordName = mappedChord
+            } else {
+                let simulatedKey = JSKey(name: characters, meta: isCommandDown, alt: isOptionDown, ctrl: isControlDown, shift: isShiftDown)
+                chordName = MusicTheory.getChordFromDefaultMapping(key: simulatedKey)
+            }
         }
 
         if let chord = chordName {

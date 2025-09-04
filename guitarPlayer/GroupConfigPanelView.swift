@@ -4,7 +4,9 @@ struct ChordButtonView: View {
     let chordName: String
     let isSelected: Bool
     let shortcut: String?
-    let action: () -> Void
+    let action: () -> Void // For playing the chord
+    let onShortcutClick: (String) -> Void // For initiating shortcut capture
+    let isCapturingShortcut: Bool // To indicate if this button is currently capturing
     
     private var displayName: (String, String) {
         if chordName.hasSuffix("_Major") {
@@ -46,16 +48,37 @@ struct ChordButtonView: View {
                 .padding(.horizontal, 5)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Shortcut key overlay
-                if let shortcut = shortcut {
-                    Text(shortcut.uppercased())
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.7))
-                        .padding(5)
-                        .background(Color.black.opacity(0.25))
-                        .clipShape(Circle())
-                        .padding(4)
+                // Shortcut key overlay / Placeholder (now always a button)
+                Button(action: { onShortcutClick(chordName) }) {
+                    ZStack { // Use ZStack to layer content
+                        if let shortcut = shortcut {
+                            Text(shortcut.uppercased())
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(5)
+                                .background(Color.black.opacity(0.25))
+                                .clipShape(Circle())
+                                .padding(4)
+                        } else {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.gray.opacity(0.6))
+                                .padding(4)
+                        }
+
+                        // Visual feedback for capturing state
+                        if isCapturingShortcut {
+                            Circle()
+                                .stroke(Color.accentColor, lineWidth: 2)
+                                .frame(width: 30, height: 30) // Adjust size as needed
+                                .scaleEffect(1.2) // Make it slightly larger
+                                .opacity(0.8)
+                                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isCapturingShortcut)
+                        }
+                    }
                 }
+                .buttonStyle(.plain) // Ensure it's a plain button
+                .padding(4) // Padding to match the original shortcut padding
             }
             .frame(minWidth: 100, minHeight: 80)
             .background(
@@ -103,6 +126,7 @@ struct GroupConfigPanelView: View {
     @State private var editingShortcutBuffer: String = ""
     @State private var editingFingeringBuffer: String = ""
     @State private var showChordDiagramCreator: Bool = false
+    @State private var capturingShortcutForChord: String? = nil // NEW STATE
 
     var body: some View {
         HStack(spacing: 12) {
@@ -295,18 +319,35 @@ struct GroupConfigPanelView: View {
                                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], spacing: 12) {
                                         ForEach(group.chordsOrder, id: \.self) { chordName in
                                             let shortcutDisplay = getShortcutForChord(chordName: chordName, group: group)
-                                            ChordButtonView(chordName: chordName, isSelected: keyboardHandler.activeChordName == chordName, shortcut: shortcutDisplay) {
-                                                // play chord with a simple pattern (pluck all strings once)
-                                                let simpleStrumPattern = GuitarPattern(
-                                                    id: "__preview_strum__",
-                                                    name: "Preview Strum",
-                                                    pattern: [
-                                                        PatternEvent(delay: "0", notes: [.int(6), .int(5), .int(4), .int(3), .int(2), .int(1)], delta: 15.0)
-                                                    ]
-                                                )
-                                                let keyName = appData.KEY_CYCLE.indices.contains(keyboardHandler.currentKeyIndex) ? appData.KEY_CYCLE[keyboardHandler.currentKeyIndex] : "C"
-                                                guitarPlayer.playChord(chordName: chordName, pattern: simpleStrumPattern, tempo: keyboardHandler.currentTempo, key: keyName, velocity: UInt8(100))
-                                            }
+                                            ChordButtonView(
+                                                chordName: chordName,
+                                                isSelected: keyboardHandler.activeChordName == chordName,
+                                                shortcut: shortcutDisplay,
+                                                action: { // This is the action for playing the chord
+                                                    // play chord with a simple pattern (pluck all strings once)
+                                                    let simpleStrumPattern = GuitarPattern(
+                                                        id: "__preview_strum__",
+                                                        name: "Preview Strum",
+                                                        pattern: [
+                                                            PatternEvent(delay: "0", notes: [.int(6), .int(5), .int(4), .int(3), .int(2), .int(1)], delta: 15.0)
+                                                        ]
+                                                    )
+                                                    let keyName = appData.KEY_CYCLE.indices.contains(keyboardHandler.currentKeyIndex) ? appData.KEY_CYCLE[keyboardHandler.currentKeyIndex] : "C"
+                                                    guitarPlayer.playChord(chordName: chordName, pattern: simpleStrumPattern, tempo: keyboardHandler.currentTempo, key: keyName, velocity: UInt8(100))
+                                                },
+                                                onShortcutClick: { clickedChordName in // NEW ACTION FOR SHORTCUT CAPTURE
+                                                    // If we are already capturing for this chord, cancel it
+                                                    if capturingShortcutForChord == clickedChordName {
+                                                        capturingShortcutForChord = nil
+                                                        keyboardHandler.stopCapturingShortcut() // Need to implement this in KeyboardHandler
+                                                    } else {
+                                                        // Start capturing for this chord
+                                                        capturingShortcutForChord = clickedChordName
+                                                        keyboardHandler.startCapturingShortcut(for: clickedChordName) // Need to implement this in KeyboardHandler
+                                                    }
+                                                },
+                                                isCapturingShortcut: capturingShortcutForChord == chordName // NEW PROPERTY
+                                            )
                                             .contextMenu {
                                                 Button("Edit") {
                                                     editingChordName = chordName
@@ -358,6 +399,25 @@ struct GroupConfigPanelView: View {
             })
             .environmentObject(appData)
             .environmentObject(keyboardHandler)
+        }
+        .onAppear {
+            keyboardHandler.onShortcutCaptured = { chordName, capturedKey in
+                // Find the current group index
+                let gi = self.keyboardHandler.currentGroupIndex
+                guard self.appData.performanceConfig.patternGroups.indices.contains(gi) else { return }
+
+                var group = self.appData.performanceConfig.patternGroups[gi]
+                var assignment = group.chordAssignments[chordName] ?? ChordAssignment()
+                assignment.shortcutKey = capturedKey.isEmpty ? nil : capturedKey // Set to nil if empty
+                group.chordAssignments[chordName] = assignment
+                self.appData.performanceConfig.patternGroups[gi] = group
+
+                // Reset capture state in GroupConfigPanelView
+                self.capturingShortcutForChord = nil
+            }
+        }
+        .onDisappear {
+            keyboardHandler.onShortcutCaptured = nil // Clean up
         }
         
     }
