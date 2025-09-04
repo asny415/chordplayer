@@ -30,142 +30,141 @@ struct Preset: Codable, Identifiable, Equatable {
     }
 }
 
-/// Preset管理器
+/// 统一的Preset管理器 - 所有配置都通过Preset管理
 class PresetManager: ObservableObject {
     static let shared = PresetManager()
     
     @Published var presets: [Preset] = []
     @Published var currentPreset: Preset?
     
-    private let presetsURL: URL
-    private let currentPresetURL: URL
-    private var cancellables = Set<AnyCancellable>()
+    // 特殊的"未命名"Preset ID
+    private let unnamedPresetId = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    
+    private let presetsDirectory: URL
+    private let presetsFile: URL
+    private let unnamedPresetFile: URL
+    
+    // 自动保存定时器
+    private var autoSaveTimer: Timer?
+    private let autoSaveDelay: TimeInterval = 2.0
     
     private init() {
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        presetsURL = documentsDirectory.appendingPathComponent("presets.json")
-        currentPresetURL = documentsDirectory.appendingPathComponent("current_preset.json")
+        // 设置存储路径
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        presetsDirectory = documentsPath.appendingPathComponent("GuitarPlayer")
+        presetsFile = presetsDirectory.appendingPathComponent("presets.json")
+        unnamedPresetFile = presetsDirectory.appendingPathComponent("unnamed_preset.json")
         
+        // 确保目录存在
+        try? FileManager.default.createDirectory(at: presetsDirectory, withIntermediateDirectories: true)
+        
+        // 加载现有presets
         loadPresets()
-        loadCurrentPreset()
         
-        print("[PresetManager] Initialized with \(presets.count) presets")
-    }
-    
-    // MARK: - 保存和加载
-    
-    /// 保存所有presets
-    private func savePresets() {
-        do {
-            let data = try JSONEncoder().encode(presets)
-            try data.write(to: presetsURL)
-            print("[PresetManager] ✅ Saved \(presets.count) presets")
-        } catch {
-            print("[PresetManager] ❌ Failed to save presets: \(error)")
-        }
-    }
-    
-    /// 加载所有presets
-    private func loadPresets() {
-        guard FileManager.default.fileExists(atPath: presetsURL.path) else {
-            print("[PresetManager] No presets file found, starting with empty list")
-            return
-        }
+        // 确保始终有一个活跃的Preset
+        ensureActivePreset()
         
-        do {
-            let data = try Data(contentsOf: presetsURL)
-            presets = try JSONDecoder().decode([Preset].self, from: data)
-            print("[PresetManager] ✅ Loaded \(presets.count) presets")
-        } catch {
-            print("[PresetManager] ❌ Failed to load presets: \(error)")
-            presets = []
+        print("[PresetManager] Initialized with \(presets.count) presets, current: \(currentPreset?.name ?? "未命名")")
+    }
+    
+    // MARK: - 核心方法
+    
+    /// 获取当前活跃的Preset（如果不存在则创建"未命名"）
+    var currentPresetOrUnnamed: Preset {
+        if let current = currentPreset {
+            return current
+        } else {
+            return createUnnamedPreset()
         }
     }
     
-    /// 保存当前preset
-    private func saveCurrentPreset() {
-        guard let currentPreset = currentPreset else { return }
+    /// 检查是否为"未命名"Preset
+    func isUnnamedPreset(_ preset: Preset) -> Bool {
+        return preset.id == unnamedPresetId
+    }
+    
+    /// 获取所有Preset（包括"未命名"）
+    var allPresets: [Preset] {
+        var all = presets
+        // 如果当前没有活跃Preset，添加"未命名"
+        if currentPreset == nil {
+            all.insert(createUnnamedPreset(), at: 0)
+        }
+        return all
+    }
+    
+    // MARK: - Preset Operations
+    
+    /// 加载Preset并设置为当前活跃
+    func loadPreset(_ preset: Preset) -> (PerformanceConfig, AppConfig) {
+        currentPreset = preset
+        saveCurrentPreset()
         
-        do {
-            let data = try JSONEncoder().encode(currentPreset)
-            try data.write(to: currentPresetURL)
-            print("[PresetManager] ✅ Saved current preset: \(currentPreset.name)")
-        } catch {
-            print("[PresetManager] ❌ Failed to save current preset: \(error)")
-        }
+        print("[PresetManager] ✅ Loaded preset: \(preset.name)")
+        return (preset.performanceConfig, preset.appConfig)
     }
     
-    /// 加载当前preset
-    private func loadCurrentPreset() {
-        guard FileManager.default.fileExists(atPath: currentPresetURL.path) else {
-            print("[PresetManager] No current preset file found")
-            return
-        }
-        
-        do {
-            let data = try Data(contentsOf: currentPresetURL)
-            currentPreset = try JSONDecoder().decode(Preset.self, from: data)
-            print("[PresetManager] ✅ Loaded current preset: \(currentPreset?.name ?? "Unknown")")
-        } catch {
-            print("[PresetManager] ❌ Failed to load current preset: \(error)")
-            currentPreset = nil
-        }
-    }
-    
-    // MARK: - Preset操作
-    
-    /// 创建新preset
-    func createPreset(name: String, description: String? = nil, from performanceConfig: PerformanceConfig, appConfig: AppConfig) -> Preset? {
+    /// 创建新的命名Preset
+    func createNewPreset(name: String, description: String? = nil, performanceConfig: PerformanceConfig, appConfig: AppConfig) -> Preset? {
         // 检查名称是否已存在
         if presets.contains(where: { $0.name.lowercased() == name.lowercased() }) {
             print("[PresetManager] ❌ Preset with name '\(name)' already exists")
             return nil
         }
         
-        let preset = Preset(
+        let newPreset = Preset(
             name: name,
             description: description,
             performanceConfig: performanceConfig,
             appConfig: appConfig
         )
         
-        presets.append(preset)
-        savePresets()
+        presets.append(newPreset)
+        currentPreset = newPreset
+        
+        // 保存到文件
+        savePresetsToFile()
+        saveCurrentPreset()
         
         print("[PresetManager] ✅ Created preset: \(name)")
-        return preset
+        return newPreset
     }
     
-    /// 更新preset
-    func updatePreset(_ preset: Preset, name: String? = nil, description: String? = nil, performanceConfig: PerformanceConfig? = nil, appConfig: AppConfig? = nil) -> Bool {
-        guard let index = presets.firstIndex(where: { $0.id == preset.id }) else {
-            print("[PresetManager] ❌ Preset not found for update")
-            return false
-        }
+    /// 更新当前活跃Preset的配置
+    func updateCurrentPreset(performanceConfig: PerformanceConfig, appConfig: AppConfig) {
+        let targetPreset = currentPresetOrUnnamed
         
-        // 如果更新名称，检查是否与其他preset冲突
-        if let newName = name, newName != preset.name {
-            if presets.contains(where: { $0.name.lowercased() == newName.lowercased() && $0.id != preset.id }) {
-                print("[PresetManager] ❌ Preset with name '\(newName)' already exists")
-                return false
+        // 更新配置
+        var updatedPreset = targetPreset
+        updatedPreset.performanceConfig = performanceConfig
+        updatedPreset.appConfig = appConfig
+        updatedPreset.updatedAt = Date()
+        
+        // 如果是"未命名"Preset，更新当前Preset
+        if isUnnamedPreset(targetPreset) {
+            currentPreset = updatedPreset
+            saveUnnamedPreset(updatedPreset)
+        } else {
+            // 更新Preset列表中的对应项
+            if let index = presets.firstIndex(where: { $0.id == targetPreset.id }) {
+                presets[index] = updatedPreset
+                currentPreset = updatedPreset
+                savePresetsToFile()
             }
         }
         
-        presets[index].update(name: name, description: description, performanceConfig: performanceConfig, appConfig: appConfig)
-        savePresets()
-        
-        // 如果更新的是当前preset，也要更新currentPreset
-        if currentPreset?.id == preset.id {
-            currentPreset = presets[index]
-            saveCurrentPreset()
-        }
-        
-        print("[PresetManager] ✅ Updated preset: \(presets[index].name)")
-        return true
+        // 保存当前Preset状态
+        saveCurrentPreset()
     }
     
-    /// 删除preset
+    /// 删除Preset
     func deletePreset(_ preset: Preset) -> Bool {
+        // 不能删除"未命名"Preset
+        if isUnnamedPreset(preset) {
+            print("[PresetManager] ❌ Cannot delete unnamed preset")
+            return false
+        }
+        
         guard let index = presets.firstIndex(where: { $0.id == preset.id }) else {
             print("[PresetManager] ❌ Preset not found for deletion")
             return false
@@ -173,9 +172,9 @@ class PresetManager: ObservableObject {
         
         let presetName = presets[index].name
         presets.remove(at: index)
-        savePresets()
+        savePresetsToFile()
         
-        // 如果删除的是当前preset，清除currentPreset
+        // 如果删除的是当前preset，切换到"未命名"
         if currentPreset?.id == preset.id {
             currentPreset = nil
             saveCurrentPreset()
@@ -185,24 +184,119 @@ class PresetManager: ObservableObject {
         return true
     }
     
-    /// 加载preset
-    func loadPreset(_ preset: Preset) -> (PerformanceConfig, AppConfig) {
-        currentPreset = preset
-        saveCurrentPreset()
+    // MARK: - 自动保存
+    
+    /// 调度自动保存
+    func scheduleAutoSave(performanceConfig: PerformanceConfig, appConfig: AppConfig) {
+        autoSaveTimer?.invalidate()
+        autoSaveTimer = Timer.scheduledTimer(withTimeInterval: autoSaveDelay, repeats: false) { _ in
+            self.updateCurrentPreset(performanceConfig: performanceConfig, appConfig: appConfig)
+        }
+    }
+    
+    /// 立即保存
+    func saveImmediately(performanceConfig: PerformanceConfig, appConfig: AppConfig) {
+        autoSaveTimer?.invalidate()
+        updateCurrentPreset(performanceConfig: performanceConfig, appConfig: appConfig)
+    }
+    
+    // MARK: - 私有方法
+    
+    /// 创建"未命名"Preset
+    private func createUnnamedPreset() -> Preset {
+        // 尝试从文件加载"未命名"Preset
+        if let savedUnnamed = loadUnnamedPreset() {
+            return savedUnnamed
+        }
         
-        print("[PresetManager] ✅ Loaded preset: \(preset.name)")
-        return (preset.performanceConfig, preset.appConfig)
+        // 创建新的"未命名"Preset
+        return Preset(
+            name: "未命名",
+            description: "自动保存的配置",
+            performanceConfig: PerformanceConfig(
+                tempo: 120,
+                timeSignature: "4/4",
+                key: "C",
+                quantize: QuantizationMode.measure.rawValue,
+                quantizeToggleKey: "q",
+                drumPattern: "ROCK_4_4_BASIC",
+                keyMap: [:],
+                patternGroups: [
+                    PatternGroup(name: "Intro", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC"),
+                    PatternGroup(name: "Verse", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC"),
+                    PatternGroup(name: "Chorus", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC")
+                ]
+            ),
+            appConfig: AppConfig(
+                midiPortName: "IAC驱动程序 总线1",
+                note: 60,
+                velocity: 64,
+                duration: 4000,
+                channel: 0
+            )
+        )
     }
     
-    /// 从当前配置创建preset
-    func createPresetFromCurrent(name: String, description: String? = nil, performanceConfig: PerformanceConfig, appConfig: AppConfig) -> Preset? {
-        return createPreset(name: name, description: description, from: performanceConfig, appConfig: appConfig)
+    /// 确保始终有一个活跃的Preset
+    private func ensureActivePreset() {
+        if currentPreset == nil {
+            currentPreset = createUnnamedPreset()
+            saveCurrentPreset()
+        }
     }
     
-    /// 更新当前preset
-    func updateCurrentPreset(performanceConfig: PerformanceConfig, appConfig: AppConfig) -> Bool {
-        guard let currentPreset = currentPreset else { return false }
-        return updatePreset(currentPreset, performanceConfig: performanceConfig, appConfig: appConfig)
+    /// 保存"未命名"Preset到文件
+    private func saveUnnamedPreset(_ preset: Preset) {
+        do {
+            let data = try JSONEncoder().encode(preset)
+            try data.write(to: unnamedPresetFile)
+        } catch {
+            print("[PresetManager] ❌ Failed to save unnamed preset: \(error)")
+        }
+    }
+    
+    /// 从文件加载"未命名"Preset
+    private func loadUnnamedPreset() -> Preset? {
+        do {
+            let data = try Data(contentsOf: unnamedPresetFile)
+            return try JSONDecoder().decode(Preset.self, from: data)
+        } catch {
+            return nil
+        }
+    }
+    
+    // MARK: - 文件操作
+    
+    private func loadPresets() {
+        do {
+            let data = try Data(contentsOf: presetsFile)
+            presets = try JSONDecoder().decode([Preset].self, from: data)
+            print("[PresetManager] ✅ Loaded \(presets.count) presets")
+        } catch {
+            print("[PresetManager] ❌ Failed to load presets: \(error)")
+            presets = []
+        }
+    }
+    
+    func savePresetsToFile() {
+        do {
+            let data = try JSONEncoder().encode(presets)
+            try data.write(to: presetsFile)
+        } catch {
+            print("[PresetManager] ❌ Failed to save presets: \(error)")
+        }
+    }
+    
+    private func saveCurrentPreset() {
+        guard let currentPreset = currentPreset else { return }
+        
+        do {
+            let data = try JSONEncoder().encode(currentPreset)
+            let currentPresetFile = presetsDirectory.appendingPathComponent("current_preset.json")
+            try data.write(to: currentPresetFile)
+        } catch {
+            print("[PresetManager] ❌ Failed to save current preset: \(error)")
+        }
     }
     
     // MARK: - 查询方法
@@ -228,9 +322,12 @@ class PresetManager: ObservableObject {
     func getPresetStats() -> [String: Any] {
         return [
             "total_presets": presets.count,
-            "current_preset": currentPreset?.name ?? "None",
+            "current_preset": currentPreset?.name ?? "未命名",
+            "is_unnamed": isUnnamedPreset(currentPresetOrUnnamed),
             "recent_presets": getRecentPresets(limit: 3).map { $0.name },
-            "storage_size": getStorageSize()
+            "storage_size": getStorageSize(),
+            "presets_file": presetsFile.path,
+            "unnamed_file": unnamedPresetFile.path
         ]
     }
     
@@ -238,16 +335,16 @@ class PresetManager: ObservableObject {
     private func getStorageSize() -> Int64 {
         var totalSize: Int64 = 0
         
-        if FileManager.default.fileExists(atPath: presetsURL.path) {
+        if FileManager.default.fileExists(atPath: presetsFile.path) {
             do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: presetsURL.path)
+                let attributes = try FileManager.default.attributesOfItem(atPath: presetsFile.path)
                 totalSize += (attributes[.size] as? Int64) ?? 0
             } catch {}
         }
         
-        if FileManager.default.fileExists(atPath: currentPresetURL.path) {
+        if FileManager.default.fileExists(atPath: unnamedPresetFile.path) {
             do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: currentPresetURL.path)
+                let attributes = try FileManager.default.attributesOfItem(atPath: unnamedPresetFile.path)
                 totalSize += (attributes[.size] as? Int64) ?? 0
             } catch {}
         }
@@ -259,7 +356,7 @@ class PresetManager: ObservableObject {
     func clearAllPresets() {
         presets.removeAll()
         currentPreset = nil
-        savePresets()
+        savePresetsToFile()
         saveCurrentPreset()
         print("[PresetManager] ✅ Cleared all presets")
     }

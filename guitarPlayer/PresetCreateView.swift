@@ -187,11 +187,9 @@ struct PresetCreateView: View {
         let trimmedDescription = presetDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalDescription = trimmedDescription.isEmpty ? nil : trimmedDescription
         
-        if let _ = presetManager.createPresetFromCurrent(
+        if let _ = appData.createNewPreset(
             name: trimmedName,
-            description: finalDescription,
-            performanceConfig: appData.performanceConfig,
-            appConfig: appData.CONFIG
+            description: finalDescription
         ) {
             dismiss()
         } else {
@@ -420,11 +418,16 @@ struct PresetEditView: View {
         let trimmedDescription = presetDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalDescription = trimmedDescription.isEmpty ? nil : trimmedDescription
         
-        if presetManager.updatePreset(
-            preset,
-            name: trimmedName != preset.name ? trimmedName : nil,
-            description: finalDescription != preset.description ? finalDescription : nil
-        ) {
+        // 更新Preset名称和描述
+        var updatedPreset = preset
+        updatedPreset.name = trimmedName
+        updatedPreset.description = finalDescription
+        updatedPreset.updatedAt = Date()
+        
+        // 保存更新后的Preset
+        if let index = presetManager.presets.firstIndex(where: { $0.id == preset.id }) {
+            presetManager.presets[index] = updatedPreset
+            presetManager.savePresetsToFile()
             dismiss()
         } else {
             errorMessage = "Failed to update preset. Please try again."
@@ -435,11 +438,16 @@ struct PresetEditView: View {
     }
     
     private func updatePresetWithCurrentConfig() {
-        if presetManager.updatePreset(
-            preset,
-            performanceConfig: appData.performanceConfig,
-            appConfig: appData.CONFIG
-        ) {
+        // 更新Preset的配置
+        var updatedPreset = preset
+        updatedPreset.performanceConfig = appData.performanceConfig
+        updatedPreset.appConfig = appData.CONFIG
+        updatedPreset.updatedAt = Date()
+        
+        // 保存更新后的Preset
+        if let index = presetManager.presets.firstIndex(where: { $0.id == preset.id }) {
+            presetManager.presets[index] = updatedPreset
+            presetManager.savePresetsToFile()
             // 配置已更新，可以关闭对话框
         } else {
             errorMessage = "Failed to update preset configuration. Please try again."

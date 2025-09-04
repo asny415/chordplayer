@@ -80,7 +80,7 @@ struct PresetManagerView: View {
                 .environmentObject(presetManager)
         }
         .sheet(isPresented: $showingEditSheet) {
-            if let selectedPreset = selectedPreset {
+            if selectedPreset != nil {
                 PresetCreateView()
                     .environmentObject(appData)
                     .environmentObject(presetManager)
@@ -123,19 +123,19 @@ struct PresetManagerView: View {
             Spacer()
             
             // 当前preset指示器
-            if let currentPreset = presetManager.currentPreset {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    Text("Current: \(currentPreset.name)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(8)
+            let currentPreset = presetManager.currentPresetOrUnnamed
+            let isUnnamed = presetManager.isUnnamedPreset(currentPreset)
+            HStack(spacing: 8) {
+                Image(systemName: isUnnamed ? "circle" : "checkmark.circle.fill")
+                    .foregroundColor(isUnnamed ? .secondary : .green)
+                Text("Current: \(currentPreset.name)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isUnnamed ? Color.secondary.opacity(0.1) : Color.green.opacity(0.1))
+            .cornerRadius(8)
             
             // 关闭按钮
             Button(action: {
@@ -289,11 +289,7 @@ struct PresetManagerView: View {
     // MARK: - 方法
     
     private func loadPreset(_ preset: Preset) {
-        let (performanceConfig, appConfig) = presetManager.loadPreset(preset)
-        
-        // 更新AppData
-        appData.performanceConfig = performanceConfig
-        appData.CONFIG = appConfig
+        appData.loadPreset(preset)
         
         print("[PresetManagerView] Loaded preset: \(preset.name)")
     }

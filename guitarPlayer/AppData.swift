@@ -7,27 +7,27 @@ class AppData: ObservableObject {
     @Published var drumPatternLibrary: DrumPatternLibrary?
     @Published var patternLibrary: PatternLibrary?
     
-    // Configuration properties
+    // Configuration properties - 现在通过PresetManager管理
     @Published var performanceConfig: PerformanceConfig {
         didSet {
-            // 自动保存性能配置
-            DataPersistenceManager.shared.schedulePerformanceConfigSave(performanceConfig)
+            // 自动保存到当前活跃的Preset
+            presetManager.scheduleAutoSave(performanceConfig: performanceConfig, appConfig: CONFIG)
         }
     }
-    let KEY_CYCLE: [String]
-    let TIME_SIGNATURE_CYCLE: [String]
     
     @Published var CONFIG: AppConfig {
         didSet {
-            // 自动保存应用配置
-            DataPersistenceManager.shared.saveAppConfig(CONFIG)
+            // 自动保存到当前活跃的Preset
+            presetManager.scheduleAutoSave(performanceConfig: performanceConfig, appConfig: CONFIG)
         }
     }
     
-    // 数据持久化管理器
-    private let persistenceManager = DataPersistenceManager.shared
-    private var cancellables = Set<AnyCancellable>()
+    let KEY_CYCLE: [String]
+    let TIME_SIGNATURE_CYCLE: [String]
     
+    // Preset管理器
+    private let presetManager = PresetManager.shared
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
         // 先设置常量
@@ -36,41 +36,12 @@ class AppData: ObservableObject {
         ]
         self.TIME_SIGNATURE_CYCLE = ["4/4", "3/4", "6/8"]
         
-        // 尝试从保存的数据加载配置，如果失败则使用默认值
-        if let savedPerformanceConfig = persistenceManager.loadPerformanceConfig() {
-            print("[AppData] ✅ Loaded saved performance config")
-            self.performanceConfig = savedPerformanceConfig
-        } else {
-            print("[AppData] Using default performance config")
-            self.performanceConfig = PerformanceConfig(
-                tempo: 120,
-                timeSignature: "4/4",
-                key: "C",
-                quantize: QuantizationMode.measure.rawValue,
-                quantizeToggleKey: "q",
-                drumPattern: "ROCK_4_4_BASIC",
-                keyMap: [:],
-                patternGroups: [
-                    PatternGroup(name: "Intro", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC"),
-                    PatternGroup(name: "Verse", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC"),
-                    PatternGroup(name: "Chorus", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC")
-                ]
-            )
-        }
+        // 从当前活跃的Preset加载配置
+        let currentPreset = presetManager.currentPresetOrUnnamed
+        self.performanceConfig = currentPreset.performanceConfig
+        self.CONFIG = currentPreset.appConfig
         
-        if let savedAppConfig = persistenceManager.loadAppConfig() {
-            print("[AppData] ✅ Loaded saved app config")
-            self.CONFIG = savedAppConfig
-        } else {
-            print("[AppData] Using default app config")
-            self.CONFIG = AppConfig(
-                midiPortName: "IAC驱动程序 总线1",
-                note: 60,
-                velocity: 64,
-                duration: 4000,
-                channel: 0
-            )
-        }
+        print("[AppData] ✅ Loaded config from preset: \(currentPreset.name)")
 
         // Load resources
         self.loadData()
@@ -156,23 +127,55 @@ class AppData: ObservableObject {
     /// 应用即将失去焦点时保存数据
     private func handleAppWillResignActive() {
         print("[AppData] App will resign active - saving data...")
-        persistenceManager.savePerformanceConfig(performanceConfig)
-        persistenceManager.saveAppConfig(CONFIG)
+        presetManager.saveImmediately(performanceConfig: performanceConfig, appConfig: CONFIG)
     }
     
     /// 应用即将终止时保存数据
     private func handleAppWillTerminate() {
         print("[AppData] App will terminate - saving data...")
-        persistenceManager.savePerformanceConfig(performanceConfig)
-        persistenceManager.saveAppConfig(CONFIG)
-        persistenceManager.cleanup()
+        presetManager.saveImmediately(performanceConfig: performanceConfig, appConfig: CONFIG)
     }
     
     /// 系统即将关闭时保存数据
     private func handleSystemWillPowerOff() {
         print("[AppData] System will power off - saving data...")
-        persistenceManager.savePerformanceConfig(performanceConfig)
-        persistenceManager.saveAppConfig(CONFIG)
+        presetManager.saveImmediately(performanceConfig: performanceConfig, appConfig: CONFIG)
+    }
+    
+    // MARK: - Preset相关方法
+    
+    /// 加载指定的Preset
+    func loadPreset(_ preset: Preset) {
+        let (newPerformanceConfig, newAppConfig) = presetManager.loadPreset(preset)
+        
+        // 更新当前配置
+        self.performanceConfig = newPerformanceConfig
+        self.CONFIG = newAppConfig
+        
+        // 重新初始化默认模式
+        self.initializeDefaultPatterns()
+        
+        print("[AppData] ✅ Loaded preset: \(preset.name)")
+    }
+    
+    /// 创建新的Preset
+    func createNewPreset(name: String, description: String? = nil) -> Preset? {
+        return presetManager.createNewPreset(
+            name: name,
+            description: description,
+            performanceConfig: performanceConfig,
+            appConfig: CONFIG
+        )
+    }
+    
+    /// 获取当前活跃的Preset
+    var currentPreset: Preset {
+        return presetManager.currentPresetOrUnnamed
+    }
+    
+    /// 检查当前是否为"未命名"Preset
+    var isUnnamedPreset: Bool {
+        return presetManager.isUnnamedPreset(currentPreset)
     }
     
     // MARK: - 公共方法
@@ -180,16 +183,12 @@ class AppData: ObservableObject {
     /// 手动保存所有数据
     func saveAllData() {
         print("[AppData] Manual save requested")
-        persistenceManager.savePerformanceConfig(performanceConfig)
-        persistenceManager.saveAppConfig(CONFIG)
+        presetManager.saveImmediately(performanceConfig: performanceConfig, appConfig: CONFIG)
     }
     
     /// 重置所有配置到默认值
     func resetToDefaults() {
         print("[AppData] Resetting to default configuration")
-        
-        // 清除保存的数据
-        persistenceManager.clearAllData()
         
         // 重置到默认值
         self.performanceConfig = PerformanceConfig(
@@ -218,12 +217,14 @@ class AppData: ObservableObject {
         // 重新初始化默认模式
         self.initializeDefaultPatterns()
         
+        // 立即保存到当前Preset
+        presetManager.saveImmediately(performanceConfig: performanceConfig, appConfig: CONFIG)
+        
         print("[AppData] ✅ Configuration reset to defaults")
     }
     
-    /// 获取保存文件的信息（用于调试）
-    func getPersistenceInfo() -> [String: Any] {
-        return persistenceManager.getSavedFilesInfo()
+    /// 获取Preset统计信息（用于调试）
+    func getPresetInfo() -> [String: Any] {
+        return presetManager.getPresetStats()
     }
-
 }

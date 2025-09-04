@@ -64,11 +64,10 @@ struct PresetQuickAccessView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    if let currentPreset = presetManager.currentPreset {
-                        Text("• \(currentPreset.name)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
+                    let currentPreset = presetManager.currentPresetOrUnnamed
+                    Text("• \(currentPreset.name)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
             }
             .buttonStyle(.plain)
@@ -95,50 +94,38 @@ struct PresetQuickAccessView: View {
     }
     
     private var currentPresetView: some View {
-        Group {
-            if presetManager.currentPreset != nil {
-                let currentPreset = presetManager.currentPreset!
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(currentPreset.name)
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        
-                        if let description = currentPreset.description, !description.isEmpty {
-                            Text(description)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Text("Current")
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(4)
-                }
-                .padding(.vertical, 4)
-            } else {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle")
-                        .foregroundColor(.orange)
-                    
-                    Text("No preset loaded")
-                        .font(.subheadline)
+        let currentPreset = presetManager.currentPresetOrUnnamed
+        let isUnnamed = presetManager.isUnnamedPreset(currentPreset)
+        
+        return HStack {
+            Image(systemName: isUnnamed ? "circle" : "checkmark.circle.fill")
+                .foregroundColor(isUnnamed ? .secondary : .green)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(currentPreset.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                if let description = currentPreset.description, !description.isEmpty {
+                    Text(description)
+                        .font(.caption)
                         .foregroundColor(.secondary)
-                    
-                    Spacer()
+                        .lineLimit(1)
                 }
-                .padding(.vertical, 4)
+            }
+            
+            Spacer()
+            
+            if !isUnnamed {
+                Text("Active")
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(4)
             }
         }
+        .padding(.vertical, 4)
     }
     
     private var quickAccessList: some View {
@@ -184,9 +171,7 @@ struct PresetQuickAccessView: View {
     }
     
     private func loadPreset(_ preset: Preset) {
-        let (performanceConfig, appConfig) = presetManager.loadPreset(preset)
-        appData.performanceConfig = performanceConfig
-        appData.CONFIG = appConfig
+        appData.loadPreset(preset)
     }
 }
 
@@ -256,25 +241,21 @@ struct PresetStatusIndicator: View {
     
     var body: some View {
         HStack(spacing: 6) {
-            if let currentPreset = presetManager.currentPreset {
-                Image(systemName: "folder.fill")
-                    .foregroundColor(.blue)
-                
-                Text(currentPreset.name)
-                    .font(.caption)
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                
+            let currentPreset = presetManager.currentPresetOrUnnamed
+            let isUnnamed = presetManager.isUnnamedPreset(currentPreset)
+            
+            Image(systemName: isUnnamed ? "folder" : "folder.fill")
+                .foregroundColor(isUnnamed ? .secondary : .blue)
+            
+            Text(currentPreset.name)
+                .font(.caption)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+            
+            if !isUnnamed {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
                     .font(.caption2)
-            } else {
-                Image(systemName: "folder")
-                    .foregroundColor(.secondary)
-                
-                Text("No Preset")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
         }
         .padding(.horizontal, 8)
