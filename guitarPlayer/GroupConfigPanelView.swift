@@ -225,10 +225,11 @@ struct GroupConfigPanelView: View {
         // Simplified for brevity, logic remains the same
         if let gi = activeGroupIndex {
             let chordName = editingChordName
+            // This view should be built out more completely
             return AnyView(
                 VStack {
                     Text("Edit Chord: \(chordName)").font(.title)
-                    // Form for editing shortcut and fingering would go here
+                    Text("Shortcut editing UI would go here.")
                     Spacer()
                     HStack {
                         Button("Cancel") { showChordEditSheet = false }
@@ -253,10 +254,57 @@ struct GroupConfigPanelView: View {
     }
     
     // MARK: - Logic (Setup, Conflict, Helpers, etc.)
-    private func setupShortcutCapture() { /* ... */ }
-    private func findConflictingChords(for shortcut: String, excluding: String, in group: PatternGroup) -> [String] { /* ... */ return [] }
-    private func showConflictWarning(newChord: String, newShortcut: String, conflictingChords: [String], groupIndex: Int) { /* ... */ }
-    private func resolveConflict(choice: ConflictResolutionChoice) { /* ... */ }
+    
+    private func setupShortcutCapture() {
+        keyboardHandler.onShortcutCaptured = { shortcut in
+            guard let chordName = capturingShortcutForChord, let groupIndex = activeGroupIndex else { return }
+            
+            let group = appData.performanceConfig.patternGroups[groupIndex]
+            let conflictingChords = findConflictingChords(for: shortcut, excluding: chordName, in: group)
+            
+            if conflictingChords.isEmpty {
+                appData.performanceConfig.patternGroups[groupIndex].chordAssignments[chordName]?.shortcutKey = shortcut
+            } else {
+                showConflictWarning(newChord: chordName, newShortcut: shortcut, conflictingChords: conflictingChords, groupIndex: groupIndex)
+            }
+            
+            capturingShortcutForChord = nil
+            keyboardHandler.stopCapturingShortcuts()
+        }
+    }
+    
+    private func findConflictingChords(for shortcut: String, excluding chordToExclude: String, in group: PatternGroup) -> [String] {
+        return group.chordAssignments.filter { (chordName, assignment) in
+            return chordName != chordToExclude && assignment.shortcutKey == shortcut
+        }.map { $0.key }
+    }
+    
+    private func showConflictWarning(newChord: String, newShortcut: String, conflictingChords: [String], groupIndex: Int) {
+        self.conflictData = ConflictData(
+            newChord: newChord,
+            newShortcut: newShortcut,
+            conflictingChords: conflictingChords,
+            groupIndex: groupIndex
+        )
+        self.showConflictAlert = true
+    }
+    
+    private func resolveConflict(choice: ConflictResolutionChoice) {
+        guard let data = conflictData else { return }
+        
+        switch choice {
+        case .replace:
+            // Remove shortcut from conflicting chords
+            for chordName in data.conflictingChords {
+                appData.performanceConfig.patternGroups[data.groupIndex].chordAssignments[chordName]?.shortcutKey = nil
+            }
+            // Assign shortcut to the new chord
+            appData.performanceConfig.patternGroups[data.groupIndex].chordAssignments[data.newChord]?.shortcutKey = data.newShortcut
+        case .cancel:
+            break
+        }
+        conflictData = nil
+    }
 
     private func addChord(to groupIndex: Int, chordName: String) {
         guard appData.performanceConfig.patternGroups.indices.contains(groupIndex) else { return }
@@ -266,11 +314,15 @@ struct GroupConfigPanelView: View {
             appData.performanceConfig.patternGroups[groupIndex] = group
         }
     }
+    
     private func removeChord(from groupIndex: Int, chordName: String) {
         guard appData.performanceConfig.patternGroups.indices.contains(groupIndex) else { return }
         var group = appData.performanceConfig.patternGroups[groupIndex]
         group.chordAssignments.removeValue(forKey: chordName)
         appData.performanceConfig.patternGroups[groupIndex] = group
     }
-    private func getShortcutForChord(chordName: String, group: PatternGroup) -> String? { return nil }
+    
+    private func getShortcutForChord(chordName: String, group: PatternGroup) -> String? {
+        return group.chordAssignments[chordName]?.shortcutKey
+    }
 }

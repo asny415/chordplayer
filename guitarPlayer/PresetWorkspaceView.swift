@@ -30,6 +30,12 @@ struct PresetWorkspaceView: View {
                 activeGroupIndex = 0
             }
         }
+        .onReceive(keyboardHandler.$currentGroupIndex) { newIndex in
+            // Update the selection when the keyboard handler changes the group
+            if appData.performanceConfig.patternGroups.indices.contains(newIndex) {
+                activeGroupIndex = newIndex
+            }
+        }
     }
 
     private var groupListView: some View {
