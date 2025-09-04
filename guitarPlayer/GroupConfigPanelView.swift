@@ -263,7 +263,18 @@ struct GroupConfigPanelView: View {
             let conflictingChords = findConflictingChords(for: shortcut, excluding: chordName, in: group)
             
             if conflictingChords.isEmpty {
-                appData.performanceConfig.patternGroups[groupIndex].chordAssignments[chordName]?.shortcutKey = shortcut
+                // Modify structs safely by copying, modifying, and then setting back.
+                var group = appData.performanceConfig.patternGroups[groupIndex]
+                if var assignment = group.chordAssignments[chordName] {
+                    assignment.shortcutKey = shortcut
+                    group.chordAssignments[chordName] = assignment
+                    appData.performanceConfig.patternGroups[groupIndex] = group
+                } else {
+                    var newAssignment = ChordAssignment()
+                    newAssignment.shortcutKey = shortcut
+                    group.chordAssignments[chordName] = newAssignment
+                    appData.performanceConfig.patternGroups[groupIndex] = group
+                }
             } else {
                 showConflictWarning(newChord: chordName, newShortcut: shortcut, conflictingChords: conflictingChords, groupIndex: groupIndex)
             }
@@ -294,12 +305,22 @@ struct GroupConfigPanelView: View {
         
         switch choice {
         case .replace:
+            var group = appData.performanceConfig.patternGroups[data.groupIndex]
             // Remove shortcut from conflicting chords
             for chordName in data.conflictingChords {
-                appData.performanceConfig.patternGroups[data.groupIndex].chordAssignments[chordName]?.shortcutKey = nil
+                group.chordAssignments[chordName]?.shortcutKey = nil
             }
             // Assign shortcut to the new chord
-            appData.performanceConfig.patternGroups[data.groupIndex].chordAssignments[data.newChord]?.shortcutKey = data.newShortcut
+            if var assignment = group.chordAssignments[data.newChord] {
+                assignment.shortcutKey = data.newShortcut
+                group.chordAssignments[data.newChord] = assignment
+            } else {
+                var newAssignment = ChordAssignment()
+                newAssignment.shortcutKey = data.newShortcut
+                group.chordAssignments[data.newChord] = newAssignment
+            }
+            appData.performanceConfig.patternGroups[data.groupIndex] = group
+
         case .cancel:
             break
         }
