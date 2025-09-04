@@ -8,13 +8,12 @@ struct ContentView: View {
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     @EnvironmentObject var metronome: Metronome
 
-    @State private var showingCreateSheet = false
     @State private var activeGroupIndex: Int? = 0
 
     var body: some View {
         NavigationSplitView {
             // MARK: - Column 1: Sidebar for Presets
-            PresetSidebar(showingCreateSheet: $showingCreateSheet)
+            PresetSidebar()
                 .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 400)
 
         } content: {
@@ -29,9 +28,6 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .frame(minWidth: 1200, minHeight: 700)
         .onAppear(perform: setupInitialState)
-        .sheet(isPresented: $showingCreateSheet) {
-            PresetCreateView()
-        }
         // Clicking on empty area should clear focus so global shortcuts work again
         .onTapGesture {
             NSApp.keyWindow?.makeFirstResponder(nil)
@@ -58,7 +54,6 @@ struct ContentView: View {
 private struct PresetSidebar: View {
     @EnvironmentObject var appData: AppData
     @StateObject private var presetManager = PresetManager.shared
-    @Binding var showingCreateSheet: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -74,9 +69,7 @@ private struct PresetSidebar: View {
             .listStyle(.sidebar)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showingCreateSheet = true }) {
-                        Label("New Preset", systemImage: "plus")
-                    }
+                    // Removed the "New Preset" button as per user's instruction to remove old logic.
                 }
             }
             
@@ -104,9 +97,12 @@ private struct PresetSidebar: View {
 
 // MARK: - Preset Row
 private struct PresetRow: View {
+    @EnvironmentObject var presetManager: PresetManager
     let preset: Preset
     let isCurrent: Bool
     let onSelect: () -> Void
+    
+    @State private var showingDeleteConfirmation = false
     
     var body: some View {
         HStack {
@@ -124,6 +120,21 @@ private struct PresetRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
+        .contextMenu {
+            Button(role: .destructive) {
+                showingDeleteConfirmation = true
+            } label: {
+                Label("Delete Preset", systemImage: "trash")
+            }
+        }
+        .alert("Delete Preset", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                _ = presetManager.deletePreset(preset)
+            }
+        } message: {
+            Text("Are you sure you want to delete '\(preset.name)'? This action cannot be undone.")
+        }
     }
 }
 
