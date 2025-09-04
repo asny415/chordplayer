@@ -256,16 +256,16 @@ struct GroupConfigPanelView: View {
     // MARK: - Logic (Setup, Conflict, Helpers, etc.)
     
     private func setupShortcutCapture() {
-        keyboardHandler.onShortcutCaptured = { (shortcut: String) in
-            guard let chordName = capturingShortcutForChord, let groupIndex = activeGroupIndex else { return }
-            
+        keyboardHandler.onShortcutCaptured = { (chordName: String, shortcut: String) in
+            guard let groupIndex = activeGroupIndex else { return }
+
             let conflictingChords = findConflictingChords(for: shortcut, excluding: chordName, in: appData.performanceConfig.patternGroups[groupIndex])
-            
+
             if conflictingChords.isEmpty {
                 var config = appData.performanceConfig
                 var group = config.patternGroups[groupIndex]
                 var assignment = group.chordAssignments[chordName] ?? ChordAssignment()
-                
+
                 assignment.shortcutKey = shortcut
                 group.chordAssignments[chordName] = assignment
                 config.patternGroups[groupIndex] = group
@@ -273,7 +273,7 @@ struct GroupConfigPanelView: View {
             } else {
                 showConflictWarning(newChord: chordName, newShortcut: shortcut, conflictingChords: conflictingChords, groupIndex: groupIndex)
             }
-            
+
             capturingShortcutForChord = nil
             keyboardHandler.stopCapturingShortcut()
         }
