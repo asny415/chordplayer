@@ -53,7 +53,7 @@ struct ContentView: View {
 // MARK: - Preset Sidebar View
 private struct PresetSidebar: View {
     @EnvironmentObject var appData: AppData
-    @StateObject private var presetManager = PresetManager.shared
+    @EnvironmentObject var presetManager: PresetManager // Changed from @StateObject
     @State private var editingPresetId: UUID? // New state for inline editing
 
     var body: some View {
@@ -208,5 +208,6 @@ struct ContentView_Previews: PreviewProvider {
             .environmentObject(guitarPlayer)
             .environmentObject(drumPlayer)
             .environmentObject(keyboardHandler)
+            .environmentObject(PresetManager.shared)
     }
 }

@@ -41,6 +41,7 @@ struct guitarPlayerApp: App {
                 .environmentObject(guitarPlayer)
                 .environmentObject(drumPlayer)
                 .environmentObject(keyboardHandler) // Add this
+                .environmentObject(PresetManager.shared)
         }
     }
 }
