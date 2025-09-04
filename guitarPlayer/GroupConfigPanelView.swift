@@ -223,7 +223,7 @@ struct GroupConfigPanelView: View {
     // MARK: - Sheet Views
     private var chordEditSheet: some View {
         // Simplified for brevity, logic remains the same
-        if let gi = activeGroupIndex {
+        if activeGroupIndex != nil {
             let chordName = editingChordName
             // This view should be built out more completely
             return AnyView(
@@ -269,7 +269,7 @@ struct GroupConfigPanelView: View {
             }
             
             capturingShortcutForChord = nil
-            keyboardHandler.stopCapturingShortcuts()
+            keyboardHandler.stopCapturingShortcut()
         }
     }
     
