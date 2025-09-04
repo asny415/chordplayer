@@ -140,10 +140,16 @@ struct GroupConfigPanelView: View {
     @State private var conflictData: ConflictData? = nil
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            groupListView
-            Divider()
-            groupEditorView
+        VStack(spacing: 12) {
+            // Preset快速访问
+            PresetQuickAccessView()
+                .environmentObject(appData)
+            
+            HStack(alignment: .top, spacing: 12) {
+                groupListView
+                Divider()
+                groupEditorView
+            }
         }
         .sheet(isPresented: $showChordEditSheet) {
             chordEditSheet

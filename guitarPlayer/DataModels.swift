@@ -166,7 +166,7 @@ struct DrumSettings: Codable {
     let defaultPattern: String
 }
 
-struct PatternGroup: Codable {
+struct PatternGroup: Codable, Equatable {
     var name: String
     var patterns: [String: String?] // String? to allow for null in JS
     var pattern: String? // New field for default fingering ID
@@ -212,12 +212,12 @@ struct PatternGroup: Codable {
 }
 
 // Per-chord assignment metadata
-struct ChordAssignment: Codable {
+struct ChordAssignment: Codable, Equatable {
     var fingeringId: String?
     var shortcutKey: String?
 }
 
-struct PerformanceConfig: Codable {
+struct PerformanceConfig: Codable, Equatable {
     var tempo: Double
     var timeSignature: String
     var key: String
@@ -229,7 +229,7 @@ struct PerformanceConfig: Codable {
     var patternGroups: [PatternGroup]
 }
 
-struct AppConfig: Codable {
+struct AppConfig: Codable, Equatable {
     let midiPortName: String
     let note: Int
     let velocity: Int

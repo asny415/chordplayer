@@ -52,6 +52,7 @@ struct ControlBarView: View {
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     
     @State private var showAutoSaveDebug = false
+    @State private var showPresetManager = false
     
     // A computed property for the drum patterns available for the current time signature
     private var availableDrumPatterns: [String] {
@@ -187,6 +188,17 @@ struct ControlBarView: View {
                 )
                 .frame(width: 160)
                 
+                // Preset Manager Button
+                Button(action: {
+                    showPresetManager = true
+                }) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
+                .help("Preset Manager")
+                
                 // Auto Save Debug Button
                 Button(action: {
                     showAutoSaveDebug = true
@@ -203,6 +215,10 @@ struct ControlBarView: View {
         .padding(.vertical, 8)
         .background(Color.black.opacity(0.2))
         .focusable(false)
+        .sheet(isPresented: $showPresetManager) {
+            PresetManagerView()
+                .environmentObject(appData)
+        }
         .sheet(isPresented: $showAutoSaveDebug) {
             AutoSaveDebugView()
                 .environmentObject(appData)

@@ -145,8 +145,8 @@ class DataPersistenceManager: ObservableObject {
                 let attributes = try FileManager.default.attributesOfItem(atPath: performanceConfigURL.path)
                 info["performance_config"] = [
                     "exists": true,
-                    "size": (attributes[.size] as? Int64) ?? 0,
-                    "modified": (attributes[.modificationDate] as? Date) ?? Date()
+                    "size": (attributes[.size] as? Int64) ?? 0 as Any,
+                    "modified": (attributes[.modificationDate] as? Date) ?? Date() as Any
                 ]
             } catch {
                 info["performance_config"] = ["exists": true, "error": error.localizedDescription]
@@ -160,8 +160,8 @@ class DataPersistenceManager: ObservableObject {
                 let attributes = try FileManager.default.attributesOfItem(atPath: appConfigURL.path)
                 info["app_config"] = [
                     "exists": true,
-                    "size": (attributes[.size] as? Int64) ?? 0,
-                    "modified": (attributes[.modificationDate] as? Date) ?? Date()
+                    "size": (attributes[.size] as? Int64) ?? 0 as Any,
+                    "modified": (attributes[.modificationDate] as? Date) ?? Date() as Any
                 ]
             } catch {
                 info["app_config"] = ["exists": true, "error": error.localizedDescription]
