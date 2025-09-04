@@ -54,6 +54,7 @@ struct ContentView: View {
 private struct PresetSidebar: View {
     @EnvironmentObject var appData: AppData
     @StateObject private var presetManager = PresetManager.shared
+    @State private var editingPresetId: UUID? // New state for inline editing
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -62,14 +63,29 @@ private struct PresetSidebar: View {
                     ForEach(presetManager.presets) { preset in
                         PresetRow(preset: preset,
                                   isCurrent: preset.id == presetManager.currentPreset?.id,
-                                  onSelect: { appData.loadPreset(preset) })
+                                  onSelect: { appData.loadPreset(preset) },
+                                  isEditing: .constant(editingPresetId == preset.id),
+                                  onRename: { newName in
+                                      presetManager.renamePreset(preset, newName: newName)
+                                      editingPresetId = nil // Exit editing mode
+                                  },
+                                  onStartEditing: { presetId in
+                                      editingPresetId = presetId // Set editing mode for the double-clicked preset
+                                  })
                     }
                 }
             }
             .listStyle(.sidebar)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    // Removed the "New Preset" button as per user's instruction to remove old logic.
+                    Button {
+                        let newPresetName = "New Preset " + Date().formatted(date: .numeric, time: .standard)
+                        if let newPreset = appData.createNewPreset(name: newPresetName) {
+                            editingPresetId = newPreset.id // Set editing mode for the new preset
+                        }
+                    } label: {
+                        Label("New Preset", systemImage: "plus.circle")
+                    }
                 }
             }
             
@@ -101,16 +117,45 @@ private struct PresetRow: View {
     let preset: Preset
     let isCurrent: Bool
     let onSelect: () -> Void
+    @Binding var isEditing: Bool // New binding for editing state
+    let onRename: (String) -> Void // New closure for renaming
+    let onStartEditing: (UUID) -> Void // New closure to start editing from double-click
     
     @State private var showingDeleteConfirmation = false
+    @State private var newName: String = "" // State for TextField
+    
+    @FocusState private var isNameFieldFocused: Bool // For auto-focusing TextField
     
     var body: some View {
         HStack {
             Image(systemName: "folder")
                 .foregroundColor(.accentColor)
             VStack(alignment: .leading) {
-                Text(preset.name)
-                    .fontWeight(isCurrent ? .bold : .regular)
+                if isEditing {
+                    TextField("Preset Name", text: $newName, onCommit: {
+                        onRename(newName)
+                        isNameFieldFocused = false // Resign focus on commit
+                    })
+                    .textFieldStyle(.plain)
+                    .font(isCurrent ? .headline : .body)
+                    .focused($isNameFieldFocused) // Apply focus state
+                    .onAppear {
+                        newName = preset.name // Initialize TextField with current name
+                        DispatchQueue.main.async { // Delay focus to ensure TextField is ready
+                            isNameFieldFocused = true
+                        }
+                    }
+                    .onChange(of: isEditing) { newValue in
+                        if newValue { // If editing starts, focus the field
+                            DispatchQueue.main.async { // Delay focus to ensure TextField is ready
+                                isNameFieldFocused = true
+                            }
+                        }
+                    }
+                } else {
+                    Text(preset.name)
+                        .fontWeight(isCurrent ? .bold : .regular)
+                }
                 if let desc = preset.description, !desc.isEmpty {
                     Text(desc)
                         .font(.caption)
@@ -119,7 +164,14 @@ private struct PresetRow: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture(perform: onSelect)
+        .onTapGesture(perform: {
+            if !isEditing {
+                onSelect()
+            }
+        })
+        .highPriorityGesture(TapGesture(count: 2).onEnded { // Double tap to edit
+            onStartEditing(preset.id)
+        })
         .contextMenu {
             Button(role: .destructive) {
                 showingDeleteConfirmation = true

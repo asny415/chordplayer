@@ -184,6 +184,32 @@ class PresetManager: ObservableObject {
         return true
     }
     
+    /// 重命名Preset
+    func renamePreset(_ preset: Preset, newName: String) {
+        guard let index = presets.firstIndex(where: { $0.id == preset.id }) else {
+            print("[PresetManager] ❌ Preset not found for renaming")
+            return
+        }
+        
+        // 检查新名称是否已存在（除了自身）
+        if presets.contains(where: { $0.id != preset.id && $0.name.lowercased() == newName.lowercased() }) {
+            print("[PresetManager] ❌ Preset with name '\(newName)' already exists")
+            return
+        }
+        
+        presets[index].name = newName
+        presets[index].updatedAt = Date()
+        savePresetsToFile()
+        
+        // 如果重命名的是当前活跃的Preset，也更新其名称
+        if currentPreset?.id == preset.id {
+            currentPreset?.name = newName
+            currentPreset?.updatedAt = Date()
+            saveCurrentPreset()
+        }
+        print("[PresetManager] ✅ Renamed preset '\(preset.name)' to '\(newName)'")
+    }
+    
     // MARK: - 自动保存
     
     /// 调度自动保存
