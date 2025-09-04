@@ -140,7 +140,7 @@ struct GroupConfigPanelView: View {
     @State private var conflictData: ConflictData? = nil
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             groupListView
             Divider()
             groupEditorView
@@ -211,9 +211,10 @@ struct GroupConfigPanelView: View {
             } else {
                 Text("No groups available")
                     .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     private func groupHeaderView(group: PatternGroup, bindingGroupIndex: Int) -> some View {
