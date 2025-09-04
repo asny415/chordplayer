@@ -160,11 +160,54 @@ class AppData: ObservableObject {
     
     /// 创建新的Preset
     func createNewPreset(name: String, description: String? = nil) -> Preset? {
-        return presetManager.createNewPreset(
+        // 如果当前在"未命名"preset中，继承当前设置；否则使用默认设置
+        let shouldInheritCurrentConfig = isUnnamedPreset
+        
+        let performanceConfig = shouldInheritCurrentConfig ? self.performanceConfig : getDefaultPerformanceConfig()
+        let appConfig = shouldInheritCurrentConfig ? self.CONFIG : getDefaultAppConfig()
+        
+        // 创建新preset
+        guard let newPreset = presetManager.createNewPreset(
             name: name,
             description: description,
             performanceConfig: performanceConfig,
-            appConfig: CONFIG
+            appConfig: appConfig
+        ) else {
+            return nil
+        }
+        
+        // 立即加载新创建的preset，更新UI状态
+        loadPreset(newPreset)
+        
+        return newPreset
+    }
+    
+    /// 获取默认的PerformanceConfig
+    private func getDefaultPerformanceConfig() -> PerformanceConfig {
+        return PerformanceConfig(
+            tempo: 120,
+            timeSignature: "4/4",
+            key: "C",
+            quantize: QuantizationMode.measure.rawValue,
+            quantizeToggleKey: "q",
+            drumPattern: "ROCK_4_4_BASIC",
+            keyMap: [:],
+            patternGroups: [
+                PatternGroup(name: "Intro", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC"),
+                PatternGroup(name: "Verse", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC"),
+                PatternGroup(name: "Chorus", patterns: [:], pattern: "ARPEGGIO_4_4_BASIC")
+            ]
+        )
+    }
+    
+    /// 获取默认的AppConfig
+    private func getDefaultAppConfig() -> AppConfig {
+        return AppConfig(
+            midiPortName: "IAC驱动程序 总线1",
+            note: 60,
+            velocity: 64,
+            duration: 4000,
+            channel: 0
         )
     }
     

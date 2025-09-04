@@ -53,7 +53,9 @@ struct PresetCreateView: View {
                 .font(.system(size: 48))
                 .foregroundColor(.blue)
             
-            Text("Create a new preset from your current configuration")
+            Text(appData.isUnnamedPreset ? 
+                 "Create a new preset from your current configuration" : 
+                 "Create a new preset with default settings")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -100,15 +102,25 @@ struct PresetCreateView: View {
     
     private var previewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Current Configuration Preview", systemImage: "eye")
+            Label("New Preset Configuration", systemImage: "eye")
                 .font(.headline)
+            
+            if appData.isUnnamedPreset {
+                Text("This preset will inherit your current settings:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                Text("This preset will start with default settings:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
             
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Tempo:")
                         .fontWeight(.medium)
                     Spacer()
-                    Text("\(Int(appData.performanceConfig.tempo)) BPM")
+                    Text(appData.isUnnamedPreset ? "\(Int(appData.performanceConfig.tempo)) BPM" : "120 BPM")
                         .foregroundColor(.secondary)
                 }
                 
@@ -116,7 +128,7 @@ struct PresetCreateView: View {
                     Text("Key:")
                         .fontWeight(.medium)
                     Spacer()
-                    Text(appData.performanceConfig.key)
+                    Text(appData.isUnnamedPreset ? appData.performanceConfig.key : "C")
                         .foregroundColor(.secondary)
                 }
                 
@@ -124,7 +136,7 @@ struct PresetCreateView: View {
                     Text("Time Signature:")
                         .fontWeight(.medium)
                     Spacer()
-                    Text(appData.performanceConfig.timeSignature)
+                    Text(appData.isUnnamedPreset ? appData.performanceConfig.timeSignature : "4/4")
                         .foregroundColor(.secondary)
                 }
                 
@@ -132,7 +144,7 @@ struct PresetCreateView: View {
                     Text("Pattern Groups:")
                         .fontWeight(.medium)
                     Spacer()
-                    Text("\(appData.performanceConfig.patternGroups.count) groups")
+                    Text(appData.isUnnamedPreset ? "\(appData.performanceConfig.patternGroups.count) groups" : "3 groups (Intro, Verse, Chorus)")
                         .foregroundColor(.secondary)
                 }
                 
@@ -140,7 +152,7 @@ struct PresetCreateView: View {
                     Text("MIDI Output:")
                         .fontWeight(.medium)
                     Spacer()
-                    Text(appData.CONFIG.midiPortName)
+                    Text(appData.isUnnamedPreset ? appData.CONFIG.midiPortName : "IAC驱动程序 总线1")
                         .foregroundColor(.secondary)
                 }
             }
