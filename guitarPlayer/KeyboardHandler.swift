@@ -390,6 +390,11 @@ class KeyboardHandler: ObservableObject {
         }
     }
     
+    // NEW: Function to get the default shortcut display string for a given chord name
+    func getDefaultShortcutDisplay(for chordName: String) -> String? {
+        return MusicTheory.defaultChordToShortcutMap[chordName]
+    }
+    
     private func markChordActive(_ chord: String) {
         DispatchQueue.main.async {
             self.activeChordName = chord

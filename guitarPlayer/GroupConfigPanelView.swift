@@ -341,6 +341,11 @@ struct GroupConfigPanelView: View {
     }
     
     private func getShortcutForChord(chordName: String, group: PatternGroup) -> String? {
-        return group.chordAssignments[chordName]?.shortcutKey
+        // First, check for an assigned shortcut key
+        if let assignedShortcut = group.chordAssignments[chordName]?.shortcutKey, !assignedShortcut.isEmpty {
+            return assignedShortcut
+        }
+        // If no assigned shortcut, try to get the default shortcut from KeyboardHandler
+        return keyboardHandler.getDefaultShortcutDisplay(for: chordName)
     }
 }
