@@ -255,25 +255,22 @@ struct GroupConfigPanelView: View {
     
     // MARK: - Logic (Setup, Conflict, Helpers, etc.)
     
+    /// A helper function to safely modify the performance configuration.
+    private func modifyPerformanceConfig(_ modification: (inout PerformanceConfig) -> Void) {
+        var newConfig = appData.performanceConfig
+        modification(&newConfig)
+        appData.performanceConfig = newConfig
+    }
+    
     private func setupShortcutCapture() {
         keyboardHandler.onShortcutCaptured = { shortcut in
             guard let chordName = capturingShortcutForChord, let groupIndex = activeGroupIndex else { return }
             
-            let group = appData.performanceConfig.patternGroups[groupIndex]
-            let conflictingChords = findConflictingChords(for: shortcut, excluding: chordName, in: group)
+            let conflictingChords = findConflictingChords(for: shortcut, excluding: chordName, in: appData.performanceConfig.patternGroups[groupIndex])
             
             if conflictingChords.isEmpty {
-                // Modify structs safely by copying, modifying, and then setting back.
-                var group = appData.performanceConfig.patternGroups[groupIndex]
-                if var assignment = group.chordAssignments[chordName] {
-                    assignment.shortcutKey = shortcut
-                    group.chordAssignments[chordName] = assignment
-                    appData.performanceConfig.patternGroups[groupIndex] = group
-                } else {
-                    var newAssignment = ChordAssignment()
-                    newAssignment.shortcutKey = shortcut
-                    group.chordAssignments[chordName] = newAssignment
-                    appData.performanceConfig.patternGroups[groupIndex] = group
+                modifyPerformanceConfig { config in
+                    config.patternGroups[groupIndex].chordAssignments[chordName]?.shortcutKey = shortcut
                 }
             } else {
                 showConflictWarning(newChord: chordName, newShortcut: shortcut, conflictingChords: conflictingChords, groupIndex: groupIndex)
@@ -305,21 +302,14 @@ struct GroupConfigPanelView: View {
         
         switch choice {
         case .replace:
-            var group = appData.performanceConfig.patternGroups[data.groupIndex]
-            // Remove shortcut from conflicting chords
-            for chordName in data.conflictingChords {
-                group.chordAssignments[chordName]?.shortcutKey = nil
+            modifyPerformanceConfig { config in
+                // Remove shortcut from conflicting chords
+                for chordName in data.conflictingChords {
+                    config.patternGroups[data.groupIndex].chordAssignments[chordName]?.shortcutKey = nil
+                }
+                // Assign shortcut to the new chord
+                config.patternGroups[data.groupIndex].chordAssignments[data.newChord]?.shortcutKey = data.newShortcut
             }
-            // Assign shortcut to the new chord
-            if var assignment = group.chordAssignments[data.newChord] {
-                assignment.shortcutKey = data.newShortcut
-                group.chordAssignments[data.newChord] = assignment
-            } else {
-                var newAssignment = ChordAssignment()
-                newAssignment.shortcutKey = data.newShortcut
-                group.chordAssignments[data.newChord] = newAssignment
-            }
-            appData.performanceConfig.patternGroups[data.groupIndex] = group
 
         case .cancel:
             break
@@ -328,19 +318,17 @@ struct GroupConfigPanelView: View {
     }
 
     private func addChord(to groupIndex: Int, chordName: String) {
-        guard appData.performanceConfig.patternGroups.indices.contains(groupIndex) else { return }
-        var group = appData.performanceConfig.patternGroups[groupIndex]
-        if group.chordAssignments[chordName] == nil {
-            group.chordAssignments[chordName] = ChordAssignment()
-            appData.performanceConfig.patternGroups[groupIndex] = group
+        modifyPerformanceConfig { config in
+            if config.patternGroups[groupIndex].chordAssignments[chordName] == nil {
+                config.patternGroups[groupIndex].chordAssignments[chordName] = ChordAssignment()
+            }
         }
     }
     
     private func removeChord(from groupIndex: Int, chordName: String) {
-        guard appData.performanceConfig.patternGroups.indices.contains(groupIndex) else { return }
-        var group = appData.performanceConfig.patternGroups[groupIndex]
-        group.chordAssignments.removeValue(forKey: chordName)
-        appData.performanceConfig.patternGroups[groupIndex] = group
+        modifyPerformanceConfig { config in
+            config.patternGroups[groupIndex].chordAssignments.removeValue(forKey: chordName)
+        }
     }
     
     private func getShortcutForChord(chordName: String, group: PatternGroup) -> String? {
