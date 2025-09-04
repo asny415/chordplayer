@@ -187,11 +187,6 @@ struct ControlBarView: View {
                 )
                 .frame(width: 160)
                 
-                // Preset Status Display
-                PresetStatusDisplay()
-                    .onTapGesture {
-                        showPresetManager = true
-                    }
                 
             }
         }
@@ -206,71 +201,3 @@ struct ControlBarView: View {
     }
 }
 
-// MARK: - Preset Status Display
-
-struct PresetStatusDisplay: View {
-    @StateObject private var presetManager = PresetManager.shared
-    @State private var isHovered = false
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            // Preset Icon
-            Image(systemName: presetManager.isUnnamedPreset(presetManager.currentPresetOrUnnamed) ? "folder" : "folder.fill")
-                .font(.system(size: 14))
-                .foregroundColor(presetManager.isUnnamedPreset(presetManager.currentPresetOrUnnamed) ? .secondary : .blue)
-            
-            // Preset Name
-            VStack(alignment: .leading, spacing: 2) {
-                Text(presetManager.currentPresetOrUnnamed.name)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                
-                if !presetManager.isUnnamedPreset(presetManager.currentPresetOrUnnamed) {
-                    Text("Active")
-                        .font(.caption2)
-                        .foregroundColor(.green)
-                } else {
-                    Text("Unsaved")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
-                }
-            }
-            
-            // Quick Info
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("\(Int(presetManager.currentPresetOrUnnamed.performanceConfig.tempo)) BPM")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                
-                Text(presetManager.currentPresetOrUnnamed.performanceConfig.key)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-            
-            // Dropdown Arrow
-            Image(systemName: "chevron.down")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .rotationEffect(.degrees(isHovered ? 180 : 0))
-                .animation(.easeInOut(duration: 0.2), value: isHovered)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.black.opacity(isHovered ? 0.25 : 0.15))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(presetManager.isUnnamedPreset(presetManager.currentPresetOrUnnamed) ? Color.orange.opacity(0.3) : Color.blue.opacity(0.3), lineWidth: 1)
-        )
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovered = hovering
-            }
-        }
-        .help("Current Preset: \(presetManager.currentPresetOrUnnamed.name)")
-    }
-}

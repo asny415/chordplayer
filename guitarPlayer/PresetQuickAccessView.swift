@@ -117,11 +117,21 @@ struct PresetQuickAccessView: View {
             Spacer()
             
             // Expand/Collapse Arrow
-            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .rotationEffect(.degrees(isExpanded ? 0 : 0))
-                .animation(.easeInOut(duration: 0.2), value: isExpanded)
+            Button(action: {
+                if isExpanded {
+                    isExpanded = false
+                } else {
+                    showingPresetManager = true
+                }
+            }) {
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 0 : 0))
+                    .animation(.easeInOut(duration: 0.2), value: isExpanded)
+            }
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Collapse" : "Open Preset Manager")
             
             // Quick Action Buttons
             HStack(spacing: 8) {

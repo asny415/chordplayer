@@ -510,7 +510,7 @@ struct PresetRowView: View {
                 ActionButton(icon: "pencil.circle", color: .orange, action: onEdit, help: "Edit Preset")
                 ActionButton(icon: "trash.circle", color: .red, action: onDelete, help: "Delete Preset")
             }
-            .opacity(isHovered ? 1.0 : 0.0)
+            .opacity(isHovered ? 1.0 : 0.3)
             .animation(.easeInOut(duration: 0.2), value: isHovered)
         }
         .padding(20)
