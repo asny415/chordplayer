@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 渐变定义 -->
+    <linearGradient id="guitarBodyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2C3E50;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#34495E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1A252F;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="guitarNeckGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B4513;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#A0522D;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#654321;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="stringsGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F39C12;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E67E22;stop-opacity:1" />
+    </linearGradient>
+    
+    <radialGradient id="soundHoleGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#1A252F;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#000000;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- 阴影滤镜 -->
+    <filter id="dropShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+      <feOffset dx="2" dy="4" result="offset"/>
+      <feFlood flood-color="#000000" flood-opacity="0.3"/>
+      <feComposite in2="offset" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- 背景圆形 -->
+  <circle cx="256" cy="256" r="240" fill="url(#guitarBodyGradient)" stroke="#1A252F" stroke-width="4"/>
+  
+  <!-- 吉他主体 -->
+  <ellipse cx="256" cy="320" rx="120" ry="80" fill="url(#guitarBodyGradient)" filter="url(#dropShadow)"/>
+  
+  <!-- 吉他琴颈 -->
+  <rect x="200" y="200" width="112" height="20" rx="10" fill="url(#guitarNeckGradient)" filter="url(#dropShadow)"/>
+  
+  <!-- 琴头 -->
+  <rect x="180" y="180" width="152" height="40" rx="20" fill="url(#guitarNeckGradient)" filter="url(#dropShadow)"/>
+  
+  <!-- 调音钮 -->
+  <circle cx="200" cy="200" r="8" fill="#34495E"/>
+  <circle cx="220" cy="200" r="8" fill="#34495E"/>
+  <circle cx="292" cy="200" r="8" fill="#34495E"/>
+  <circle cx="312" cy="200" r="8" fill="#34495E"/>
+  
+  <!-- 琴弦 -->
+  <line x1="200" y1="210" x2="200" y2="320" stroke="url(#stringsGradient)" stroke-width="2"/>
+  <line x1="220" y1="210" x2="220" y2="320" stroke="url(#stringsGradient)" stroke-width="2"/>
+  <line x1="292" y1="210" x2="292" y2="320" stroke="url(#stringsGradient)" stroke-width="2"/>
+  <line x1="312" y1="210" x2="312" y2="320" stroke="url(#stringsGradient)" stroke-width="2"/>
+  
+  <!-- 音孔 -->
+  <circle cx="256" cy="320" r="25" fill="url(#soundHoleGradient)"/>
+  <circle cx="256" cy="320" r="20" fill="none" stroke="#F39C12" stroke-width="2"/>
+  
+  <!-- 音乐符号装饰 -->
+  <g transform="translate(100, 100)">
+    <path d="M0,0 Q10,-10 20,0 Q10,10 0,0" fill="#F39C12" opacity="0.8"/>
+    <circle cx="25" cy="0" r="3" fill="#F39C12" opacity="0.8"/>
+  </g>
+  
+  <g transform="translate(380, 120)">
+    <path d="M0,0 Q10,-10 20,0 Q10,10 0,0" fill="#F39C12" opacity="0.8"/>
+    <circle cx="25" cy="0" r="3" fill="#F39C12" opacity="0.8"/>
+  </g>
+  
+  <!-- 高光效果 -->
+  <ellipse cx="240" cy="300" rx="60" ry="40" fill="none" stroke="#F39C12" stroke-width="1" opacity="0.3"/>
+</svg>
