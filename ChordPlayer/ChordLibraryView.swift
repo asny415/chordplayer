@@ -104,13 +104,13 @@ struct ChordLibraryView: View {
     private func chordResultButton(chord: String) -> some View {
         let isCustomChord = appData.customChordManager.chordExists(name: chord)
         
-        return Button(action: { 
+        return Button(action: {
             onAddChord(chord)
         }) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(chord).font(.headline)
+                        Text(displayChordName(for: chord)).font(.headline)
                         if isCustomChord {
                             Image(systemName: "star.fill")
                                 .font(.caption)
@@ -142,6 +142,25 @@ struct ChordLibraryView: View {
         .buttonStyle(.plain)
     }
 
+    private func displayChordName(for chord: String) -> String {
+        let parts = chord.split(separator: "_")
+        guard parts.count == 2 else {
+            return chord
+        }
+
+        let note = String(parts[0])
+        let quality = String(parts[1])
+
+        switch quality {
+        case "Major":
+            return note
+        case "Minor":
+            return note + "m"
+        default:
+            return chord
+        }
+    }
+
     private func filteredChordLibrary(prefix: String) -> [String] {
         let allChords = Array(appData.chordLibrary?.keys ?? [String: [StringOrInt]]().keys)
         var filteredChords = allChords
@@ -158,7 +177,7 @@ struct ChordLibraryView: View {
         
         // 根据搜索文本过滤
         if !prefix.isEmpty {
-            filteredChords = filteredChords.filter { $0.localizedCaseInsensitiveContains(prefix) }
+            filteredChords = filteredChords.filter { displayChordName(for: $0).localizedCaseInsensitiveContains(prefix) }
         }
         
         return filteredChords.sorted()
