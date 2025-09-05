@@ -169,13 +169,26 @@ class PresetManager: ObservableObject {
         presets.remove(at: index)
         savePresetsToFile()
         
-        // 如果删除的是当前preset，切换到"未命名"
+        // 如果删除的是当前preset
         if currentPreset?.id == preset.id {
-            currentPreset = nil
-            saveCurrentPreset()
+            if presets.isEmpty {
+                // Case 1: No more named presets left, create a new unnamed one
+                let newUnnamed = createUnnamedPreset()
+                presets.append(newUnnamed) // Add to the list
+                currentPreset = newUnnamed // Set as active
+                savePresetsToFile() // Save presets.json again as we added a new one
+                print("[PresetManager] ✅ Deleted last preset, created and set new unnamed preset.")
+            } else {
+                // Case 2: Other named presets remain, set the first one as active
+                currentPreset = presets.first // Set to the first remaining preset
+                print("[PresetManager] ✅ Deleted current preset, set first remaining as active.")
+            }
+            saveCurrentPreset() // Save the new current preset state
+        } else {
+            // Case 3: Deleted preset was not the current active one, no change to currentPreset needed
+            print("[PresetManager] ✅ Deleted preset: \(presetName)")
         }
         
-        print("[PresetManager] ✅ Deleted preset: \(presetName)")
         return true
     }
     

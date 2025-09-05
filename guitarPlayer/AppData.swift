@@ -50,6 +50,21 @@ class AppData: ObservableObject {
         
         // 设置应用生命周期监听
         self.setupAppLifecycleHandling()
+        
+        // 监听PresetManager的currentPreset变化，并更新AppData的配置
+        presetManager.$currentPreset
+            .compactMap { $0 } // Only proceed if currentPreset is not nil
+            .sink { [weak self] newPreset in
+                guard let self = self else { return }
+                // Only update if the newPreset is actually different to avoid unnecessary updates
+                if self.performanceConfig != newPreset.performanceConfig || self.CONFIG != newPreset.appConfig {
+                    self.performanceConfig = newPreset.performanceConfig
+                    self.CONFIG = newPreset.appConfig
+                    self.initializeDefaultPatterns() // Re-initialize patterns based on new config
+                    print("[AppData] ✅ Updated config from PresetManager.currentPreset: \(newPreset.name)")
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // Load data files into libraries
