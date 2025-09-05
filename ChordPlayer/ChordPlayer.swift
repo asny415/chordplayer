@@ -39,11 +39,6 @@ class ChordPlayer: ObservableObject {
             }
         }
 
-        let _: [Int] = midiNotes.filter { $0 != -1 }
-        
-        // Capture currently playing notes for later scheduling of note-offs
-        let notesToTurnOff = Array(self.stringNotes.values)
-        
         let wholeNoteSeconds = (60.0 / tempo) * 4.0
         var schedulingStartUptimeMs: Double
         let currentUptime = ProcessInfo.processInfo.systemUptime * 1000.0
@@ -56,19 +51,16 @@ class ChordPlayer: ObservableObject {
             switch quantizationMode {
             case .measure:
                 quantizationUnitDuration = clock.loopDuration
-                let numUnitsCompleted = floor(elapsedTime / quantizationUnitDuration)
-                nextQuantizationTime = clock.startTime + (numUnitsCompleted + 1) * quantizationUnitDuration
             case .halfMeasure:
                 quantizationUnitDuration = clock.loopDuration / 2.0
-                let numUnitsCompleted = floor(elapsedTime / quantizationUnitDuration)
-                nextQuantizationTime = clock.startTime + (numUnitsCompleted + 1) * quantizationUnitDuration
             case .none:
-                // This case should ideally not be reached if quantizationMode != .none
                 schedulingStartUptimeMs = currentUptime
-                return // Exit early if somehow none is passed here
+                return // Should not happen
             }
 
-            // Ensure nextQuantizationTime is in the future
+            let numUnitsCompleted = floor(elapsedTime / quantizationUnitDuration)
+            nextQuantizationTime = clock.startTime + (numUnitsCompleted + 1) * quantizationUnitDuration
+
             if nextQuantizationTime < currentUptime {
                 nextQuantizationTime += quantizationUnitDuration
             }
@@ -76,25 +68,28 @@ class ChordPlayer: ObservableObject {
             let timeToNextQuantization = nextQuantizationTime - currentUptime
             let quantizationWindow = quantizationUnitDuration / 2.0
 
-            // Discard if current time is outside the quantization window
             if timeToNextQuantization > quantizationWindow {
-                print("[ChordPlayer] Discarding chord playback: outside quantization window. Time to next: \(timeToNextQuantization)ms, Window: \(quantizationWindow)ms")
-                return // Discard the playback
+                print("[ChordPlayer] Discarding chord playback: outside quantization window.")
+                return
             }
             
             schedulingStartUptimeMs = nextQuantizationTime
 
         } else {
-            // No quantization or drum not playing, play immediately
             schedulingStartUptimeMs = currentUptime
         }
 
-        // Schedule note-offs for previously playing notes at the new chord's scheduled start time
-        for note in notesToTurnOff {
-            self.midiManager.scheduleNoteOff(note: note, velocity: 0, channel: 0, scheduledUptimeMs: schedulingStartUptimeMs)
+        // Stop notes on strings that will be silent in the new chord.
+        for (stringIndex, note) in stringNotes {
+            if midiNotes[stringIndex] == -1 { // If the string is muted in the new chord
+                if let scheduledOffId = playingNotes[note] {
+                    midiManager.cancelScheduledEvent(id: scheduledOffId)
+                    playingNotes.removeValue(forKey: note)
+                }
+                midiManager.sendNoteOff(note: note, velocity: 0, channel: 0)
+                stringNotes.removeValue(forKey: stringIndex)
+            }
         }
-        self.playingNotes.removeAll() // Clear current state after scheduling note-offs
-        self.stringNotes.removeAll()   // Clear current state after scheduling note-offs
 
         for event in pattern.pattern {
             guard let delayFraction = MusicTheory.parseDelay(delayString: event.delay) else {
@@ -105,24 +100,16 @@ class ChordPlayer: ObservableObject {
 
             var notesToSchedule: [(note: UInt8, stringIndex: Int)] = []
             
-            // Filter out notes that are on muted strings based on the current chord definition
-            let filteredPatternNotes = event.notes.filter { noteValue in
-                switch noteValue {
-                case .int(let stringNumber): // This is a direct string number (1-6)
-                    let stringIndex = stringNumber - 1 // Convert to 0-5 index
-                    // Only include if the string index is valid and the MIDI note for that string is not -1 (i.e., not muted)
+            let filteredPatternNotes = event.notes.filter {
+                switch $0 {
+                case .int(let stringNumber):
+                    let stringIndex = stringNumber - 1
                     return stringIndex >= 0 && stringIndex < midiNotes.count && midiNotes[stringIndex] != -1
                 case .string(let symbol):
-                    // For "ROOT" notes, we need to check if the *resolved* string will be muted.
-                    // This is more complex as it depends on the rootStringIndex and offset.
-                    // For now, we'll allow ROOT notes to pass through this filter and handle muting
-                    // when resolving the actual MIDI note, as it's already done there.
-                    // The primary concern is direct string numbers.
-                    return symbol.starts(with: "ROOT") // Allow ROOT notes to be processed further
+                    return symbol.starts(with: "ROOT")
                 }
             }
 
-            // Find the root string and its MIDI note
             var rootInfo: (stringIndex: Int, midiNote: Int)?
             for (index, note) in midiNotes.enumerated() {
                 if note != -1 {
@@ -133,44 +120,29 @@ class ChordPlayer: ObservableObject {
 
             guard let unwrappedRootInfo = rootInfo else {
                 print("[ChordPlayer] Could not determine root note for chord \(chordName).")
-                return // Cannot proceed without a root note
+                return
             }
-            let unwrappedRootStringIndex = unwrappedRootInfo.stringIndex
-            let _ = unwrappedRootInfo.midiNote
 
-            for noteValue in filteredPatternNotes { // Iterate over filtered notes
+            for noteValue in filteredPatternNotes {
                 var resolvedNote: (note: Int, stringIndex: Int)?
 
                 switch noteValue {
-                case .int(let stringNumber): // This is a direct string number (1-6)
-                    let stringIndex = stringNumber - 1 // Convert to 0-5 index
+                case .int(let stringNumber):
+                    let stringIndex = stringNumber - 1
                     if stringIndex >= 0 && stringIndex < midiNotes.count && midiNotes[stringIndex] != -1 {
                         resolvedNote = (note: midiNotes[stringIndex], stringIndex: stringIndex)
                     }
                 case .string(let symbol):
                     if symbol.starts(with: "ROOT") {
                         let numPart = symbol.replacingOccurrences(of: "ROOT", with: "").replacingOccurrences(of: "-", with: "")
-                        var offset: Int = 0 // Offset from the root string
+                        var offset = 0
                         if !numPart.isEmpty, let num = Int(numPart) {
                             offset = num
                         }
-                        
-                        let targetStringIndex = unwrappedRootStringIndex + offset
-                        
-                        // Ensure targetStringIndex is within valid bounds (0-5)
-                        if targetStringIndex >= 0 && targetStringIndex < midiNotes.count {
-                            let note = midiNotes[targetStringIndex]
-                            if note != -1 {
-                                resolvedNote = (note: note, stringIndex: targetStringIndex)
-                            } else {
-                                print("[ChordPlayer] Warning: Pattern requested note on muted string at index \(targetStringIndex) (ROOT+\(offset)).")
-                            }
-                        } else {
-                            print("[ChordPlayer] Warning: Pattern requested note on string index \(targetStringIndex) (ROOT+\(offset)) which is out of bounds.")
+                        let targetStringIndex = unwrappedRootInfo.stringIndex + offset
+                        if targetStringIndex >= 0 && targetStringIndex < midiNotes.count, midiNotes[targetStringIndex] != -1 {
+                            resolvedNote = (note: midiNotes[targetStringIndex], stringIndex: targetStringIndex)
                         }
-                    } else {
-                        // Handle other string symbols if any, or log an error
-                        print("[ChordPlayer] Warning: Unrecognized string symbol in pattern: \(symbol)")
                     }
                 }
                 
@@ -187,15 +159,15 @@ class ChordPlayer: ObservableObject {
 
                 let scheduledNoteOnUptimeMs = eventBaseTimeMs + strumOffsetMs
                 
-                // If a note is already playing on this string, cancel its scheduled note-off and send an immediate note-off.
+                // If a note is already playing on this string, cancel its scheduled note-off.
                 if let previousNote = self.stringNotes[item.stringIndex] {
                     if let scheduledOffId = self.playingNotes[previousNote] {
                         self.midiManager.cancelScheduledEvent(id: scheduledOffId)
                         self.playingNotes.removeValue(forKey: previousNote)
                     }
-                    self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: 0)
+                    // The immediate sendNoteOff is removed to allow for smooth transition.
                 }
-                // Schedule the new note
+
                 self.midiManager.scheduleNoteOn(note: item.note, velocity: velocity, channel: 0, scheduledUptimeMs: scheduledNoteOnUptimeMs)
                 self.stringNotes[item.stringIndex] = item.note
 
@@ -215,6 +187,7 @@ class ChordPlayer: ObservableObject {
     }
     
     func playChordDirectly(chordDefinition: [StringOrInt], key: String = "C", capo: Int = 0, velocity: UInt8 = 100, duration: TimeInterval = 2.0) {
+        let currentUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
         var transposeOffset = 0
         if let idx = appData.KEY_CYCLE.firstIndex(of: key) {
             transposeOffset = idx
@@ -224,7 +197,7 @@ class ChordPlayer: ObservableObject {
         for (i, fretVal) in chordDefinition.enumerated() {
             switch fretVal {
             case .int(let fretInt):
-                if fretInt >= 0 { // Consider 'x' or negative as muted
+                if fretInt >= 0 {
                     midiNotes[i] = MusicTheory.standardGuitarTuning[i] + fretInt + transposeOffset + capo
                 }
             case .string:
@@ -232,19 +205,37 @@ class ChordPlayer: ObservableObject {
             }
         }
 
-        let activeNotes: [Int] = midiNotes.filter { $0 != -1 }
-        
-        
-        
-        // Play the chord
-        for note in activeNotes {
-            midiManager.sendNoteOn(note: UInt8(note), velocity: velocity, channel: 0)
-        }
-        
-        // Schedule note off after duration
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
-            for note in activeNotes {
-                self.midiManager.sendNoteOff(note: UInt8(note), velocity: 0, channel: 0)
+        // Iterate through all 6 strings
+        for stringIndex in 0..<6 {
+            let newNote = midiNotes[stringIndex]
+
+            // If a note is already playing on this string, cancel its scheduled note-off.
+            if let previousNote = self.stringNotes[stringIndex] {
+                if let scheduledOffId = self.playingNotes[previousNote] {
+                    self.midiManager.cancelScheduledEvent(id: scheduledOffId)
+                    self.playingNotes.removeValue(forKey: previousNote)
+                }
+                // We send an immediate note-off for the previous note to ensure it stops now,
+                // as the new chord might not play on this string.
+                if newNote == -1 {
+                    self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: 0)
+                    self.stringNotes.removeValue(forKey: stringIndex)
+                }
+            }
+
+            // If there's a new note to play on this string
+            if newNote != -1 {
+                let noteToPlay = UInt8(newNote)
+                
+                // Schedule the new note
+                self.midiManager.scheduleNoteOn(note: noteToPlay, velocity: velocity, channel: 0, scheduledUptimeMs: currentUptimeMs)
+                self.stringNotes[stringIndex] = noteToPlay
+
+                // Schedule the corresponding note-off
+                let scheduledNoteOffUptimeMs = currentUptimeMs + (duration * 1000.0)
+                let offId = self.midiManager.scheduleNoteOff(note: noteToPlay, velocity: 0, channel: 0, scheduledUptimeMs: scheduledNoteOffUptimeMs)
+                
+                self.playingNotes[noteToPlay] = offId
             }
         }
     }
