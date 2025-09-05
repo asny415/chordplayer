@@ -327,16 +327,22 @@ class KeyboardHandler: ObservableObject {
         }
 
         if let chord = chordName {
-            markChordActive(chord)
+            // Ensure the resolved chord is part of the active group before playing
+            if activeGroup.chordAssignments.keys.contains(chord) {
+                markChordActive(chord)
 
-            if let finalPattern = resolvePattern(for: chord) {
-                let durationSeconds = TimeInterval(appData.CONFIG.duration) / 1000.0
-                let keyString = appData.KEY_CYCLE[currentKeyIndex]
-                let quantMode = quantizationMode
+                if let finalPattern = resolvePattern(for: chord) {
+                    let durationSeconds = TimeInterval(appData.CONFIG.duration) / 1000.0
+                    let keyString = appData.KEY_CYCLE[currentKeyIndex]
+                    let quantMode = quantizationMode
 
-                chordPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds, quantizationMode: QuantizationMode(rawValue: quantMode) ?? .none, drumClockInfo: drumPlayer.clockInfo)
+                    chordPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds, quantizationMode: QuantizationMode(rawValue: quantMode) ?? .none, drumClockInfo: drumPlayer.clockInfo)
+                } else {
+                    print("\nError: Could not resolve pattern data for \(chord).")
+                }
             } else {
-                print("\nError: Could not resolve pattern data for \(chord).")
+                // Optional: Provide feedback that the chord is not in the current group
+                print("Chord '\(chord)' is not in the current group '\(activeGroup.name)' and will not be played.")
             }
         }
     }
