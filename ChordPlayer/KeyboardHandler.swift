@@ -6,7 +6,7 @@ import Combine
 class KeyboardHandler: ObservableObject {
     private var midiManager: MidiManager
     private var metronome: Metronome
-    private var guitarPlayer: GuitarPlayer
+    private var chordPlayer: ChordPlayer
     private var drumPlayer: DrumPlayer
     private var appData: AppData
 
@@ -28,10 +28,10 @@ class KeyboardHandler: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var activeChordClearWorkItem: DispatchWorkItem?
 
-    init(midiManager: MidiManager, metronome: Metronome, guitarPlayer: GuitarPlayer, drumPlayer: DrumPlayer, appData: AppData) {
+    init(midiManager: MidiManager, metronome: Metronome, chordPlayer: ChordPlayer, drumPlayer: DrumPlayer, appData: AppData) {
         self.midiManager = midiManager
         self.metronome = metronome
-        self.guitarPlayer = guitarPlayer
+        self.chordPlayer = chordPlayer
         self.drumPlayer = drumPlayer
         self.appData = appData
 
@@ -338,11 +338,11 @@ class KeyboardHandler: ObservableObject {
                 let quantMode = quantizationMode
 
                 if quantMode == QuantizationMode.none.rawValue {
-                    guitarPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
+                    chordPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
                 } else {
                     let clock = drumPlayer.clockInfo
                     if !clock.isPlaying || clock.loopDuration <= 0 {
-                        guitarPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
+                        chordPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
                     } else {
                         var division = 1.0
                         if quantMode == QuantizationMode.halfMeasure.rawValue {
@@ -360,7 +360,7 @@ class KeyboardHandler: ObservableObject {
                             let delaySeconds = timeToNextIntervalStart / 1000.0
                             DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
                                 guard let self = self else { return }
-                                self.guitarPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: self.currentTempo, key: keyString, velocity: UInt8(self.appData.CONFIG.velocity), duration: durationSeconds)
+                                self.chordPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: self.currentTempo, key: keyString, velocity: UInt8(self.appData.CONFIG.velocity), duration: durationSeconds)
                             }
                         } else {
                             return
@@ -384,7 +384,7 @@ class KeyboardHandler: ObservableObject {
         if let finalPattern = resolvePattern(for: chordName) {
             let durationSeconds = TimeInterval(appData.CONFIG.duration) / 1000.0
             let keyString = appData.KEY_CYCLE[currentKeyIndex]
-            guitarPlayer.playChord(chordName: chordName, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
+            chordPlayer.playChord(chordName: chordName, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
         } else {
             print("[KeyboardHandler] playChordButton: could not resolve pattern for \(chordName)")
         }

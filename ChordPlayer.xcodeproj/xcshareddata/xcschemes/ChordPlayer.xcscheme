@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "945556A52E6487F900D53154"
-               BuildableName = "guitarPlayer.app"
-               BlueprintName = "guitarPlayer"
-               ReferencedContainer = "container:guitarPlayer.xcodeproj">
+               BuildableName = "ChordPlayer.app"
+               BlueprintName = "ChordPlayer"
+               ReferencedContainer = "container:ChordPlayer.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -36,9 +36,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "945556B62E6487FD00D53154"
-               BuildableName = "guitarPlayerTests.xctest"
-               BlueprintName = "guitarPlayerTests"
-               ReferencedContainer = "container:guitarPlayer.xcodeproj">
+               BuildableName = "ChordPlayerTests.xctest"
+               BlueprintName = "ChordPlayerTests"
+               ReferencedContainer = "container:ChordPlayer.xcodeproj">
             </BuildableReference>
          </TestableReference>
          <TestableReference
@@ -47,9 +47,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "945556C02E6487FD00D53154"
-               BuildableName = "guitarPlayerUITests.xctest"
-               BlueprintName = "guitarPlayerUITests"
-               ReferencedContainer = "container:guitarPlayer.xcodeproj">
+               BuildableName = "ChordPlayerUITests.xctest"
+               BlueprintName = "ChordPlayerUITests"
+               ReferencedContainer = "container:ChordPlayer.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -70,9 +70,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "945556A52E6487F900D53154"
-            BuildableName = "guitarPlayer.app"
-            BlueprintName = "guitarPlayer"
-            ReferencedContainer = "container:guitarPlayer.xcodeproj">
+            BuildableName = "ChordPlayer.app"
+            BlueprintName = "ChordPlayer"
+            ReferencedContainer = "container:ChordPlayer.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -87,9 +87,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "945556A52E6487F900D53154"
-            BuildableName = "guitarPlayer.app"
-            BlueprintName = "guitarPlayer"
-            ReferencedContainer = "container:guitarPlayer.xcodeproj">
+            BuildableName = "ChordPlayer.app"
+            BlueprintName = "ChordPlayer"
+            ReferencedContainer = "container:ChordPlayer.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -51,7 +51,7 @@ class PresetManager: ObservableObject {
     private init() {
         // 设置存储路径
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        presetsDirectory = documentsPath.appendingPathComponent("GuitarPlayer")
+        presetsDirectory = documentsPath.appendingPathComponent("ChordPlayer")
         presetsFile = presetsDirectory.appendingPathComponent("presets.json")
         unnamedPresetFile = presetsDirectory.appendingPathComponent("unnamed_preset.json")
         

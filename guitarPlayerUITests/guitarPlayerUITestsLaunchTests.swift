@@ -1,13 +1,13 @@
 //
-//  guitarPlayerUITestsLaunchTests.swift
-//  guitarPlayerUITests
+//  ChordPlayerUITestsLaunchTests.swift
+//  ChordPlayerUITests
 //
 //  Created by wwq on 2025/8/31.
 //
 
 import XCTest
 
-final class guitarPlayerUITestsLaunchTests: XCTestCase {
+final class ChordPlayerUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

@@ -7,7 +7,7 @@ struct ControlBarView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var midiManager: MidiManager
     @EnvironmentObject var metronome: Metronome
-    @EnvironmentObject var guitarPlayer: GuitarPlayer
+    @EnvironmentObject var chordPlayer: ChordPlayer
     @EnvironmentObject var drumPlayer: DrumPlayer
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     

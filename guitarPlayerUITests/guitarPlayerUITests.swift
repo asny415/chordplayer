@@ -1,13 +1,13 @@
 //
-//  guitarPlayerUITests.swift
-//  guitarPlayerUITests
+//  ChordPlayerUITests.swift
+//  ChordPlayerUITests
 //
 //  Created by wwq on 2025/8/31.
 //
 
 import XCTest
 
-final class guitarPlayerUITests: XCTestCase {
+final class ChordPlayerUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

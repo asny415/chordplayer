@@ -109,7 +109,7 @@ class MidiManager: ObservableObject {
     // removed duplicate deinit - cleanup done in single deinit above
 
     private func setupMidi() {
-        var status = MIDIClientCreateWithBlock("GuitarPlayer MIDI Client" as CFString, &client) { notification in
+        var status = MIDIClientCreateWithBlock("ChordPlayer MIDI Client" as CFString, &client) { notification in
             // Handle MIDI notifications (e.g., device added/removed)
             switch notification.pointee.messageID {
             case .msgObjectAdded, .msgObjectRemoved, .msgPropertyChanged:
@@ -123,7 +123,7 @@ class MidiManager: ObservableObject {
             return
         }
 
-        status = MIDIOutputPortCreate(client, "GuitarPlayer Output Port" as CFString, &outputPort)
+        status = MIDIOutputPortCreate(client, "ChordPlayer Output Port" as CFString, &outputPort)
         if status != noErr {
             print("Error creating MIDI output port: \(status)")
             return

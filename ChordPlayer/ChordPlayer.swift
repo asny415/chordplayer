@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-class GuitarPlayer: ObservableObject {
+class ChordPlayer: ObservableObject {
     private let schedulingQueue = DispatchQueue(label: "com.guitastudio.guitarScheduler", qos: .userInitiated)
     private var midiManager: MidiManager
     private var metronome: Metronome
@@ -18,7 +18,7 @@ class GuitarPlayer: ObservableObject {
 
     func playChord(chordName: String, pattern: GuitarPattern, tempo: Double = 120.0, key: String = "C", capo: Int = 0, velocity: UInt8 = 100, duration: TimeInterval = 0.5) {
         guard let chordDefinition = appData.chordLibrary?[chordName] else {
-            print("[GuitarPlayer] Chord definition for \(chordName) not found.")
+            print("[ChordPlayer] Chord definition for \(chordName) not found.")
             return
         }
 
@@ -48,7 +48,7 @@ class GuitarPlayer: ObservableObject {
 
         for event in pattern.pattern {
             guard let delayFraction = MusicTheory.parseDelay(delayString: event.delay) else {
-                print("[GuitarPlayer] Could not parse delay string: \(event.delay)")
+                print("[ChordPlayer] Could not parse delay string: \(event.delay)")
                 continue
             }
             let eventBaseTimeMs = schedulingStartUptimeMs + (delayFraction * wholeNoteSeconds * 1000.0)
@@ -82,7 +82,7 @@ class GuitarPlayer: ObservableObject {
             }
 
             guard let unwrappedRootInfo = rootInfo else {
-                print("[GuitarPlayer] Could not determine root note for chord \(chordName).")
+                print("[ChordPlayer] Could not determine root note for chord \(chordName).")
                 return // Cannot proceed without a root note
             }
             let unwrappedRootStringIndex = unwrappedRootInfo.stringIndex
@@ -113,14 +113,14 @@ class GuitarPlayer: ObservableObject {
                             if note != -1 {
                                 resolvedNote = (note: note, stringIndex: targetStringIndex)
                             } else {
-                                print("[GuitarPlayer] Warning: Pattern requested note on muted string at index \(targetStringIndex) (ROOT+\(offset)).")
+                                print("[ChordPlayer] Warning: Pattern requested note on muted string at index \(targetStringIndex) (ROOT+\(offset)).")
                             }
                         } else {
-                            print("[GuitarPlayer] Warning: Pattern requested note on string index \(targetStringIndex) (ROOT+\(offset)) which is out of bounds.")
+                            print("[ChordPlayer] Warning: Pattern requested note on string index \(targetStringIndex) (ROOT+\(offset)) which is out of bounds.")
                         }
                     } else {
                         // Handle other string symbols if any, or log an error
-                        print("[GuitarPlayer] Warning: Unrecognized string symbol in pattern: \(symbol)")
+                        print("[ChordPlayer] Warning: Unrecognized string symbol in pattern: \(symbol)")
                     }
                 }
                 
