@@ -334,14 +334,7 @@ class KeyboardHandler: ObservableObject {
                 let keyString = appData.KEY_CYCLE[currentKeyIndex]
                 let quantMode = quantizationMode
 
-                if quantMode == QuantizationMode.none.rawValue {
-                    chordPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
-                } else {
-                    let clock = drumPlayer.clockInfo
-                    if !clock.isPlaying || clock.loopDuration <= 0 {
-                        chordPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
-                    }
-                }
+                chordPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds, quantizationMode: QuantizationMode(rawValue: quantMode) ?? .none, drumClockInfo: drumPlayer.clockInfo)
             } else {
                 print("\nError: Could not resolve pattern data for \(chord).")
             }
