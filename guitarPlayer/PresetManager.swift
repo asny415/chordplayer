@@ -85,12 +85,7 @@ class PresetManager: ObservableObject {
     
     /// 获取所有Preset（包括"未命名"）
     var allPresets: [Preset] {
-        var all = presets
-        // 如果当前没有活跃Preset，添加"未命名"
-        if currentPreset == nil {
-            all.insert(createUnnamedPreset(), at: 0)
-        }
-        return all
+        return presets
     }
     
     // MARK: - Preset Operations
@@ -296,11 +291,19 @@ class PresetManager: ObservableObject {
     private func loadPresets() {
         do {
             let data = try Data(contentsOf: presetsFile)
-            presets = try JSONDecoder().decode([Preset].self, from: data)
-            print("[PresetManager] ✅ Loaded \(presets.count) presets")
+            let loadedPresets = try JSONDecoder().decode([Preset].self, from: data)
+            if loadedPresets.isEmpty {
+                // If file exists but is empty, create the unnamed preset
+                presets = [createUnnamedPreset()]
+                print("[PresetManager] ✅ presets.json was empty, created default unnamed preset.")
+            } else {
+                presets = loadedPresets
+                print("[PresetManager] ✅ Loaded \(presets.count) presets")
+            }
         } catch {
-            print("[PresetManager] ❌ Failed to load presets: \(error)")
-            presets = []
+            print("[PresetManager] ❌ Failed to load presets: \(error). Creating default unnamed preset.")
+            // If file doesn't exist or is invalid, create the unnamed preset
+            presets = [createUnnamedPreset()]
         }
     }
     
