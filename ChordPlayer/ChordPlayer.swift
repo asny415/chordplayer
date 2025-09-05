@@ -103,7 +103,7 @@ class ChordPlayer: ObservableObject {
             let filteredPatternNotes = event.notes.filter {
                 switch $0 {
                 case .int(let stringNumber):
-                    let stringIndex = stringNumber - 1
+                    let stringIndex = 6 - stringNumber
                     return stringIndex >= 0 && stringIndex < midiNotes.count && midiNotes[stringIndex] != -1
                 case .string(let symbol):
                     return symbol.starts(with: "ROOT")
@@ -128,7 +128,7 @@ class ChordPlayer: ObservableObject {
 
                 switch noteValue {
                 case .int(let stringNumber):
-                    let stringIndex = stringNumber - 1
+                    let stringIndex = 6 - stringNumber
                     if stringIndex >= 0 && stringIndex < midiNotes.count && midiNotes[stringIndex] != -1 {
                         resolvedNote = (note: midiNotes[stringIndex], stringIndex: stringIndex)
                     }
