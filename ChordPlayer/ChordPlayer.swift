@@ -50,30 +50,40 @@ class ChordPlayer: ObservableObject {
 
         if quantizationMode != .none, let clock = drumClockInfo, clock.isPlaying, clock.loopDuration > 0 {
             let elapsedTime = currentUptime - clock.startTime
-            // let timeIntoCurrentLoop = elapsedTime.truncatingRemainder(dividingBy: clock.loopDuration) // This was unused, can remove
+            var quantizationUnitDuration: Double
+            var nextQuantizationTime: Double
 
             switch quantizationMode {
             case .measure:
-                // Calculate the start of the next full measure
-                let numLoopsCompleted = floor(elapsedTime / clock.loopDuration)
-                schedulingStartUptimeMs = clock.startTime + (numLoopsCompleted + 1) * clock.loopDuration
-                // Ensure it's in the future
-                if schedulingStartUptimeMs < currentUptime {
-                    schedulingStartUptimeMs += clock.loopDuration
-                }
+                quantizationUnitDuration = clock.loopDuration
+                let numUnitsCompleted = floor(elapsedTime / quantizationUnitDuration)
+                nextQuantizationTime = clock.startTime + (numUnitsCompleted + 1) * quantizationUnitDuration
             case .halfMeasure:
-                // Calculate the start of the next half measure
-                let halfMeasureDuration = clock.loopDuration / 2.0
-                let numHalfMeasuresCompleted = floor(elapsedTime / halfMeasureDuration)
-                schedulingStartUptimeMs = clock.startTime + (numHalfMeasuresCompleted + 1) * halfMeasureDuration
-                // Ensure it's in the future
-                if schedulingStartUptimeMs < currentUptime {
-                    schedulingStartUptimeMs += halfMeasureDuration
-                }
+                quantizationUnitDuration = clock.loopDuration / 2.0
+                let numUnitsCompleted = floor(elapsedTime / quantizationUnitDuration)
+                nextQuantizationTime = clock.startTime + (numUnitsCompleted + 1) * quantizationUnitDuration
             case .none:
-                // Should not happen if we enter this block, but as a fallback
+                // This case should ideally not be reached if quantizationMode != .none
                 schedulingStartUptimeMs = currentUptime
+                return // Exit early if somehow none is passed here
             }
+
+            // Ensure nextQuantizationTime is in the future
+            if nextQuantizationTime < currentUptime {
+                nextQuantizationTime += quantizationUnitDuration
+            }
+
+            let timeToNextQuantization = nextQuantizationTime - currentUptime
+            let quantizationWindow = quantizationUnitDuration / 2.0
+
+            // Discard if current time is outside the quantization window
+            if timeToNextQuantization > quantizationWindow {
+                print("[ChordPlayer] Discarding chord playback: outside quantization window. Time to next: \(timeToNextQuantization)ms, Window: \(quantizationWindow)ms")
+                return // Discard the playback
+            }
+            
+            schedulingStartUptimeMs = nextQuantizationTime
+
         } else {
             // No quantization or drum not playing, play immediately
             schedulingStartUptimeMs = currentUptime
