@@ -22,35 +22,39 @@ struct ChordButtonView: View {
     let onShortcutClick: (String) -> Void // For initiating shortcut capture
     let isCapturingShortcut: Bool // To indicate if this button is currently capturing
     
-    private var displayName: (String, String) {
-        if chordName.hasSuffix("_Major7") { let r = chordName.replacingOccurrences(of: "_Major7", with: "").replacingOccurrences(of: "_Sharp", with: "#"); return (r, "maj7") }
-        if chordName.hasSuffix("_Minor7") { let r = chordName.replacingOccurrences(of: "_Minor7", with: "").replacingOccurrences(of: "_Sharp", with: "#"); return (r, "m7") }
-        if chordName.hasSuffix("_Major") { let r = chordName.replacingOccurrences(of: "_Major", with: "").replacingOccurrences(of: "_Sharp", with: "#"); return (r, "") }
-        if chordName.hasSuffix("_Minor") { let r = chordName.replacingOccurrences(of: "_Minor", with: "").replacingOccurrences(of: "_Sharp", with: "#"); return (r, "m") }
-        let label = chordName.replacingOccurrences(of: "_Sharp", with: "#").replacingOccurrences(of: "_", with: " "); return (label, "")
+    private var displayString: String {
+        let name = chordName.replacingOccurrences(of: "_Sharp", with: "#")
+        let parts = name.split(separator: "_")
+
+        if parts.count == 2 {
+            let note = String(parts[0])
+            let quality = String(parts[1])
+
+            if quality == "Major" {
+                return note
+            } else if quality == "Minor" {
+                return note + "m"
+            }
+        }
+        
+        // Fallback for other names like "C_Major_7" or custom names
+        return name.replacingOccurrences(of: "_", with: " ")
     }
     
     var body: some View {
         Button(action: action) {
-            VStack {
-                Text(displayName.0)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                if !displayName.1.isEmpty {
-                    Text(displayName.1)
-                        .font(.system(size: 14, weight: .regular, design: .rounded))
-                        .foregroundColor(.secondary)
+            Text(displayString)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .padding(.vertical, 10)
+                .padding(.horizontal, 5)
+                .frame(minWidth: 100, minHeight: 70)
+                .background(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor))
+                .foregroundColor(isSelected ? .white : .primary)
+                .cornerRadius(10)
+                .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                .overlay(alignment: .topTrailing) {
+                    shortcutView
                 }
-            }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 5)
-            .frame(minWidth: 100, minHeight: 70)
-            .background(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor))
-            .foregroundColor(isSelected ? .white : .primary)
-            .cornerRadius(10)
-            .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-            .overlay(alignment: .topTrailing) {
-                shortcutView
-            }
         }
         .buttonStyle(.plain)
     }
