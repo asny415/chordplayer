@@ -103,25 +103,28 @@ struct ControlBarView: View {
             
             // --- MIDI OUTPUT & TEMPO ---
             Section(header: Text("Tempo & MIDI")) {
-                VStack {
-                    HStack {
-                        Text("BPM")
-                        Spacer()
-                        Text("\(Int(appData.performanceConfig.tempo))")
-                            .foregroundColor(.secondary)
-                    }
+                HStack { // Use HStack for horizontal layout
+                    Text("BPM")
+                    // Display current tempo
+                    Text("\(Int(appData.performanceConfig.tempo))")
+                        .foregroundColor(.secondary)
+                        .frame(width: 40, alignment: .trailing) // Give it a fixed width for alignment
+
+                    // Stepper for fine adjustment
+                    Stepper("", // Empty label as "BPM" is already displayed
+                        value: $appData.performanceConfig.tempo,
+                        in: 10...240,
+                        step: 1,
+                        onEditingChanged: { _ in metronome.tempo = appData.performanceConfig.tempo }
+                    ).labelsHidden() // Hide default label
+
+                    // Slider for coarse adjustment
                     Slider(
                         value: $appData.performanceConfig.tempo,
-                        in: 60...240,
+                        in: 10...240,
                         step: 1,
                         onEditingChanged: { _ in metronome.tempo = appData.performanceConfig.tempo }
                     )
-                    Stepper("BPM",
-                        value: $appData.performanceConfig.tempo,
-                        in: 60...240,
-                        step: 1,
-                        onEditingChanged: { _ in metronome.tempo = appData.performanceConfig.tempo }
-                    ).labelsHidden()
                 }
                 
                 Picker("MIDI Output", selection: $midiManager.selectedOutput) {
