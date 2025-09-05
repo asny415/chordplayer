@@ -37,7 +37,7 @@ struct PresetWorkspaceView: View {
                 activeGroupId = newId
             }
         }
-        .onChange(of: appData.performanceConfig.patternGroups) { newGroups in
+        .onChange(of: appData.performanceConfig.patternGroups) { oldGroups, newGroups in
             // When the pattern groups change (e.g., a new preset is loaded),
             // activate the first group if available.
             if let firstGroup = newGroups.first {

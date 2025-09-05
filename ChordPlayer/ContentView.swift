@@ -158,6 +158,7 @@ private struct PresetRow: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture(perform: {
             if !isEditing {
