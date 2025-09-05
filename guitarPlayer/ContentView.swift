@@ -145,7 +145,7 @@ private struct PresetRow: View {
                             isNameFieldFocused = true
                         }
                     }
-                    .onChange(of: isEditing) { newValue in
+                    .onChange(of: isEditing) { oldValue, newValue in
                         if newValue { // If editing starts, focus the field
                             DispatchQueue.main.async { // Delay focus to ensure TextField is ready
                                 isNameFieldFocused = true
