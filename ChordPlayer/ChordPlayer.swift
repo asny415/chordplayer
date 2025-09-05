@@ -41,15 +41,16 @@ class ChordPlayer: ObservableObject {
 
         let _: [Int] = midiNotes.filter { $0 != -1 }
         
-        panic() // Stop previous notes before playing new ones
-
+        // Capture currently playing notes for later scheduling of note-offs
+        let notesToTurnOff = Array(self.stringNotes.values)
+        
         let wholeNoteSeconds = (60.0 / tempo) * 4.0
         var schedulingStartUptimeMs: Double
         let currentUptime = ProcessInfo.processInfo.systemUptime * 1000.0
 
         if quantizationMode != .none, let clock = drumClockInfo, clock.isPlaying, clock.loopDuration > 0 {
             let elapsedTime = currentUptime - clock.startTime
-            let timeIntoCurrentLoop = elapsedTime.truncatingRemainder(dividingBy: clock.loopDuration)
+            // let timeIntoCurrentLoop = elapsedTime.truncatingRemainder(dividingBy: clock.loopDuration) // This was unused, can remove
 
             switch quantizationMode {
             case .measure:
@@ -77,6 +78,13 @@ class ChordPlayer: ObservableObject {
             // No quantization or drum not playing, play immediately
             schedulingStartUptimeMs = currentUptime
         }
+
+        // Schedule note-offs for previously playing notes at the new chord's scheduled start time
+        for note in notesToTurnOff {
+            self.midiManager.scheduleNoteOff(note: note, velocity: 0, channel: 0, scheduledUptimeMs: schedulingStartUptimeMs)
+        }
+        self.playingNotes.removeAll() // Clear current state after scheduling note-offs
+        self.stringNotes.removeAll()   // Clear current state after scheduling note-offs
 
         for event in pattern.pattern {
             guard let delayFraction = MusicTheory.parseDelay(delayString: event.delay) else {
@@ -177,7 +185,6 @@ class ChordPlayer: ObservableObject {
                     }
                     self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: 0)
                 }
-
                 // Schedule the new note
                 self.midiManager.scheduleNoteOn(note: item.note, velocity: velocity, channel: 0, scheduledUptimeMs: scheduledNoteOnUptimeMs)
                 self.stringNotes[item.stringIndex] = item.note
@@ -217,7 +224,7 @@ class ChordPlayer: ObservableObject {
 
         let activeNotes: [Int] = midiNotes.filter { $0 != -1 }
         
-        panic() // Stop previous notes before playing new ones
+        
         
         // Play the chord
         for note in activeNotes {
