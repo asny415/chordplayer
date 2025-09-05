@@ -48,7 +48,22 @@ class KeyboardHandler: ObservableObject {
         }
 
         setupEventMonitor()
+
+        appData.$performanceConfig
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newConfig in
+                guard let self = self else { return }
+                self.currentTempo = newConfig.tempo
+                self.currentTimeSignature = newConfig.timeSignature
+                self.quantizationMode = newConfig.quantize ?? QuantizationMode.none.rawValue
+                if let index = self.appData.KEY_CYCLE.firstIndex(of: newConfig.key) {
+                    self.currentKeyIndex = index
+                }
+            }
+            .store(in: &cancellables)
+
         $currentTimeSignature
+            .removeDuplicates()
             .sink { [weak self] new in
                 guard let self = self else { return }
                 let parts = new.split(separator: "/").map(String.init)
@@ -63,6 +78,7 @@ class KeyboardHandler: ObservableObject {
             .store(in: &cancellables)
 
         $currentTempo
+            .removeDuplicates()
             .sink { [weak self] newTempo in
                 self?.appData.performanceConfig.tempo = newTempo
             }
