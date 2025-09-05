@@ -15,7 +15,7 @@ class KeyboardHandler: ObservableObject {
     @Published var currentTempo: Double
     @Published var currentTimeSignature: String
     @Published var quantizationMode: String
-    @Published var currentGroupIndex: Int
+    @Published var activeGroupId: UUID? // Changed to UUID?
     @Published var activeChordName: String?
     // When true, global keyboard handler should ignore events (TextField is active)
     @Published var isTextInputActive: Bool = false
@@ -38,7 +38,7 @@ class KeyboardHandler: ObservableObject {
         _currentTempo = Published(initialValue: appData.performanceConfig.tempo)
         _currentTimeSignature = Published(initialValue: appData.performanceConfig.timeSignature)
         _quantizationMode = Published(initialValue: appData.performanceConfig.quantize ?? "MEASURE")
-        _currentGroupIndex = Published(initialValue: 0)
+        _activeGroupId = Published(initialValue: nil) // Changed to nil
 
         let initialKey = appData.performanceConfig.key
         if let index = appData.KEY_CYCLE.firstIndex(of: initialKey) {
@@ -79,16 +79,16 @@ class KeyboardHandler: ObservableObject {
         isCapturingShortcut = false
         targetChordForShortcutCapture = nil
     }
-    
+
     // MARK: - Shortcut Key Formatting
     private func formatShortcutKey(event: NSEvent) -> String {
         guard let characters = event.charactersIgnoringModifiers else { return "" }
-        
+
         let isControlDown = event.modifierFlags.contains(.control)
         let isShiftDown = event.modifierFlags.contains(.shift)
         let isOptionDown = event.modifierFlags.contains(.option)
         let isCommandDown = event.modifierFlags.contains(.command)
-        
+
         // Get the base key name
         let keyName: String
         switch event.keyCode {
@@ -110,14 +110,14 @@ class KeyboardHandler: ObservableObject {
         case 12: keyName = "q"
         default: keyName = characters.lowercased()
         }
-        
+
         // Build modifier string
         var modifiers: [String] = []
         if isCommandDown { modifiers.append("⌘") }
         if isControlDown { modifiers.append("⌃") }
         if isOptionDown { modifiers.append("⌥") }
         if isShiftDown { modifiers.append("⇧") }
-        
+
         // Combine modifiers with key
         if modifiers.isEmpty {
             return keyName.uppercased()
@@ -150,11 +150,11 @@ class KeyboardHandler: ObservableObject {
             }
         }
     }
-    
+
     private func resolvePattern(for chordName: String) -> GuitarPattern? {
-        let group = appData.performanceConfig.patternGroups[currentGroupIndex]
+        guard let activeGroupId = activeGroupId, let group = appData.performanceConfig.patternGroups.first(where: { $0.id == activeGroupId }) else { return nil }
         let timeSig = appData.performanceConfig.timeSignature
-        
+
         var patternId: String? = nil
 
         // 1. Check for a chord-specific fingering override.
@@ -164,7 +164,7 @@ class KeyboardHandler: ObservableObject {
             // 2. Fall back to the group's default fingering (new pattern field).
             patternId = group.pattern
         }
-        
+
         guard let finalPatternId = patternId, !finalPatternId.isEmpty else {
             print("[KeyboardHandler] No pattern ID resolved for chord \(chordName) in group \(group.name)")
             return nil
@@ -174,7 +174,7 @@ class KeyboardHandler: ObservableObject {
         if let patternsForTimeSig = appData.patternLibrary?[timeSig] {
             return patternsForTimeSig.first { $0.id == finalPatternId }
         }
-        
+
         return nil
     }
 
@@ -295,28 +295,25 @@ class KeyboardHandler: ObservableObject {
             return
         }
 
-        if let groupIndex = Int(keyName), groupIndex >= 1 && groupIndex <= 9 {
-            let actualGroupIndex = groupIndex - 1
-            if appData.performanceConfig.patternGroups.indices.contains(actualGroupIndex) {
-                currentGroupIndex = actualGroupIndex
-                return
-            }
+        // Number pad group selection
+        if let groupNumber = Int(keyName), groupNumber >= 1 && groupNumber <= appData.performanceConfig.patternGroups.count {
+            let targetGroup = appData.performanceConfig.patternGroups[groupNumber - 1]
+            activeGroupId = targetGroup.id
+            return
         }
 
         var chordName: String? = nil
 
         // NEW LOGIC: Prioritize shortcut from the currently active group
-        let currentGroupIndex = self.currentGroupIndex // Get the active group index
-        if appData.performanceConfig.patternGroups.indices.contains(currentGroupIndex) {
-            let activeGroup = appData.performanceConfig.patternGroups[currentGroupIndex]
-            // Create the full shortcut string for comparison
-            let currentShortcut = formatShortcutKey(event: event)
-            // Iterate through chordAssignments in the active group to find a match
-            if let foundChordName = activeGroup.chordAssignments.first(where: { (key, value) in
-                return value.shortcutKey == currentShortcut
-            })?.key {
-                chordName = foundChordName
-            }
+        guard let activeGroupId = self.activeGroupId, let activeGroup = appData.performanceConfig.patternGroups.first(where: { $0.id == activeGroupId }) else { return }
+
+        // Create the full shortcut string for comparison
+        let currentShortcut = formatShortcutKey(event: event)
+        // Iterate through chordAssignments in the active group to find a match
+        if let foundChordName = activeGroup.chordAssignments.first(where: { (key, value) in
+            return value.shortcutKey == currentShortcut
+        })?.key {
+            chordName = foundChordName
         }
 
         // Existing logic (fallback if not found in active group's shortcuts)
@@ -331,7 +328,7 @@ class KeyboardHandler: ObservableObject {
 
         if let chord = chordName {
             markChordActive(chord)
-            
+
             if let finalPattern = resolvePattern(for: chord) {
                 let durationSeconds = TimeInterval(appData.CONFIG.duration) / 1000.0
                 let keyString = appData.KEY_CYCLE[currentKeyIndex]
@@ -343,28 +340,6 @@ class KeyboardHandler: ObservableObject {
                     let clock = drumPlayer.clockInfo
                     if !clock.isPlaying || clock.loopDuration <= 0 {
                         chordPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: currentTempo, key: keyString, velocity: UInt8(appData.CONFIG.velocity), duration: durationSeconds)
-                    } else {
-                        var division = 1.0
-                        if quantMode == QuantizationMode.halfMeasure.rawValue {
-                            division = 2.0
-                        }
-                        let quantizationInterval = clock.loopDuration / division
-                        let nowUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
-                        let loopElapsedTime = fmod(nowUptimeMs - clock.startTime, clock.loopDuration)
-                        let currentInterval = floor(loopElapsedTime / quantizationInterval)
-                        let timeToNextIntervalStart = ((currentInterval + 1.0) * quantizationInterval) - loopElapsedTime
-                        let QUANTIZATION_WINDOW_PERCENT = 0.5
-                        let quantizationWindow = quantizationInterval * QUANTIZATION_WINDOW_PERCENT
-
-                        if timeToNextIntervalStart <= quantizationWindow {
-                            let delaySeconds = timeToNextIntervalStart / 1000.0
-                            DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
-                                guard let self = self else { return }
-                                self.chordPlayer.playChord(chordName: chord, pattern: finalPattern, tempo: self.currentTempo, key: keyString, velocity: UInt8(self.appData.CONFIG.velocity), duration: durationSeconds)
-                            }
-                        } else {
-                            return
-                        }
                     }
                 }
             } else {
@@ -389,12 +364,12 @@ class KeyboardHandler: ObservableObject {
             print("[KeyboardHandler] playChordButton: could not resolve pattern for \(chordName)")
         }
     }
-    
+
     // NEW: Function to get the default shortcut display string for a given chord name
     func getDefaultShortcutDisplay(for chordName: String) -> String? {
         return MusicTheory.defaultChordToShortcutMap[chordName]
     }
-    
+
     private func markChordActive(_ chord: String) {
         DispatchQueue.main.async {
             self.activeChordName = chord
@@ -409,4 +384,3 @@ class KeyboardHandler: ObservableObject {
         }
     }
 }
-

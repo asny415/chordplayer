@@ -5,7 +5,7 @@ struct ConflictData {
     let newChord: String
     let newShortcut: String
     let conflictingChords: [String]
-    let groupIndex: Int
+    let groupId: UUID
 }
 
 enum ConflictResolutionChoice {
@@ -89,7 +89,7 @@ struct GroupConfigPanelView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     
-    @Binding var activeGroupIndex: Int?
+    @Binding var activeGroupId: UUID?
     
     @State private var showChordEditSheet: Bool = false
     @State private var editingChordName: String = ""
@@ -108,8 +108,8 @@ struct GroupConfigPanelView: View {
             .sheet(isPresented: $showChordDiagramCreator) { chordDiagramCreatorSheet }
             .sheet(isPresented: $showChordLibrary) {
                 ChordLibraryView { chordName in
-                    if let groupIndex = activeGroupIndex {
-                        addChord(to: groupIndex, chordName: chordName)
+                    if let activeGroupId = activeGroupId {
+                        addChord(to: activeGroupId, chordName: chordName)
                     }
                     showChordLibrary = false // Dismiss after adding
                 }
@@ -127,23 +127,23 @@ struct GroupConfigPanelView: View {
                 Text("The shortcut \"\(ChordButtonView.formatShortcutDisplay(data.newShortcut))\" is already used by: \n\n\(data.conflictingChords.joined(separator: ", "))\n\nAssigning it to \"\(data.newChord)\" will remove it from the other chords.")
             }
             // Sync active group index with keyboard handler
-            .onChange(of: activeGroupIndex) { _, newValue in
-                keyboardHandler.currentGroupIndex = newValue ?? 0
-            }
+            // .onChange(of: activeGroupId) { _, newValue in
+            //     keyboardHandler.currentGroupIndex = newValue ?? 0
+            // }
     }
     
     private func setupOnAppear() {
-        keyboardHandler.currentGroupIndex = activeGroupIndex ?? 0
+        // keyboardHandler.currentGroupIndex = activeGroupId ?? 0
         setupShortcutCapture()
     }
     
     // MARK: - Sub Views
     private var groupEditorView: some View {
         ScrollView {
-            if let groupIndex = activeGroupIndex, appData.performanceConfig.patternGroups.indices.contains(groupIndex) {
+            if let activeGroupId = activeGroupId, let groupBinding = $appData.performanceConfig.patternGroups.first(where: { $0.id == activeGroupId }) {
                 VStack(alignment: .leading, spacing: 24) {
-                    groupSettingsView(bindingGroupIndex: groupIndex)
-                    chordManagementView(bindingGroupIndex: groupIndex)
+                    groupSettingsView(groupBinding: groupBinding)
+                    chordManagementView(groupBinding: groupBinding)
                 }
                 .padding(.vertical)
             } else {
@@ -154,12 +154,8 @@ struct GroupConfigPanelView: View {
         }
     }
     
-    private func groupSettingsView(bindingGroupIndex: Int) -> some View {
-        let groupBinding = $appData.performanceConfig.patternGroups[bindingGroupIndex]
-        
+    private func groupSettingsView(groupBinding: Binding<PatternGroup>) -> some View {
         return Section(header: Text("Group Settings").font(.headline)) {
-            TextField("Group Name", text: groupBinding.name)
-            
             let patternsForTimeSig = appData.patternLibrary?[appData.performanceConfig.timeSignature] ?? []
             Picker("Default Fingering", selection: groupBinding.pattern) {
                 Text("None").tag(String?.none)
@@ -171,9 +167,9 @@ struct GroupConfigPanelView: View {
         }
     }
     
-    private func chordManagementView(bindingGroupIndex: Int) -> some View {
+    private func chordManagementView(groupBinding: Binding<PatternGroup>) -> some View {
         Section(header: Text("Assigned Chords").font(.headline)) {
-            assignedChordsView(bindingGroupIndex: bindingGroupIndex)
+            assignedChordsView(groupBinding: groupBinding)
             
             // Button to open the chord library
             Button(action: { showChordLibrary = true }) {
@@ -184,21 +180,22 @@ struct GroupConfigPanelView: View {
         }
     }
     
-    private func assignedChordsView(bindingGroupIndex: Int) -> some View {
-        let group = appData.performanceConfig.patternGroups[bindingGroupIndex]
+    private func assignedChordsView(groupBinding: Binding<PatternGroup>) -> some View {
+        let group = groupBinding.wrappedValue
         
         return ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], spacing: 12) {
                 ForEach(group.chordAssignments.keys.sorted(), id: \.self) {
                     chordName in
-                    assignedChordButton(chordName: chordName, group: group, bindingGroupIndex: bindingGroupIndex)
+                    assignedChordButton(chordName: chordName, groupBinding: groupBinding)
                 }
             }
         }
     }
     
-    private func assignedChordButton(chordName: String, group: PatternGroup, bindingGroupIndex: Int) -> some View {
-        ChordButtonView(
+    private func assignedChordButton(chordName: String, groupBinding: Binding<PatternGroup>) -> some View {
+        let group = groupBinding.wrappedValue
+        return ChordButtonView(
             chordName: chordName,
             isSelected: keyboardHandler.activeChordName == chordName,
             shortcut: getShortcutForChord(chordName: chordName, group: group),
@@ -215,7 +212,8 @@ struct GroupConfigPanelView: View {
                 showChordEditSheet = true
             }
             Button("Remove from Group", role: .destructive) {
-                removeChord(from: bindingGroupIndex, chordName: chordName)
+                let currentGroupId = groupBinding.wrappedValue.id
+                removeChord(from: currentGroupId, chordName: chordName)
             }
         }
     }
@@ -223,7 +221,7 @@ struct GroupConfigPanelView: View {
     // MARK: - Sheet Views
     private var chordEditSheet: some View {
         // Simplified for brevity, logic remains the same
-        if activeGroupIndex != nil {
+        if activeGroupId != nil {
             let chordName = editingChordName
             // This view should be built out more completely
             return AnyView(
@@ -246,8 +244,8 @@ struct GroupConfigPanelView: View {
         ChordDiagramEditor(onSave: { name, def in
             appData.chordLibrary = appData.chordLibrary ?? [:]
             appData.chordLibrary?[name] = def
-            if let groupIndex = activeGroupIndex {
-                addChord(to: groupIndex, chordName: name)
+            if let activeGroupId = activeGroupId {
+                addChord(to: activeGroupId, chordName: name)
             }
             showChordDiagramCreator = false
         }, onCancel: { showChordDiagramCreator = false })
@@ -257,21 +255,22 @@ struct GroupConfigPanelView: View {
     
     private func setupShortcutCapture() {
         keyboardHandler.onShortcutCaptured = { (chordName: String, shortcut: String) in
-            guard let groupIndex = activeGroupIndex else { return }
+            guard let activeGroupId = activeGroupId, let groupIndex = appData.performanceConfig.patternGroups.firstIndex(where: { $0.id == activeGroupId }) else { return }
+            let group = appData.performanceConfig.patternGroups[groupIndex]
 
-            let conflictingChords = findConflictingChords(for: shortcut, excluding: chordName, in: appData.performanceConfig.patternGroups[groupIndex])
+            let conflictingChords = findConflictingChords(for: shortcut, excluding: chordName, in: group)
 
             if conflictingChords.isEmpty {
                 var config = appData.performanceConfig
-                var group = config.patternGroups[groupIndex]
-                var assignment = group.chordAssignments[chordName] ?? ChordAssignment()
+                var groupToModify = config.patternGroups[groupIndex]
+                var assignment = groupToModify.chordAssignments[chordName] ?? ChordAssignment()
 
                 assignment.shortcutKey = shortcut
-                group.chordAssignments[chordName] = assignment
-                config.patternGroups[groupIndex] = group
+                groupToModify.chordAssignments[chordName] = assignment
+                config.patternGroups[groupIndex] = groupToModify
                 appData.performanceConfig = config
             } else {
-                showConflictWarning(newChord: chordName, newShortcut: shortcut, conflictingChords: conflictingChords, groupIndex: groupIndex)
+                showConflictWarning(newChord: chordName, newShortcut: shortcut, conflictingChords: conflictingChords, groupId: activeGroupId)
             }
 
             capturingShortcutForChord = nil
@@ -285,23 +284,23 @@ struct GroupConfigPanelView: View {
         }.map { $0.key }
     }
     
-    private func showConflictWarning(newChord: String, newShortcut: String, conflictingChords: [String], groupIndex: Int) {
+    private func showConflictWarning(newChord: String, newShortcut: String, conflictingChords: [String], groupId: UUID) {
         self.conflictData = ConflictData(
             newChord: newChord,
             newShortcut: newShortcut,
             conflictingChords: conflictingChords,
-            groupIndex: groupIndex
+            groupId: groupId
         )
         self.showConflictAlert = true
     }
     
     private func resolveConflict(choice: ConflictResolutionChoice) {
-        guard let data = conflictData else { return }
+        guard let data = conflictData, let groupIndex = appData.performanceConfig.patternGroups.firstIndex(where: { $0.id == data.groupId }) else { return }
         
         switch choice {
         case .replace:
             var config = appData.performanceConfig
-            var group = config.patternGroups[data.groupIndex]
+            var group = config.patternGroups[groupIndex]
 
             // Remove shortcut from conflicting chords
             for chordName in data.conflictingChords {
@@ -313,7 +312,7 @@ struct GroupConfigPanelView: View {
             assignment.shortcutKey = data.newShortcut
             group.chordAssignments[data.newChord] = assignment
             
-            config.patternGroups[data.groupIndex] = group
+            config.patternGroups[groupIndex] = group
             appData.performanceConfig = config
 
         case .cancel:
@@ -322,7 +321,8 @@ struct GroupConfigPanelView: View {
         conflictData = nil
     }
 
-    private func addChord(to groupIndex: Int, chordName: String) {
+    private func addChord(to groupId: UUID, chordName: String) {
+        guard let groupIndex = appData.performanceConfig.patternGroups.firstIndex(where: { $0.id == groupId }) else { return }
         var config = appData.performanceConfig
         var group = config.patternGroups[groupIndex]
         if group.chordAssignments[chordName] == nil {
@@ -332,7 +332,8 @@ struct GroupConfigPanelView: View {
         appData.performanceConfig = config
     }
     
-    private func removeChord(from groupIndex: Int, chordName: String) {
+    private func removeChord(from groupId: UUID, chordName: String) {
+        guard let groupIndex = appData.performanceConfig.patternGroups.firstIndex(where: { $0.id == groupId }) else { return }
         var config = appData.performanceConfig
         var group = config.patternGroups[groupIndex]
         group.chordAssignments.removeValue(forKey: chordName)

@@ -166,7 +166,8 @@ struct DrumSettings: Codable {
     let defaultPattern: String
 }
 
-struct PatternGroup: Codable, Equatable {
+struct PatternGroup: Codable, Equatable, Identifiable { // Added Identifiable
+    let id = UUID() // Added id property
     var name: String
     var patterns: [String: String?] // String? to allow for null in JS
     var pattern: String? // New field for default fingering ID

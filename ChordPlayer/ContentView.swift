@@ -8,7 +8,7 @@ struct ContentView: View {
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     @EnvironmentObject var metronome: Metronome
 
-    @State private var activeGroupIndex: Int? = 0
+    @State private var activeGroupId: UUID? = nil // This is the corrected line
 
     var body: some View {
         NavigationSplitView {
@@ -18,12 +18,12 @@ struct ContentView: View {
 
         } content: {
             // MARK: - Column 2: Preset Workspace (Global Controls + Group List)
-            PresetWorkspaceView(activeGroupIndex: $activeGroupIndex)
+            PresetWorkspaceView(activeGroupId: $activeGroupId) // Corrected usage
                 .navigationSplitViewColumnWidth(min: 400, ideal: 450, max: 600)
 
         } detail: {
             // MARK: - Column 3: Group Config Panel (Inspector)
-            GroupConfigPanelView(activeGroupIndex: $activeGroupIndex)
+            GroupConfigPanelView(activeGroupId: $activeGroupId) // Corrected usage
         }
         .preferredColorScheme(.dark)
         .frame(minWidth: 1200, minHeight: 700)
@@ -34,12 +34,12 @@ struct ContentView: View {
             keyboardHandler.isTextInputActive = false
         }
     }
-    
+
     private func setupInitialState() {
         DispatchQueue.main.async {
             keyboardHandler.currentTimeSignature = appData.performanceConfig.timeSignature
             keyboardHandler.currentTempo = appData.performanceConfig.tempo
-            
+
             let parts = appData.performanceConfig.timeSignature.split(separator: "/").map(String.init)
             if parts.count == 2, let num = Int(parts[0]), let den = Int(parts[1]) {
                 metronome.timeSignatureNumerator = num
@@ -88,18 +88,18 @@ private struct PresetSidebar: View {
                     }
                 }
             }
-            
+
             Divider()
-            
+
             // Current Preset Status Footer
             VStack(alignment: .leading, spacing: 4) {
                 let current = presetManager.currentPresetOrUnnamed
                 let isUnnamed = presetManager.isUnnamedPreset(current)
-                
+
                 Text("Current")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 HStack {
                     Image(systemName: isUnnamed ? "circle.dotted" : "checkmark.circle.fill")
                         .foregroundColor(isUnnamed ? .orange : .green)
@@ -120,12 +120,12 @@ private struct PresetRow: View {
     @Binding var isEditing: Bool // New binding for editing state
     let onRename: (String) -> Void // New closure for renaming
     let onStartEditing: (UUID) -> Void // New closure to start editing from double-click
-    
+
     @State private var showingDeleteConfirmation = false
     @State private var newName: String = "" // State for TextField
-    
+
     @FocusState private var isNameFieldFocused: Bool // For auto-focusing TextField
-    
+
     var body: some View {
         HStack {
             Image(systemName: "folder")

@@ -1,4 +1,3 @@
-
 import SwiftUI
 
 /// This view acts as the main workspace for a selected preset.
@@ -7,8 +6,8 @@ struct PresetWorkspaceView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
 
-    // The currently selected group index. This will be passed to the detail view.
-    @Binding var activeGroupIndex: Int?
+    // The currently selected group ID.
+    @Binding var activeGroupId: UUID? // Changed to UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -26,14 +25,16 @@ struct PresetWorkspaceView: View {
         .background(Color.black.opacity(0.1))
         .onAppear {
             // Ensure a group is selected if possible
-            if activeGroupIndex == nil, !appData.performanceConfig.patternGroups.isEmpty {
-                activeGroupIndex = 0
+            if activeGroupId == nil, let firstGroup = appData.performanceConfig.patternGroups.first {
+                activeGroupId = firstGroup.id
             }
+            // Sync keyboard handler's active group ID with UI's active group ID
+            keyboardHandler.activeGroupId = activeGroupId
         }
-        .onReceive(keyboardHandler.$currentGroupIndex) { newIndex in
+        .onReceive(keyboardHandler.$activeGroupId) { newId in // Listen to activeGroupId
             // Update the selection when the keyboard handler changes the group
-            if appData.performanceConfig.patternGroups.indices.contains(newIndex) {
-                activeGroupIndex = newIndex
+            if newId != activeGroupId { // Only update if different to avoid loop
+                activeGroupId = newId
             }
         }
     }
@@ -52,14 +53,14 @@ struct PresetWorkspaceView: View {
             .padding([.horizontal, .top])
             .padding(.bottom, 8)
 
-            List(selection: $activeGroupIndex) {
-                ForEach(Array(appData.performanceConfig.patternGroups.indices), id: \.self) { index in
+            List(selection: $activeGroupId) { // Use activeGroupId for selection
+                ForEach($appData.performanceConfig.patternGroups) { $group in
                     GroupRow(
-                        group: appData.performanceConfig.patternGroups[index],
-                        isSelected: index == activeGroupIndex,
-                        onDelete: { removeGroup(at: index) }
+                        group: $group,
+                        isSelected: group.id == activeGroupId, // Compare UUIDs
+                        onDelete: { removeGroup(groupToRemove: group) } // Pass the group to remove
                     )
-                    .tag(index)
+                    .tag(group.id) // Tag with the group's ID
                 }
             }
             .listStyle(.inset(alternatesRowBackgrounds: true))
@@ -69,31 +70,20 @@ struct PresetWorkspaceView: View {
     // MARK: - Logic
     private func addGroup() {
         let newName = "New Group \(appData.performanceConfig.patternGroups.count + 1)"
-        let newGroup = PatternGroup(name: newName, patterns: [:], pattern: nil, chordAssignments: [:])
+        let newGroup = PatternGroup(name: newName, patterns: [:], pattern: nil, chordsOrder: [], chordAssignments: [:])
         appData.performanceConfig.patternGroups.append(newGroup)
-        activeGroupIndex = appData.performanceConfig.patternGroups.count - 1
+        activeGroupId = newGroup.id // Set active group to the new group's ID
     }
 
-    private func removeGroup(at index: Int) {
-        guard appData.performanceConfig.patternGroups.indices.contains(index) else { return }
-        appData.performanceConfig.patternGroups.remove(at: index)
+    private func removeGroup(groupToRemove: PatternGroup) {
+        appData.performanceConfig.patternGroups.removeAll { $0.id == groupToRemove.id }
 
-        if activeGroupIndex == index {
-            if appData.performanceConfig.patternGroups.isEmpty {
-                activeGroupIndex = nil
-            } else if index >= appData.performanceConfig.patternGroups.count {
-                activeGroupIndex = appData.performanceConfig.patternGroups.count - 1
-            } else {
-                // The selection will automatically move to the next item or stay if it's the last one
-                // No change needed to activeGroupIndex if it's not the last one
+        if activeGroupId == groupToRemove.id {
+            if let firstGroup = appData.performanceConfig.patternGroups.first {
+                activeGroupId = firstGroup.id
             }
-        } else if let currentActive = activeGroupIndex, currentActive > index {
-            activeGroupIndex = currentActive - 1
+        } else {
+            activeGroupId = nil
         }
     }
 }
-
-// Note: The GroupRow view is already defined in GroupConfigPanelView.swift.
-// For this to compile, we would need to move GroupRow to its own file or
-// redefine it here. For now, we assume it's accessible.
-// If we get a build error, moving GroupRow will be the first step.
