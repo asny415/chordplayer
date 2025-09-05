@@ -64,7 +64,7 @@ class PresetManager: ObservableObject {
         // 确保始终有一个活跃的Preset
         ensureActivePreset()
         
-        print("[PresetManager] Initialized with \(presets.count) presets, current: \(currentPreset?.name ?? "未命名")")
+        print("[PresetManager] Initialized with \(presets.count) presets, current: \(currentPreset?.name ?? String(localized: "preset_manager_unnamed_preset_name"))")
     }
     
     // MARK: - 核心方法
@@ -245,8 +245,8 @@ class PresetManager: ObservableObject {
         
         // 创建新的"未命名"Preset
         return Preset(
-            name: "未命名",
-            description: "自动保存的配置",
+            name: String(localized: "preset_manager_unnamed_preset_name"),
+            description: String(localized: "preset_manager_unnamed_preset_description"),
             performanceConfig: PerformanceConfig(
                 tempo: 120,
                 timeSignature: "4/4",
@@ -401,7 +401,7 @@ class PresetManager: ObservableObject {
     func getPresetStats() -> [String: Any] {
         return [
             "total_presets": presets.count,
-            "current_preset": currentPreset?.name ?? "未命名",
+            "current_preset": currentPreset?.name ?? String(localized: "preset_manager_unnamed_preset_name"),
             "is_unnamed": isUnnamedPreset(currentPresetOrUnnamed),
             "recent_presets": getRecentPresets(limit: 3).map { $0.name },
             "storage_size": getStorageSize(),

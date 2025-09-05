@@ -36,7 +36,7 @@ struct ControlBarView: View {
     var body: some View {
         Form {
             // --- DRUM CONTROL GROUP ---
-            Section(header: Text("Drum Machine")) {
+            Section(header: Text("control_bar_drum_machine_header")) {
                 HStack {
                     Button(action: {
                         if drumPlayer.isPlaying {
@@ -54,7 +54,7 @@ struct ControlBarView: View {
                     .focusable(false)
                     .disabled(midiManager.selectedOutput == nil && !drumPlayer.isPlaying)
 
-                    Picker("Pattern", selection: drumPatternBinding) {
+                    Picker("control_bar_pattern_picker_label", selection: drumPatternBinding) {
                         ForEach(availableDrumPatterns, id: \.self) { patternKey in
                             Text(appData.drumPatternLibrary?[appData.performanceConfig.timeSignature]?[patternKey]?.displayName ?? patternKey).tag(patternKey)
                         }
@@ -64,14 +64,14 @@ struct ControlBarView: View {
             }
             
             // --- GLOBAL MUSIC SETTINGS ---
-            Section(header: Text("Global Settings")) {
-                Picker("Key", selection: $appData.performanceConfig.key) {
+            Section(header: Text("control_bar_global_settings_header")) {
+                Picker("control_bar_key_picker_label", selection: $appData.performanceConfig.key) {
                     ForEach(appData.KEY_CYCLE, id: \.self) { item in
                         Text(item).tag(item)
                     }
                 }
                 
-                Picker("Time Sig", selection: $appData.performanceConfig.timeSignature) {
+                Picker("control_bar_time_sig_picker_label", selection: $appData.performanceConfig.timeSignature) {
                     ForEach(appData.TIME_SIGNATURE_CYCLE, id: \.self) { item in
                         Text(item).tag(item)
                     }
@@ -91,7 +91,7 @@ struct ControlBarView: View {
                     }
                 }
 
-                Picker("Quantize", selection: Binding<String>(
+                Picker("control_bar_quantize_picker_label", selection: Binding<String>(
                     get: { appData.performanceConfig.quantize ?? QuantizationMode.none.rawValue },
                     set: { appData.performanceConfig.quantize = $0 }
                 )) {
@@ -102,9 +102,9 @@ struct ControlBarView: View {
             }
             
             // --- MIDI OUTPUT & TEMPO ---
-            Section(header: Text("Tempo & MIDI")) {
+            Section(header: Text("control_bar_tempo_midi_header")) {
                 HStack { // Use HStack for horizontal layout
-                    Text("BPM")
+                    Text("control_bar_bpm_label")
                     // Display current tempo
                     Text("\(Int(appData.performanceConfig.tempo))")
                         .foregroundColor(.secondary)
@@ -127,8 +127,8 @@ struct ControlBarView: View {
                     )
                 }
                 
-                Picker("MIDI Output", selection: $midiManager.selectedOutput) {
-                    Text("None").tag(MIDIEndpointRef?.none)
+                Picker("control_bar_midi_output_picker_label", selection: $midiManager.selectedOutput) {
+                    Text("control_bar_midi_output_none_option").tag(MIDIEndpointRef?.none)
                     ForEach(midiManager.availableOutputs, id: \.self) { endpoint in
                         Text(midiManager.displayName(for: endpoint)).tag(MIDIEndpointRef?.some(endpoint))
                     }

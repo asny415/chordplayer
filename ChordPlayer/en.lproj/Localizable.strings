@@ -1,0 +1,56 @@
+"control_bar_drum_machine_header" = "Drum Machine";
+"control_bar_pattern_picker_label" = "Pattern";
+"control_bar_global_settings_header" = "Global Settings";
+"control_bar_key_picker_label" = "Key";
+"control_bar_time_sig_picker_label" = "Time Sig";
+"control_bar_quantize_picker_label" = "Quantize";
+"control_bar_tempo_midi_header" = "Tempo & MIDI";
+"control_bar_bpm_label" = "BPM";
+"control_bar_midi_output_picker_label" = "MIDI Output";
+"control_bar_midi_output_none_option" = "None";
+"preset_workspace_chord_groups_label" = "Chord Groups";
+"preset_workspace_add_group_button" = "Add Group";
+"preset_workspace_new_group_prefix" = "New Group ";
+"content_view_presets_section_header" = "Presets";
+"content_view_new_preset_prefix" = "New Preset ";
+"content_view_new_preset_button" = "New Preset";
+"content_view_current_preset_label" = "Current";
+"content_view_preset_name_placeholder" = "Preset Name";
+"content_view_delete_preset_context_menu" = "Delete Preset";
+"content_view_delete_preset_alert_title" = "Delete Preset";
+"content_view_cancel_button" = "Cancel";
+"content_view_delete_button" = "Delete";
+"content_view_delete_preset_confirmation_message" = "Are you sure you want to delete '%@'? This action cannot be undone.";
+"group_config_panel_shortcut_conflict_alert_title" = "Shortcut Conflict";
+"group_config_panel_replace_button_format" = "Replace (%@)";
+"group_config_panel_cancel_button" = "Cancel";
+"group_config_panel_shortcut_conflict_message_format" = "The shortcut \"%@\" is already used by: 
+
+%@
+
+Assigning it to \"%@\" will remove it from the other chords.";
+"group_config_panel_select_or_create_group_placeholder" = "Select or create a group to begin.";
+"group_config_panel_group_settings_header" = "Group Settings";
+"group_config_panel_default_fingering_picker_label" = "Default Fingering";
+"group_config_panel_none_option" = "None";
+"group_config_panel_assigned_chords_header" = "Assigned Chords";
+"group_config_panel_add_chords_from_library_button" = "Add Chords from Library";
+"group_config_panel_edit_details_context_menu" = "Edit Details";
+"group_config_panel_remove_from_group_context_menu" = "Remove from Group";
+"group_config_panel_edit_chord_sheet_title_format" = "Edit Chord: %@";
+"group_config_panel_shortcut_editing_ui_placeholder" = "Shortcut editing UI would go here.";
+"group_config_panel_sheet_cancel_button" = "Cancel";
+"group_config_panel_sheet_save_button" = "Save";
+"chord_diagram_editor_create_new_chord_title" = "Create New Chord";
+"chord_diagram_editor_name_label" = "Name";
+"chord_diagram_editor_name_placeholder" = "E.g. C_Major";
+"chord_diagram_editor_mute_button" = "X";
+"chord_diagram_editor_open_string_button" = "0";
+"chord_diagram_editor_string_label_format" = "S%@";
+"chord_diagram_editor_cancel_button" = "Cancel";
+"chord_diagram_editor_save_button" = "Save";
+"chord_library_view_header_title" = "Chord Library";
+"chord_library_view_cancel_button" = "Cancel";
+"chord_library_view_search_placeholder" = "Search chords...";
+"preset_manager_unnamed_preset_name" = "Unnamed";
+"preset_manager_unnamed_preset_description" = "Auto-saved configuration";

@@ -116,15 +116,15 @@ struct GroupConfigPanelView: View {
             }
             .onAppear(perform: setupOnAppear)
             .onDisappear { keyboardHandler.onShortcutCaptured = nil }
-            .alert("Shortcut Conflict", isPresented: $showConflictAlert, presenting: conflictData) { data in
-                Button("Replace (\(data.conflictingChords.joined(separator: ", ")))") {
+            .alert("group_config_panel_shortcut_conflict_alert_title", isPresented: $showConflictAlert, presenting: conflictData) { data in
+                Button(String(format: "group_config_panel_replace_button_format", arguments: [data.conflictingChords.joined(separator: ", ")])) {
                     resolveConflict(choice: .replace)
                 }
-                Button("Cancel", role: .cancel) {
+                Button("group_config_panel_cancel_button", role: .cancel) {
                     resolveConflict(choice: .cancel)
                 }
             } message: { data in
-                Text("The shortcut \"\(ChordButtonView.formatShortcutDisplay(data.newShortcut))\" is already used by: \n\n\(data.conflictingChords.joined(separator: ", "))\n\nAssigning it to \"\(data.newChord)\" will remove it from the other chords.")
+                Text(String(format: "group_config_panel_shortcut_conflict_message_format", arguments: [ChordButtonView.formatShortcutDisplay(data.newShortcut), data.conflictingChords.joined(separator: ", "), data.newChord]))
             }
             // Sync active group index with keyboard handler
             // .onChange(of: activeGroupId) { _, newValue in
@@ -147,7 +147,7 @@ struct GroupConfigPanelView: View {
                 }
                 .padding(.vertical)
             } else {
-                Text("Select or create a group to begin.")
+                Text("group_config_panel_select_or_create_group_placeholder")
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -155,10 +155,10 @@ struct GroupConfigPanelView: View {
     }
     
     private func groupSettingsView(groupBinding: Binding<PatternGroup>) -> some View {
-        return Section(header: Text("Group Settings").font(.headline)) {
+        return Section(header: Text("group_config_panel_group_settings_header").font(.headline)) {
             let patternsForTimeSig = appData.patternLibrary?[appData.performanceConfig.timeSignature] ?? []
-            Picker("Default Fingering", selection: groupBinding.pattern) {
-                Text("None").tag(String?.none)
+            Picker("group_config_panel_default_fingering_picker_label", selection: groupBinding.pattern) {
+                Text("group_config_panel_none_option").tag(String?.none)
                 ForEach(patternsForTimeSig, id: \.id) {
                     p in
                     Text(p.name).tag(String?.some(p.id))
@@ -168,12 +168,12 @@ struct GroupConfigPanelView: View {
     }
     
     private func chordManagementView(groupBinding: Binding<PatternGroup>) -> some View {
-        Section(header: Text("Assigned Chords").font(.headline)) {
+        Section(header: Text("group_config_panel_assigned_chords_header").font(.headline)) {
             assignedChordsView(groupBinding: groupBinding)
             
             // Button to open the chord library
             Button(action: { showChordLibrary = true }) {
-                Label("Add Chords from Library", systemImage: "plus.circle.fill")
+                Label("group_config_panel_add_chords_from_library_button", systemImage: "plus.circle.fill")
             }
             .buttonStyle(.borderedProminent)
             .padding(.top)
@@ -207,11 +207,11 @@ struct GroupConfigPanelView: View {
             isCapturingShortcut: capturingShortcutForChord == chordName
         )
         .contextMenu {
-            Button("Edit Details") {
+            Button("group_config_panel_edit_details_context_menu") {
                 editingChordName = chordName
                 showChordEditSheet = true
             }
-            Button("Remove from Group", role: .destructive) {
+            Button("group_config_panel_remove_from_group_context_menu", role: .destructive) {
                 let currentGroupId = groupBinding.wrappedValue.id
                 removeChord(from: currentGroupId, chordName: chordName)
             }
@@ -226,12 +226,12 @@ struct GroupConfigPanelView: View {
             // This view should be built out more completely
             return AnyView(
                 VStack {
-                    Text("Edit Chord: \(chordName)").font(.title)
-                    Text("Shortcut editing UI would go here.")
+                    Text(String(format: "group_config_panel_edit_chord_sheet_title_format", arguments: [chordName])).font(.title)
+                    Text("group_config_panel_shortcut_editing_ui_placeholder")
                     Spacer()
                     HStack {
-                        Button("Cancel") { showChordEditSheet = false }
-                        Button("Save") { /* Save logic here */ showChordEditSheet = false }
+                        Button("group_config_panel_sheet_cancel_button") { showChordEditSheet = false }
+                        Button("group_config_panel_sheet_save_button") { /* Save logic here */ showChordEditSheet = false }
                     }
                 }.padding().frame(width: 400, height: 300)
             )

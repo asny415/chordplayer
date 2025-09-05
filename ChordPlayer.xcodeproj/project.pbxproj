@@ -17,14 +17,14 @@
 			containerPortal = 9455569E2E6487F900D53154 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 945556A52E6487F900D53154;
-							remoteInfo = ChordPlayer;
+			remoteInfo = ChordPlayer;
 		};
 		945556C22E6487FD00D53154 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9455569E2E6487F900D53154 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 945556A52E6487F900D53154;
-							remoteInfo = ChordPlayer;
+			remoteInfo = ChordPlayer;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -39,17 +39,17 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		945556A82E6487F900D53154 /* ChordPlayer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-							path = ChordPlayer;
+			path = ChordPlayer;
 			sourceTree = "<group>";
 		};
 		945556BA2E6487FD00D53154 /* ChordPlayerTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-							path = ChordPlayerTests;
+			path = ChordPlayerTests;
 			sourceTree = "<group>";
 		};
 		945556C42E6487FD00D53154 /* ChordPlayerUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-							path = ChordPlayerUITests;
+			path = ChordPlayerUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -84,9 +84,9 @@
 		9455569D2E6487F900D53154 = {
 			isa = PBXGroup;
 			children = (
-				945556A82E6487F900D53154 /* guitarPlayer */,
-				945556BA2E6487FD00D53154 /* guitarPlayerTests */,
-				945556C42E6487FD00D53154 /* guitarPlayerUITests */,
+				945556A82E6487F900D53154 /* ChordPlayer */,
+				945556BA2E6487FD00D53154 /* ChordPlayerTests */,
+				945556C42E6487FD00D53154 /* ChordPlayerUITests */,
 				945556E32E648C0F00D53154 /* Frameworks */,
 				945556A72E6487F900D53154 /* Products */,
 			);
@@ -95,9 +95,9 @@
 		945556A72E6487F900D53154 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				945556A62E6487F900D53154 /* guitarPlayer.app */,
-				945556B72E6487FD00D53154 /* guitarPlayerTests.xctest */,
-				945556C12E6487FD00D53154 /* guitarPlayerUITests.xctest */,
+				945556A62E6487F900D53154 /* ChordPlayer.app */,
+				945556B72E6487FD00D53154 /* ChordPlayerTests.xctest */,
+				945556C12E6487FD00D53154 /* ChordPlayerUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -114,9 +114,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		945556A52E6487F900D53154 /* guitarPlayer */ = {
+		945556A52E6487F900D53154 /* ChordPlayer */ = {
 			isa = PBXNativeTarget;
-							buildConfigurationList = 945556CB2E6487FD00D53154 /* Build configuration list for PBXNativeTarget "ChordPlayer" */;
+			buildConfigurationList = 945556CB2E6487FD00D53154 /* Build configuration list for PBXNativeTarget "ChordPlayer" */;
 			buildPhases = (
 				945556A22E6487F900D53154 /* Sources */,
 				945556A32E6487F900D53154 /* Frameworks */,
@@ -127,18 +127,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				945556A82E6487F900D53154 /* guitarPlayer */,
+				945556A82E6487F900D53154 /* ChordPlayer */,
 			);
-							name = ChordPlayer;
+			name = ChordPlayer;
 			packageProductDependencies = (
 			);
-							productName = ChordPlayer;
-							productReference = 945556A62E6487F900D53154 /* ChordPlayer.app */;
+			productName = ChordPlayer;
+			productReference = 945556A62E6487F900D53154 /* ChordPlayer.app */;
 			productType = "com.apple.product-type.application";
 		};
-		945556B62E6487FD00D53154 /* guitarPlayerTests */ = {
+		945556B62E6487FD00D53154 /* ChordPlayerTests */ = {
 			isa = PBXNativeTarget;
-							buildConfigurationList = 945556CE2E6487FD00D53154 /* Build configuration list for PBXNativeTarget "ChordPlayerTests" */;
+			buildConfigurationList = 945556CE2E6487FD00D53154 /* Build configuration list for PBXNativeTarget "ChordPlayerTests" */;
 			buildPhases = (
 				945556B32E6487FD00D53154 /* Sources */,
 				945556B42E6487FD00D53154 /* Frameworks */,
@@ -150,18 +150,18 @@
 				945556B92E6487FD00D53154 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				945556BA2E6487FD00D53154 /* guitarPlayerTests */,
+				945556BA2E6487FD00D53154 /* ChordPlayerTests */,
 			);
-							name = ChordPlayerTests;
+			name = ChordPlayerTests;
 			packageProductDependencies = (
 			);
-							productName = ChordPlayerTests;
-							productReference = 945556B72E6487FD00D53154 /* ChordPlayerTests.xctest */;
+			productName = ChordPlayerTests;
+			productReference = 945556B72E6487FD00D53154 /* ChordPlayerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		945556C02E6487FD00D53154 /* guitarPlayerUITests */ = {
+		945556C02E6487FD00D53154 /* ChordPlayerUITests */ = {
 			isa = PBXNativeTarget;
-							buildConfigurationList = 945556D12E6487FD00D53154 /* Build configuration list for PBXNativeTarget "ChordPlayerUITests" */;
+			buildConfigurationList = 945556D12E6487FD00D53154 /* Build configuration list for PBXNativeTarget "ChordPlayerUITests" */;
 			buildPhases = (
 				945556BD2E6487FD00D53154 /* Sources */,
 				945556BE2E6487FD00D53154 /* Frameworks */,
@@ -173,13 +173,13 @@
 				945556C32E6487FD00D53154 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				945556C42E6487FD00D53154 /* guitarPlayerUITests */,
+				945556C42E6487FD00D53154 /* ChordPlayerUITests */,
 			);
-							name = ChordPlayerUITests;
+			name = ChordPlayerUITests;
 			packageProductDependencies = (
 			);
-							productName = ChordPlayerUITests;
-							productReference = 945556C12E6487FD00D53154 /* ChordPlayerUITests.xctest */;
+			productName = ChordPlayerUITests;
+			productReference = 945556C12E6487FD00D53154 /* ChordPlayerUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -205,12 +205,13 @@
 					};
 				};
 			};
-							buildConfigurationList = 945556A12E6487F900D53154 /* Build configuration list for PBXProject "ChordPlayer" */;
+			buildConfigurationList = 945556A12E6487F900D53154 /* Build configuration list for PBXProject "ChordPlayer" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
 			);
 			mainGroup = 9455569D2E6487F900D53154;
 			minimizedProjectReferenceProxies = 1;
@@ -219,9 +220,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				945556A52E6487F900D53154 /* guitarPlayer */,
-				945556B62E6487FD00D53154 /* guitarPlayerTests */,
-				945556C02E6487FD00D53154 /* guitarPlayerUITests */,
+				945556A52E6487F900D53154 /* ChordPlayer */,
+				945556B62E6487FD00D53154 /* ChordPlayerTests */,
+				945556C02E6487FD00D53154 /* ChordPlayerUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -277,12 +278,12 @@
 /* Begin PBXTargetDependency section */
 		945556B92E6487FD00D53154 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-							target = 945556A52E6487F900D53154 /* ChordPlayer */;
+			target = 945556A52E6487F900D53154 /* ChordPlayer */;
 			targetProxy = 945556B82E6487FD00D53154 /* PBXContainerItemProxy */;
 		};
 		945556C32E6487FD00D53154 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-							target = 945556A52E6487F900D53154 /* ChordPlayer */;
+			target = 945556A52E6487F900D53154 /* ChordPlayer */;
 			targetProxy = 945556C22E6487FD00D53154 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -415,7 +416,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-								
 				DEVELOPMENT_TEAM = F7FHY5UTD4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -442,7 +442,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-								
 				DEVELOPMENT_TEAM = F7FHY5UTD4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -531,7 +530,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		945556A12E6487F900D53154 /* Build configuration list for PBXProject "guitarPlayer" */ = {
+		945556A12E6487F900D53154 /* Build configuration list for PBXProject "ChordPlayer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				945556C92E6487FD00D53154 /* Debug */,
@@ -540,7 +539,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		945556CB2E6487FD00D53154 /* Build configuration list for PBXNativeTarget "guitarPlayer" */ = {
+		945556CB2E6487FD00D53154 /* Build configuration list for PBXNativeTarget "ChordPlayer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				945556CC2E6487FD00D53154 /* Debug */,
@@ -549,7 +548,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		945556CE2E6487FD00D53154 /* Build configuration list for PBXNativeTarget "guitarPlayerTests" */ = {
+		945556CE2E6487FD00D53154 /* Build configuration list for PBXNativeTarget "ChordPlayerTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				945556CF2E6487FD00D53154 /* Debug */,
@@ -558,7 +557,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		945556D12E6487FD00D53154 /* Build configuration list for PBXNativeTarget "guitarPlayerUITests" */ = {
+		945556D12E6487FD00D53154 /* Build configuration list for PBXNativeTarget "ChordPlayerUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				945556D22E6487FD00D53154 /* Debug */,

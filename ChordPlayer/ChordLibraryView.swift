@@ -38,16 +38,16 @@ struct ChordLibraryView: View {
 
     private var headerView: some View {
         HStack {
-            Text("Chord Library")
+            Text("chord_library_view_header_title")
                 .font(.title2).bold()
             Spacer()
-            Button("Cancel", role: .cancel) { dismiss() }
+            Button("chord_library_view_cancel_button", role: .cancel) { dismiss() }
         }
         .padding()
     }
 
     private var searchBar: some View {
-        TextField("Search chords...", text: $chordSearchText)
+        TextField("chord_library_view_search_placeholder", text: $chordSearchText)
             .textFieldStyle(.roundedBorder)
     }
 

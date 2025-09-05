@@ -59,7 +59,7 @@ private struct PresetSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             List(selection: .constant(presetManager.currentPreset?.id)) {
-                Section(header: Text("Presets")) {
+                Section(header: Text("content_view_presets_section_header")) {
                     ForEach(presetManager.presets) { preset in
                         PresetRow(preset: preset,
                                   isCurrent: preset.id == presetManager.currentPreset?.id,
@@ -79,12 +79,12 @@ private struct PresetSidebar: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        let newPresetName = "New Preset " + Date().formatted(date: .numeric, time: .standard)
+                        let newPresetName = String(localized: "content_view_new_preset_prefix") + Date().formatted(date: .numeric, time: .standard)
                         if let newPreset = appData.createNewPreset(name: newPresetName) {
                             editingPresetId = newPreset.id // Set editing mode for the new preset
                         }
                     } label: {
-                        Label("New Preset", systemImage: "plus.circle")
+                        Label("content_view_new_preset_button", systemImage: "plus.circle")
                     }
                 }
             }
@@ -96,7 +96,7 @@ private struct PresetSidebar: View {
                 let current = presetManager.currentPresetOrUnnamed
                 let isUnnamed = presetManager.isUnnamedPreset(current)
 
-                Text("Current")
+                Text("content_view_current_preset_label")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
@@ -132,7 +132,7 @@ private struct PresetRow: View {
                 .foregroundColor(.accentColor)
             VStack(alignment: .leading) {
                 if isEditing {
-                    TextField("Preset Name", text: $newName, onCommit: {
+                    TextField("content_view_preset_name_placeholder", text: $newName, onCommit: {
                         onRename(newName)
                         isNameFieldFocused = false // Resign focus on commit
                     })
@@ -176,16 +176,16 @@ private struct PresetRow: View {
             Button(role: .destructive) {
                 showingDeleteConfirmation = true
             } label: {
-                Label("Delete Preset", systemImage: "trash")
+                Label("content_view_delete_preset_context_menu", systemImage: "trash")
             }
         }
-        .alert("Delete Preset", isPresented: $showingDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
+        .alert("content_view_delete_preset_alert_title", isPresented: $showingDeleteConfirmation) {
+            Button("content_view_cancel_button", role: .cancel) { }
+            Button("content_view_delete_button", role: .destructive) {
                 _ = presetManager.deletePreset(preset)
             }
         } message: {
-            Text("Are you sure you want to delete '\(preset.name)'? This action cannot be undone.")
+            Text(String(format: "content_view_delete_preset_confirmation_message", arguments: [preset.name]))
         }
     }
 }

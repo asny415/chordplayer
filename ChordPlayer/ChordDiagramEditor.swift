@@ -13,13 +13,13 @@ struct ChordDiagramEditor: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text("Create New Chord")
+            Text("chord_diagram_editor_create_new_chord_title")
                 .font(.title2)
 
             HStack(alignment: .center) {
-                Text("Name")
+                Text("chord_diagram_editor_name_label")
                     .frame(width: 60, alignment: .leading)
-                TextField("E.g. C_Major", text: $chordName)
+                TextField("chord_diagram_editor_name_placeholder", text: $chordName)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(maxWidth: 300)
             }
@@ -51,14 +51,14 @@ struct ChordDiagramEditor: View {
                         // Controls for mute/open
                         HStack(spacing: 6) {
                             Button(action: { frets[idx] = -1 }) {
-                                Text("X")
+                                Text("chord_diagram_editor_mute_button")
                                     .foregroundColor(frets[idx] == -1 ? .white : .primary)
                                     .padding(6)
                                     .background(frets[idx] == -1 ? Color.red : Color.clear)
                                     .cornerRadius(6)
                             }
                             Button(action: { frets[idx] = 0 }) {
-                                Text("0")
+                                Text("chord_diagram_editor_open_string_button")
                                     .foregroundColor(frets[idx] == 0 ? .white : .primary)
                                     .padding(6)
                                     .background(frets[idx] == 0 ? Color.green : Color.clear)
@@ -83,9 +83,9 @@ struct ChordDiagramEditor: View {
             }
 
             HStack {
-                Button("Cancel") { onCancel() }
+                Button("chord_diagram_editor_cancel_button") { onCancel() }
                 Spacer()
-                Button("Save") {
+                Button("chord_diagram_editor_save_button") {
                     let normalizedName = chordName.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !normalizedName.isEmpty else { return }
                     var chordDef: [StringOrInt] = []
@@ -109,7 +109,7 @@ struct ChordDiagramEditor: View {
     private func stringTopLabel(for index: Int) -> String {
         // index 0 is 6th string in our UI mapping
         let mapping = ["6","5","4","3","2","1"]
-        return "S\(mapping[index])"
+        return String(format: "chord_diagram_editor_string_label_format", arguments: [mapping[index]])
     }
 }
 

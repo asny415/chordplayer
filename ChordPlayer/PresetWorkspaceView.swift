@@ -42,11 +42,11 @@ struct PresetWorkspaceView: View {
     private var groupListView: some View {
         VStack(alignment: .leading) {
             HStack {
-                Text("Chord Groups")
+                Text("preset_workspace_chord_groups_label")
                     .font(.title2).bold()
                 Spacer()
                 Button(action: addGroup) {
-                    Label("Add Group", systemImage: "plus")
+                    Label("preset_workspace_add_group_button", systemImage: "plus")
                 }
                 .labelStyle(.iconOnly)
             }
@@ -69,7 +69,7 @@ struct PresetWorkspaceView: View {
 
     // MARK: - Logic
     private func addGroup() {
-        let newName = "New Group \(appData.performanceConfig.patternGroups.count + 1)"
+        let newName = String(localized: "preset_workspace_new_group_prefix") + " \(appData.performanceConfig.patternGroups.count + 1)"
         let newGroup = PatternGroup(name: newName, patterns: [:], pattern: nil, chordsOrder: [], chordAssignments: [:])
         appData.performanceConfig.patternGroups.append(newGroup)
         activeGroupId = newGroup.id // Set active group to the new group's ID
