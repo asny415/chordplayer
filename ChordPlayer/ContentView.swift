@@ -28,11 +28,6 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .frame(minWidth: 1200, minHeight: 700)
         .onAppear(perform: setupInitialState)
-        // Clicking on empty area should clear focus so global shortcuts work again
-        .onTapGesture {
-            NSApp.keyWindow?.makeFirstResponder(nil)
-            keyboardHandler.isTextInputActive = false
-        }
     }
 
     private func setupInitialState() {
