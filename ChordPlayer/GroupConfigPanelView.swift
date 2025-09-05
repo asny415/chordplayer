@@ -87,6 +87,7 @@ struct ChordButtonView: View {
 // MARK: - Main Panel View
 struct GroupConfigPanelView: View {
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var chordPlayer: ChordPlayer
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     
     @Binding var activeGroupId: UUID?
@@ -100,6 +101,7 @@ struct GroupConfigPanelView: View {
     
     // State for the new Chord Library modal
     @State private var showChordLibrary = false
+    @State private var showCustomChordCreator = false
 
     var body: some View {
         groupEditorView
@@ -113,6 +115,12 @@ struct GroupConfigPanelView: View {
                     }
                     showChordLibrary = false // Dismiss after adding
                 }
+            }
+            .sheet(isPresented: $showCustomChordCreator) {
+                CustomChordCreatorView()
+                    .environmentObject(appData)
+                    .environmentObject(chordPlayer)
+                    .environmentObject(keyboardHandler)
             }
             .onAppear(perform: setupOnAppear)
             .onDisappear { keyboardHandler.onShortcutCaptured = nil }
@@ -168,14 +176,21 @@ struct GroupConfigPanelView: View {
     }
     
     private func chordManagementView(groupBinding: Binding<PatternGroup>) -> some View {
-        Section(header: Text("group_config_panel_assigned_chords_header").font(.headline)) {
+        Section(header: Text("已分配的和弦").font(.headline)) {
             assignedChordsView(groupBinding: groupBinding)
             
-            // Button to open the chord library
-            Button(action: { showChordLibrary = true }) {
-                Label("group_config_panel_add_chords_from_library_button", systemImage: "plus.circle.fill")
+            // 和弦管理按钮组
+            HStack(spacing: 12) {
+                Button(action: { showChordLibrary = true }) {
+                    Label("从和弦库添加", systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                
+                Button(action: { showCustomChordCreator = true }) {
+                    Label("创建自定义和弦", systemImage: "star.circle.fill")
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.borderedProminent)
             .padding(.top)
         }
     }

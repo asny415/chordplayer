@@ -164,4 +164,39 @@ class ChordPlayer: ObservableObject {
         playingNotes.removeAll()
         stringNotes.removeAll()
     }
+    
+    func playChordDirectly(chordDefinition: [StringOrInt], key: String = "C", capo: Int = 0, velocity: UInt8 = 100, duration: TimeInterval = 2.0) {
+        var transposeOffset = 0
+        if let idx = appData.KEY_CYCLE.firstIndex(of: key) {
+            transposeOffset = idx
+        }
+
+        var midiNotes: [Int] = Array(repeating: -1, count: 6)
+        for (i, fretVal) in chordDefinition.enumerated() {
+            switch fretVal {
+            case .int(let fretInt):
+                if fretInt >= 0 { // Consider 'x' or negative as muted
+                    midiNotes[i] = MusicTheory.standardGuitarTuning[i] + fretInt + transposeOffset + capo
+                }
+            case .string:
+                midiNotes[i] = -1
+            }
+        }
+
+        let activeNotes: [Int] = midiNotes.filter { $0 != -1 }
+        
+        panic() // Stop previous notes before playing new ones
+        
+        // Play the chord
+        for note in activeNotes {
+            midiManager.sendNoteOn(note: UInt8(note), velocity: velocity, channel: 0)
+        }
+        
+        // Schedule note off after duration
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            for note in activeNotes {
+                self.midiManager.sendNoteOff(note: UInt8(note), velocity: 0, channel: 0)
+            }
+        }
+    }
 }

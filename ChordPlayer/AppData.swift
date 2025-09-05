@@ -7,6 +7,9 @@ class AppData: ObservableObject {
     @Published var drumPatternLibrary: DrumPatternLibrary?
     @Published var patternLibrary: PatternLibrary?
     
+    // 自定义和弦管理器
+    @Published var customChordManager = CustomChordManager.shared
+    
     // Configuration properties - 现在通过PresetManager管理
     @Published var performanceConfig: PerformanceConfig {
         didSet {
@@ -69,15 +72,40 @@ class AppData: ObservableObject {
 
     // Load data files into libraries
     private func loadData() {
-        chordLibrary = DataLoader.load(filename: "chords", as: ChordLibrary.self)
+        // 加载内置和弦库
+        let builtInChordLibrary = DataLoader.load(filename: "chords", as: ChordLibrary.self)
         drumPatternLibrary = DataLoader.load(filename: "drums", as: DrumPatternLibrary.self)
         patternLibrary = DataLoader.load(filename: "patterns", as: PatternLibrary.self)
 
-        if chordLibrary == nil { print("Failed to load chordLibrary") }
+        // 合并内置和弦和自定义和弦
+        if let builtInChords = builtInChordLibrary {
+            chordLibrary = customChordManager.combinedChordLibrary(with: builtInChords)
+            print("[AppData] ✅ Loaded \(builtInChords.count) built-in chords")
+        } else {
+            print("[AppData] ❌ Failed to load built-in chordLibrary")
+            chordLibrary = customChordManager.customChords
+        }
+        
         if drumPatternLibrary == nil { print("Failed to load drumPatternLibrary") }
         if patternLibrary == nil { print("Failed to load patternLibrary") }
         print("Loaded patternLibrary: \(String(describing: patternLibrary))")
         if let pl = patternLibrary { print("PatternLibrary keys: \(pl.keys.sorted().joined(separator: ", "))") }
+        
+        // 监听自定义和弦变化并更新合并后的和弦库
+        customChordManager.$customChords
+            .sink { [weak self] _ in
+                self?.updateCombinedChordLibrary()
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// 更新合并后的和弦库
+    private func updateCombinedChordLibrary() {
+        // 重新加载内置和弦库
+        if let builtInChords = DataLoader.load(filename: "chords", as: ChordLibrary.self) {
+            chordLibrary = customChordManager.combinedChordLibrary(with: builtInChords)
+            print("[AppData] ✅ Updated combined chord library with \(customChordManager.customChords.count) custom chords")
+        }
     }
 
     // Ensures that each group's default pattern is a valid ID from the loaded patternLibrary.

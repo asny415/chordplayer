@@ -1,0 +1,351 @@
+import SwiftUI
+
+/// 自定义和弦管理界面
+struct CustomChordLibraryView: View {
+    @EnvironmentObject var appData: AppData
+    @EnvironmentObject var chordPlayer: ChordPlayer
+    @EnvironmentObject var keyboardHandler: KeyboardHandler
+    @Environment(\.dismiss) var dismiss
+    
+    @StateObject private var customChordManager = CustomChordManager.shared
+    
+    @State private var searchText: String = ""
+    @State private var selectedChords: Set<String> = []
+    @State private var showingDeleteAlert = false
+    @State private var showingEditSheet = false
+    @State private var editingChordName: String = ""
+    @State private var editingFingering: [StringOrInt] = []
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // 标题栏
+                headerView
+                
+                Divider()
+                
+                // 搜索栏
+                searchBar
+                    .padding()
+                
+                // 工具栏
+                toolbar
+                    .padding(.horizontal)
+                
+                Divider()
+                
+                // 和弦网格
+                chordGrid
+            }
+            .frame(minWidth: 600, idealWidth: 800, minHeight: 500, idealHeight: 700)
+            .background(Color(NSColor.windowBackgroundColor))
+        }
+        .alert("删除和弦", isPresented: $showingDeleteAlert) {
+            Button("取消", role: .cancel) { }
+            Button("删除", role: .destructive) {
+                deleteSelectedChords()
+            }
+        } message: {
+            Text("确定要删除选中的 \(selectedChords.count) 个和弦吗？此操作无法撤销。")
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            CustomChordEditorView(
+                chordName: editingChordName,
+                initialFingering: editingFingering
+            )
+        }
+    }
+    
+    // MARK: - 子视图
+    
+    private var headerView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("自定义和弦管理")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text("管理您的自定义和弦库")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 12) {
+                Button("创建新和弦") {
+                    showCreateChord()
+                }
+                .buttonStyle(.borderedProminent)
+                
+                Button("完成") {
+                    dismiss()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(20)
+    }
+    
+    private var searchBar: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+            
+            TextField("搜索和弦名称...", text: $searchText)
+                .textFieldStyle(.plain)
+            
+            if !searchText.isEmpty {
+                Button(action: { searchText = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+    }
+    
+    private var toolbar: some View {
+        HStack {
+            Text("\(filteredChords.count) 个和弦")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+            
+            if !selectedChords.isEmpty {
+                HStack(spacing: 8) {
+                    Button("编辑") {
+                        editSelectedChord()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(selectedChords.count != 1)
+                    
+                    Button("删除") {
+                        showingDeleteAlert = true
+                    }
+                    .buttonStyle(.bordered)
+                    .foregroundColor(.red)
+                }
+            }
+        }
+    }
+    
+    private var chordGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [
+                GridItem(.adaptive(minimum: 200), spacing: 16)
+            ], spacing: 16) {
+                ForEach(filteredChords, id: \.self) { chordName in
+                    chordCard(chordName: chordName)
+                }
+            }
+            .padding()
+        }
+    }
+    
+    private func chordCard(chordName: String) -> some View {
+        let fingering = customChordManager.customChords[chordName] ?? []
+        let isSelected = selectedChords.contains(chordName)
+        
+        return VStack(spacing: 12) {
+            // 和弦名称
+            HStack {
+                Text(chordName)
+                    .font(.headline)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                Button(action: { playChord(chordName) }) {
+                    Image(systemName: "play.circle.fill")
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
+            }
+            
+            // 指法图
+            HStack(spacing: 4) {
+                ForEach(0..<6, id: \.self) { stringIndex in
+                    let value = fingering[stringIndex]
+                    Text(fingeringDisplayText(value))
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .frame(width: 24, height: 24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                        )
+                }
+            }
+            
+            // 操作按钮
+            HStack(spacing: 8) {
+                Button("编辑") {
+                    editChord(chordName)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                
+                Button("删除") {
+                    deleteChord(chordName)
+                }
+                .buttonStyle(.bordered)
+                .foregroundColor(.red)
+                .controlSize(.small)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isSelected ? Color.accentColor.opacity(0.1) : Color(NSColor.controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isSelected ? Color.accentColor : Color(NSColor.separatorColor), lineWidth: isSelected ? 2 : 1)
+                )
+        )
+        .onTapGesture {
+            toggleSelection(chordName)
+        }
+    }
+    
+    // MARK: - 计算属性
+    
+    private var filteredChords: [String] {
+        let chords = customChordManager.customChordNames
+        if searchText.isEmpty {
+            return chords
+        }
+        return chords.filter { $0.localizedCaseInsensitiveContains(searchText) }
+    }
+    
+    // MARK: - 操作方法
+    
+    private func showCreateChord() {
+        // 这里可以打开创建和弦的界面
+        // 暂时使用简单的实现
+        let createView = CustomChordCreatorView()
+        if NSApplication.shared.keyWindow != nil {
+            let hostingController = NSHostingController(rootView: createView.environmentObject(appData).environmentObject(chordPlayer).environmentObject(keyboardHandler))
+            let windowController = NSWindowController(window: NSWindow(contentViewController: hostingController))
+            windowController.showWindow(nil as Any?)
+        }
+    }
+    
+    private func playChord(_ chordName: String) {
+        
+        if let pattern = appData.patternLibrary?[appData.performanceConfig.timeSignature]?.first {
+            chordPlayer.playChord(
+                chordName: chordName,
+                pattern: pattern,
+                tempo: appData.performanceConfig.tempo,
+                key: appData.performanceConfig.key,
+                capo: 0,
+                velocity: 100,
+                duration: 1.0
+            )
+        }
+    }
+    
+    private func toggleSelection(_ chordName: String) {
+        if selectedChords.contains(chordName) {
+            selectedChords.remove(chordName)
+        } else {
+            selectedChords.insert(chordName)
+        }
+    }
+    
+    private func editSelectedChord() {
+        guard let chordName = selectedChords.first else { return }
+        editChord(chordName)
+    }
+    
+    private func editChord(_ chordName: String) {
+        editingChordName = chordName
+        editingFingering = customChordManager.customChords[chordName] ?? []
+        showingEditSheet = true
+    }
+    
+    private func deleteChord(_ chordName: String) {
+        customChordManager.deleteChord(name: chordName)
+        selectedChords.remove(chordName)
+    }
+    
+    private func deleteSelectedChords() {
+        for chordName in selectedChords {
+            customChordManager.deleteChord(name: chordName)
+        }
+        selectedChords.removeAll()
+    }
+    
+    private func fingeringDisplayText(_ value: StringOrInt) -> String {
+        switch value {
+        case .string("x"):
+            return "×"
+        case .int(let fret):
+            return "\(fret)"
+        case .string(let s):
+            return s
+        }
+    }
+}
+
+// MARK: - 和弦编辑器
+struct CustomChordEditorView: View {
+    @Environment(\.dismiss) var dismiss
+    @StateObject private var customChordManager = CustomChordManager.shared
+    
+    let chordName: String
+    @State private var fingering: [StringOrInt]
+    
+    init(chordName: String, initialFingering: [StringOrInt]) {
+        self.chordName = chordName
+        self._fingering = State(initialValue: initialFingering)
+    }
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                Text("编辑和弦: \(chordName)")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                FretboardEditor(fingering: $fingering)
+                
+                HStack(spacing: 12) {
+                    Button("取消", role: .cancel) {
+                        dismiss()
+                    }
+                    .buttonStyle(.bordered)
+                    
+                    Spacer()
+                    
+                    Button("保存") {
+                        customChordManager.updateChord(name: chordName, fingering: fingering)
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(24)
+            .frame(minWidth: 500, minHeight: 400)
+        }
+    }
+}
+
+// MARK: - 预览
+struct CustomChordLibraryView_Previews: PreviewProvider {
+    static var previews: some View {
+        CustomChordLibraryView()
+            .environmentObject(AppData())
+    }
+}
