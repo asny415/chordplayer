@@ -93,7 +93,6 @@ class PresetManager: ObservableObject {
     /// 加载Preset并设置为当前活跃
     func loadPreset(_ preset: Preset) -> (PerformanceConfig, AppConfig) {
         currentPreset = preset
-        saveCurrentPreset()
         
         print("[PresetManager] ✅ Loaded preset: \(preset.name)")
         return (preset.performanceConfig, preset.appConfig)
@@ -119,7 +118,7 @@ class PresetManager: ObservableObject {
         
         // 保存到文件
         savePresetsToFile()
-        saveCurrentPreset()
+        
         
         print("[PresetManager] ✅ Created preset: \(name)")
         return newPreset
@@ -149,7 +148,7 @@ class PresetManager: ObservableObject {
         }
         
         // 保存当前Preset状态
-        saveCurrentPreset()
+        
     }
     
     /// 删除Preset
@@ -183,7 +182,7 @@ class PresetManager: ObservableObject {
                 currentPreset = presets.first // Set to the first remaining preset
                 print("[PresetManager] ✅ Deleted current preset, set first remaining as active.")
             }
-            saveCurrentPreset() // Save the new current preset state
+             // Save the new current preset state
         } else {
             // Case 3: Deleted preset was not the current active one, no change to currentPreset needed
             print("[PresetManager] ✅ Deleted preset: \(presetName)")
@@ -213,7 +212,7 @@ class PresetManager: ObservableObject {
         if currentPreset?.id == preset.id {
             currentPreset?.name = newName
             currentPreset?.updatedAt = Date()
-            saveCurrentPreset()
+            
         }
         print("[PresetManager] ✅ Renamed preset '\(preset.name)' to '\(newName)'")
     }
@@ -273,36 +272,13 @@ class PresetManager: ObservableObject {
     
     /// 确保始终有一个活跃的Preset
     private func ensureActivePreset() {
-        // 1. Try to load the last saved current preset from file
-        if let savedCurrent = loadCurrentPreset() {
-            // 2. Check if this saved preset exists in our loaded 'presets' array
-            if let foundPreset = presets.first(where: { $0.id == savedCurrent.id }) {
-                currentPreset = foundPreset
-                print("[PresetManager] ✅ Set current preset to last saved: \(foundPreset.name)")
-                saveCurrentPreset() // Save to ensure consistency after setting
-                return // Found and set, so we're done
-            } else {
-                print("[PresetManager] ⚠️ Last saved current preset not found in loaded presets. Defaulting to first preset.")
-            }
-        } else {
-            print("[PresetManager] ⚠️ No last saved current preset found. Defaulting to first preset.")
-        }
-
-        // 3. If no valid saved current preset, default to the first preset in the 'presets' array
-        //    'presets' is guaranteed to have at least one element due to loadPresets() changes.
         if let firstPreset = presets.first {
             currentPreset = firstPreset
             print("[PresetManager] ✅ Set current preset to first available: \(firstPreset.name)")
         } else {
-            // This case should ideally not happen after loadPresets() ensures 'presets' is not empty
-            print("[PresetManager] ❌ Error: 'presets' array is unexpectedly empty after loadPresets().")
-            // As a fallback, create an unnamed preset, though this indicates a deeper issue.
             currentPreset = createUnnamedPreset()
             print("[PresetManager] ✅ Fallback: Created and set new unnamed preset.")
         }
-
-        // Always save the current preset after ensuring it's set
-        saveCurrentPreset()
     }
     
     /// 保存"未命名"Preset到文件
@@ -355,28 +331,9 @@ class PresetManager: ObservableObject {
         }
     }
     
-    private func saveCurrentPreset() {
-        guard let currentPreset = currentPreset else { return }
-        
-        do {
-            let data = try JSONEncoder().encode(currentPreset)
-            let currentPresetFile = presetsDirectory.appendingPathComponent("current_preset.json")
-            try data.write(to: currentPresetFile)
-        } catch {
-            print("[PresetManager] ❌ Failed to save current preset: \(error)")
-        }
-    }
     
-    private func loadCurrentPreset() -> Preset? {
-        let currentPresetFile = presetsDirectory.appendingPathComponent("current_preset.json")
-        do {
-            let data = try Data(contentsOf: currentPresetFile)
-            return try JSONDecoder().decode(Preset.self, from: data)
-        } catch {
-            print("[PresetManager] ❌ Failed to load current preset from file: \(error)")
-            return nil
-        }
-    }
+    
+    
     
     // MARK: - 查询方法
     
@@ -436,7 +393,7 @@ class PresetManager: ObservableObject {
         presets.removeAll()
         currentPreset = nil
         savePresetsToFile()
-        saveCurrentPreset()
+        
         print("[PresetManager] ✅ Cleared all presets")
     }
 }
