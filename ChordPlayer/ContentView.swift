@@ -1,103 +1,80 @@
+
 import SwiftUI
 import CoreMIDI
-
-// MARK: - Main Content View
 
 struct ContentView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     @EnvironmentObject var metronome: Metronome
 
-    @State private var activeGroupId: UUID? = nil // This is the corrected line
-
     @Binding var showCustomChordCreatorFromMenu: Bool
     @Binding var showCustomChordManagerFromMenu: Bool
-
-    init(showCustomChordCreatorFromMenu: Binding<Bool>, showCustomChordManagerFromMenu: Binding<Bool>) {
-        self._showCustomChordCreatorFromMenu = showCustomChordCreatorFromMenu
-        self._showCustomChordManagerFromMenu = showCustomChordManagerFromMenu
-    }
+    @Binding var showAddDrumPatternSheet: Bool
 
     var body: some View {
         NavigationSplitView {
-            // MARK: - Column 1: Sidebar for Presets
             PresetSidebar()
                 .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 400)
-
-        } content: {
-            // MARK: - Column 2: Preset Workspace (Global Controls + Group List)
-            PresetWorkspaceView(activeGroupId: $activeGroupId) // Corrected usage
-                .navigationSplitViewColumnWidth(min: 400, ideal: 450, max: 600)
-
         } detail: {
-            // MARK: - Column 3: Group Config Panel (Inspector)
-            GroupConfigPanelView(activeGroupId: $activeGroupId) // Corrected usage
+            PresetWorkspaceView()
         }
         .preferredColorScheme(.dark)
-        .frame(minWidth: 1200, minHeight: 700)
+        .frame(minWidth: 900, minHeight: 600)
         .onAppear(perform: setupInitialState)
         .sheet(isPresented: $showCustomChordCreatorFromMenu) {
             CustomChordCreatorView()
-                .environmentObject(appData)
-                .environmentObject(metronome)
-                .environmentObject(keyboardHandler)
         }
         .sheet(isPresented: $showCustomChordManagerFromMenu) {
             CustomChordLibraryView()
-                .environmentObject(appData)
-                .environmentObject(metronome)
+        }
+        .sheet(isPresented: $showAddDrumPatternSheet) {
+            AddDrumPatternSheetView()
         }
     }
 
     private func setupInitialState() {
         DispatchQueue.main.async {
-            keyboardHandler.currentTimeSignature = appData.performanceConfig.timeSignature
-            keyboardHandler.currentTempo = appData.performanceConfig.tempo
-
-            let parts = appData.performanceConfig.timeSignature.split(separator: "/").map(String.init)
-            if parts.count == 2, let num = Int(parts[0]), let den = Int(parts[1]) {
-                metronome.timeSignatureNumerator = num
-                metronome.timeSignatureDenominator = den
-            }
-            metronome.tempo = appData.performanceConfig.tempo
+            keyboardHandler.updateWithNewConfig(appData.performanceConfig)
+            metronome.update(from: appData.performanceConfig)
         }
     }
 }
 
-// MARK: - Preset Sidebar View
 private struct PresetSidebar: View {
     @EnvironmentObject var appData: AppData
-    @EnvironmentObject var presetManager: PresetManager // Changed from @StateObject
-    @State private var editingPresetId: UUID? // New state for inline editing
+    @EnvironmentObject var presetManager: PresetManager
+    @State private var editingPresetId: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             List(selection: .constant(presetManager.currentPreset?.id)) {
                 Section(header: Text("content_view_presets_section_header")) {
                     ForEach(presetManager.presets) { preset in
-                        PresetRow(preset: preset,
-                                  isCurrent: preset.id == presetManager.currentPreset?.id,
-                                  onSelect: { appData.loadPreset(preset) },
-                                  isEditing: .constant(editingPresetId == preset.id),
-                                  onRename: { newName in
-                                      presetManager.renamePreset(preset, newName: newName)
-                                      editingPresetId = nil // Exit editing mode
-                                  },
-                                  onStartEditing: { presetId in
-                                      editingPresetId = presetId // Set editing mode for the double-clicked preset
-                                  })
+                        PresetRow(
+                            preset: preset,
+                            isCurrent: preset.id == presetManager.currentPreset?.id,
+                            onSelect: { appData.loadPreset(preset) },
+                            isEditing: .constant(editingPresetId == preset.id),
+                            onRename: { newName in
+                                presetManager.renamePreset(preset, newName: newName)
+                                editingPresetId = nil
+                            },
+                            onStartEditing: { presetId in
+                                editingPresetId = presetId
+                            }
+                        )
                     }
                 }
             }
             .listStyle(.sidebar)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        let newPresetName = String(localized: "content_view_new_preset_prefix") + Date().formatted(date: .numeric, time: .standard)
+                    Button(action: {                        
+                        let newPresetName = String(localized: "content_view_new_preset_prefix") + " \(Date().formatted(.dateTime.month().day().hour().minute().second()))"
                         if let newPreset = appData.createNewPreset(name: newPresetName) {
-                            editingPresetId = newPreset.id // Set editing mode for the new preset
+                            editingPresetId = newPreset.id
                         }
-                    } label: {
+                    }) {
                         Label("content_view_new_preset_button", systemImage: "plus.circle")
                     }
                 }
@@ -105,7 +82,6 @@ private struct PresetSidebar: View {
 
             Divider()
 
-            // Current Preset Status Footer
             VStack(alignment: .leading, spacing: 4) {
                 let current = presetManager.currentPresetOrUnnamed
                 let isUnnamed = presetManager.isUnnamedPreset(current)
@@ -125,20 +101,18 @@ private struct PresetSidebar: View {
     }
 }
 
-// MARK: - Preset Row
 private struct PresetRow: View {
     @EnvironmentObject var presetManager: PresetManager
     let preset: Preset
     let isCurrent: Bool
     let onSelect: () -> Void
-    @Binding var isEditing: Bool // New binding for editing state
-    let onRename: (String) -> Void // New closure for renaming
-    let onStartEditing: (UUID) -> Void // New closure to start editing from double-click
+    @Binding var isEditing: Bool
+    let onRename: (String) -> Void
+    let onStartEditing: (UUID) -> Void
 
     @State private var showingDeleteConfirmation = false
-    @State private var newName: String = "" // State for TextField
-
-    @FocusState private var isNameFieldFocused: Bool // For auto-focusing TextField
+    @State private var newName: String = ""
+    @FocusState private var isNameFieldFocused: Bool
 
     var body: some View {
         HStack {
@@ -148,45 +122,27 @@ private struct PresetRow: View {
                 if isEditing {
                     TextField("content_view_preset_name_placeholder", text: $newName, onCommit: {
                         onRename(newName)
-                        isNameFieldFocused = false // Resign focus on commit
+                        isNameFieldFocused = false
                     })
                     .textFieldStyle(.plain)
-                    .font(isCurrent ? .headline : .body)
-                    .focused($isNameFieldFocused) // Apply focus state
+                    .focused($isNameFieldFocused)
                     .onAppear {
-                        newName = preset.name // Initialize TextField with current name
-                        DispatchQueue.main.async { // Delay focus to ensure TextField is ready
-                            isNameFieldFocused = true
-                        }
-                    }
-                    .onChange(of: isEditing) { oldValue, newValue in
-                        if newValue { // If editing starts, focus the field
-                            DispatchQueue.main.async { // Delay focus to ensure TextField is ready
-                                isNameFieldFocused = true
-                            }
-                        }
+                        newName = preset.name
+                        isNameFieldFocused = true
                     }
                 } else {
                     Text(preset.name)
                         .fontWeight(isCurrent ? .bold : .regular)
                 }
                 if let desc = preset.description, !desc.isEmpty {
-                    Text(desc)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Text(desc).font(.caption).foregroundColor(.secondary)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .onTapGesture(perform: {
-            if !isEditing {
-                onSelect()
-            }
-        })
-        .highPriorityGesture(TapGesture(count: 2).onEnded { // Double tap to edit
-            onStartEditing(preset.id)
-        })
+        .onTapGesture { if !isEditing { onSelect() } }
+        .highPriorityGesture(TapGesture(count: 2).onEnded { onStartEditing(preset.id) })
         .contextMenu {
             Button(role: .destructive) {
                 showingDeleteConfirmation = true
@@ -196,37 +152,9 @@ private struct PresetRow: View {
         }
         .alert("content_view_delete_preset_alert_title", isPresented: $showingDeleteConfirmation) {
             Button("content_view_cancel_button", role: .cancel) { }
-            Button("content_view_delete_button", role: .destructive) {
-                _ = presetManager.deletePreset(preset)
-            }
+            Button("content_view_delete_button", role: .destructive) { _ = presetManager.deletePreset(preset) }
         } message: {
-            Text(String(format: "content_view_delete_preset_confirmation_message", arguments: [preset.name]))
+            Text(String(format: "content_view_delete_preset_confirmation_message", preset.name))
         }
-    }
-}
-
-// MARK: - Preview
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        // Creating a more robust preview environment
-        let midiManager = MidiManager()
-        let metronome = Metronome(midiManager: midiManager)
-        let appData = AppData()
-        let chordPlayer = ChordPlayer(midiManager: midiManager, metronome: metronome, appData: appData)
-        let drumPlayer = DrumPlayer(midiManager: midiManager, metronome: metronome, appData: appData)
-        let keyboardHandler = KeyboardHandler(midiManager: midiManager, metronome: metronome, chordPlayer: chordPlayer, drumPlayer: drumPlayer, appData: appData)
-
-        // Create dummy @State variables for the bindings
-        @State var showCustomChordCreator = false
-        @State var showCustomChordManager = false
-
-        return ContentView(showCustomChordCreatorFromMenu: $showCustomChordCreator, showCustomChordManagerFromMenu: $showCustomChordManager)
-            .environmentObject(appData)
-            .environmentObject(midiManager)
-            .environmentObject(metronome)
-            .environmentObject(chordPlayer)
-            .environmentObject(drumPlayer)
-            .environmentObject(keyboardHandler)
-            .environmentObject(PresetManager.shared)
     }
 }
