@@ -96,8 +96,6 @@ struct GroupConfigPanelView: View {
     
     @Binding var activeGroupId: UUID?
     
-    @State private var showChordEditSheet: Bool = false
-    @State private var editingChordName: String = ""
     @State private var showChordDiagramCreator: Bool = false
     @State private var capturingShortcutForChord: String? = nil
     @State private var showConflictAlert = false
@@ -108,7 +106,6 @@ struct GroupConfigPanelView: View {
     var body: some View {
         groupEditorView
             .padding()
-            .sheet(isPresented: $showChordEditSheet) { chordEditSheet }
             .sheet(isPresented: $showChordDiagramCreator) { chordDiagramCreatorSheet }
             .sheet(isPresented: $showChordLibrary) {
                 ChordLibraryView(
@@ -217,10 +214,6 @@ struct GroupConfigPanelView: View {
             isCapturingShortcut: capturingShortcutForChord == chordName
         )
         .contextMenu {
-            Button("group_config_panel_edit_details_context_menu") {
-                editingChordName = chordName
-                showChordEditSheet = true
-            }
             Button("group_config_panel_remove_from_group_context_menu", role: .destructive) {
                 let currentGroupId = groupBinding.wrappedValue.id
                 removeChord(from: currentGroupId, chordName: chordName)
@@ -229,27 +222,6 @@ struct GroupConfigPanelView: View {
     }
     
     // MARK: - Sheet Views
-    private var chordEditSheet: some View {
-        // Simplified for brevity, logic remains the same
-        if activeGroupId != nil {
-            let chordName = editingChordName
-            // This view should be built out more completely
-            return AnyView(
-                VStack {
-                    Text(String(format: "group_config_panel_edit_chord_sheet_title_format", arguments: [chordName])).font(.title)
-                    Text("group_config_panel_shortcut_editing_ui_placeholder")
-                    Spacer()
-                    HStack {
-                        Button("group_config_panel_sheet_cancel_button") { showChordEditSheet = false }
-                        Button("group_config_panel_sheet_save_button") { /* Save logic here */ showChordEditSheet = false }
-                    }
-                }.padding().frame(width: 400, height: 300)
-            )
-        } else {
-            return AnyView(EmptyView())
-        }
-    }
-    
     private var chordDiagramCreatorSheet: some View {
         ChordDiagramEditor(onSave: { name, def in
             appData.chordLibrary = appData.chordLibrary ?? [:]

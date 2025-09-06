@@ -110,11 +110,9 @@ class AppData: ObservableObject {
     
     /// 更新合并后的和弦库
     private func updateCombinedChordLibrary() {
-        print("[AppData] updateCombinedChordLibrary() called.") // Added print
         // 重新加载内置和弦库
         if let builtInChords = DataLoader.load(filename: "chords", as: ChordLibrary.self) {
             chordLibrary = customChordManager.combinedChordLibrary(with: builtInChords)
-            print("[AppData] ✅ Updated combined chord library. Custom chords count: \(customChordManager.customChords.count), Combined chord library count: \(chordLibrary?.count ?? 0)")
         }
     }
 

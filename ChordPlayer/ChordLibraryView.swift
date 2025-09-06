@@ -136,7 +136,6 @@ struct ChordLibraryView: View {
     }
 
     private var filteredChordLibrary: [String] {
-        print("ChordLibraryView filteredChordLibrary re-evaluated. appData.chordLibrary?.keys.count: \(appData.chordLibrary?.keys.count ?? 0)") // Added print
         let allChords = Array(appData.chordLibrary?.keys ?? [String: [StringOrInt]]().keys)
         var filteredChords = allChords
         
