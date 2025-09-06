@@ -59,6 +59,12 @@ class KeyboardHandler: ObservableObject {
                 if let index = self.appData.KEY_CYCLE.firstIndex(of: newConfig.key) {
                     self.currentKeyIndex = index
                 }
+                // NEW: Update activeGroupId when performanceConfig changes
+                if let firstGroup = newConfig.patternGroups.first {
+                    self.activeGroupId = firstGroup.id
+                } else {
+                    self.activeGroupId = nil
+                }
             }
             .store(in: &cancellables)
 
