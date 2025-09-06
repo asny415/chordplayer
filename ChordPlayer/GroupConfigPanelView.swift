@@ -105,8 +105,6 @@ struct GroupConfigPanelView: View {
     
     // State for the new Chord Library modal
     @State private var showChordLibrary = false
-    @State private var showCustomChordCreator = false
-
     var body: some View {
         groupEditorView
             .padding()
@@ -121,12 +119,6 @@ struct GroupConfigPanelView: View {
                     },
                     existingChordNames: Set(appData.performanceConfig.patternGroups.first(where: { $0.id == activeGroupId })?.chordAssignments.keys.map { $0 } ?? [])
                 )
-            }
-            .sheet(isPresented: $showCustomChordCreator) {
-                CustomChordCreatorView()
-                    .environmentObject(appData)
-                    .environmentObject(chordPlayer)
-                    .environmentObject(keyboardHandler)
             }
             .onAppear(perform: setupOnAppear)
             .onDisappear { keyboardHandler.onShortcutCaptured = nil }
@@ -192,10 +184,7 @@ struct GroupConfigPanelView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 
-                Button(action: { showCustomChordCreator = true }) {
-                    Label("创建自定义和弦", systemImage: "star.circle.fill")
-                }
-                .buttonStyle(.bordered)
+                
             }
             .padding(.top)
         }
