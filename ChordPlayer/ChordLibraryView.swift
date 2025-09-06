@@ -9,6 +9,8 @@ struct ChordLibraryView: View {
 
     /// Closure to execute when a chord is selected.
     let onAddChord: (String) -> Void
+    let existingChordNames: Set<String> // Chords already in the group when the dialog opened
+    @State private var sessionAddedChords: Set<String> // Chords added during this session of the dialog
 
     @State private var chordSearchText: String = ""
     @State private var selectedTab: ChordLibraryTab = .all
@@ -19,6 +21,12 @@ struct ChordLibraryView: View {
         case all = "全部"
         case builtIn = "内置"
         case custom = "自定义"
+    }
+
+    init(onAddChord: @escaping (String) -> Void, existingChordNames: Set<String>) {
+        self.onAddChord = onAddChord
+        self.existingChordNames = existingChordNames
+        _sessionAddedChords = State(initialValue: existingChordNames) // Initialize with existing chords
     }
 
     var body: some View {
@@ -79,7 +87,7 @@ struct ChordLibraryView: View {
                 }
                 .buttonStyle(.bordered)
                 
-                Button("取消", role: .cancel) { 
+                Button("完成") { 
                     dismiss() 
                 }
             }
@@ -103,9 +111,11 @@ struct ChordLibraryView: View {
 
     private func chordResultButton(chord: String) -> some View {
         let isCustomChord = appData.customChordManager.chordExists(name: chord)
+        let isAdded = sessionAddedChords.contains(chord)
         
         return Button(action: {
             onAddChord(chord)
+            sessionAddedChords.insert(chord) // Mark as added in this session
         }) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -126,17 +136,22 @@ struct ChordLibraryView: View {
                     .font(.caption).foregroundColor(.secondary)
                 }
                 Spacer()
-                Image(systemName: "plus.circle.fill")
-                    .foregroundColor(.accentColor)
+                if isAdded {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                } else {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.accentColor)
+                }
             }
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isCustomChord ? Color.orange.opacity(0.1) : Color(NSColor.controlBackgroundColor))
+                    .fill(isAdded ? Color.green.opacity(0.1) : (isCustomChord ? Color.orange.opacity(0.1) : Color(NSColor.controlBackgroundColor)))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isCustomChord ? Color.orange.opacity(0.3) : Color.clear, lineWidth: 1)
+                    .stroke(isAdded ? Color.green.opacity(0.5) : (isCustomChord ? Color.orange.opacity(0.3) : Color.clear), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -186,7 +201,7 @@ struct ChordLibraryView: View {
 
 struct ChordLibraryView_Previews: PreviewProvider {
     static var previews: some View {
-        ChordLibraryView(onAddChord: { name in print("Added \(name)") })
+        ChordLibraryView(onAddChord: { name in print("Added \(name)") }, existingChordNames: Set<String>())
             .environmentObject(AppData())
     }
 }

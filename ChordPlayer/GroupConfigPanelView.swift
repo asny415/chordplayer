@@ -113,12 +113,14 @@ struct GroupConfigPanelView: View {
             .sheet(isPresented: $showChordEditSheet) { chordEditSheet }
             .sheet(isPresented: $showChordDiagramCreator) { chordDiagramCreatorSheet }
             .sheet(isPresented: $showChordLibrary) {
-                ChordLibraryView { chordName in
-                    if let activeGroupId = activeGroupId {
-                        addChord(to: activeGroupId, chordName: chordName)
-                    }
-                    showChordLibrary = false // Dismiss after adding
-                }
+                ChordLibraryView(
+                    onAddChord: { chordName in
+                        if let activeGroupId = activeGroupId {
+                            addChord(to: activeGroupId, chordName: chordName)
+                        }
+                    },
+                    existingChordNames: Set(appData.performanceConfig.patternGroups.first(where: { $0.id == activeGroupId })?.chordAssignments.keys.map { $0 } ?? [])
+                )
             }
             .sheet(isPresented: $showCustomChordCreator) {
                 CustomChordCreatorView()
