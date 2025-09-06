@@ -33,7 +33,7 @@ struct ChordLibraryView: View {
 
             // Chord Grid
             ScrollView(.vertical) {
-                let results = filteredChordLibrary(prefix: chordSearchText)
+                let results = filteredChordLibrary
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], spacing: 12) {
                     ForEach(results, id: \.self) { chord in
                         chordResultButton(chord: chord)
@@ -135,13 +135,14 @@ struct ChordLibraryView: View {
         }
     }
 
-    private func filteredChordLibrary(prefix: String) -> [String] {
+    private var filteredChordLibrary: [String] {
+        print("ChordLibraryView filteredChordLibrary re-evaluated. appData.chordLibrary?.keys.count: \(appData.chordLibrary?.keys.count ?? 0)") // Added print
         let allChords = Array(appData.chordLibrary?.keys ?? [String: [StringOrInt]]().keys)
         var filteredChords = allChords
         
         // 根据搜索文本过滤
-        if !prefix.isEmpty {
-            filteredChords = filteredChords.filter { displayChordName(for: $0).localizedCaseInsensitiveContains(prefix) }
+        if !chordSearchText.isEmpty {
+            filteredChords = filteredChords.filter { displayChordName(for: $0).localizedCaseInsensitiveContains(chordSearchText) }
         }
         
         return filteredChords.sorted()

@@ -32,6 +32,8 @@ class AppData: ObservableObject {
     private let presetManager = PresetManager.shared
     private var cancellables = Set<AnyCancellable>()
 
+    private var customChordManagerCancellable: AnyCancellable? // New property
+
     init() {
         // 先设置常量
         self.KEY_CYCLE = [
@@ -68,7 +70,14 @@ class AppData: ObservableObject {
                 }
             }
             .store(in: &cancellables)
-    }
+        
+        // 监听自定义和弦变化并更新合并后的和弦库
+        customChordManagerCancellable = customChordManager.$customChords // Changed back to $customChords
+            .debounce(for: .seconds(0.1), scheduler: RunLoop.main) // Added debounce
+            .sink { [weak self] _ in
+                self?.updateCombinedChordLibrary()
+            }
+    } // End of init()
 
     // Load data files into libraries
     private func loadData() {
@@ -91,20 +100,21 @@ class AppData: ObservableObject {
         print("Loaded patternLibrary: \(String(describing: patternLibrary))")
         if let pl = patternLibrary { print("PatternLibrary keys: \(pl.keys.sorted().joined(separator: ", "))") }
         
-        // 监听自定义和弦变化并更新合并后的和弦库
-        customChordManager.$customChords
-            .sink { [weak self] _ in
-                self?.updateCombinedChordLibrary()
-            }
-            .store(in: &cancellables)
+        // This sink is now redundant and will be removed.
+        // customChordManager.objectWillChange
+        //     .sink { [weak self] _ in
+        //         self?.updateCombinedChordLibrary()
+        //     }
+        //     .store(in: &cancellables)
     }
     
     /// 更新合并后的和弦库
     private func updateCombinedChordLibrary() {
+        print("[AppData] updateCombinedChordLibrary() called.") // Added print
         // 重新加载内置和弦库
         if let builtInChords = DataLoader.load(filename: "chords", as: ChordLibrary.self) {
             chordLibrary = customChordManager.combinedChordLibrary(with: builtInChords)
-            print("[AppData] ✅ Updated combined chord library with \(customChordManager.customChords.count) custom chords")
+            print("[AppData] ✅ Updated combined chord library. Custom chords count: \(customChordManager.customChords.count), Combined chord library count: \(chordLibrary?.count ?? 0)")
         }
     }
 
