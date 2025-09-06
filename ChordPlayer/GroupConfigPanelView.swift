@@ -88,6 +88,31 @@ struct ChordButtonView: View {
     }
 }
 
+// MARK: - Add Chord Button View
+struct AddChordButtonView: View {
+    let action: () -> Void
+    @State private var isHovered: Bool = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 30))
+                    .foregroundColor(isHovered ? .blue : .gray)
+            }
+            .frame(minWidth: 100, minHeight: 70)
+            .background(Color(NSColor.controlBackgroundColor))
+            .foregroundColor(.primary)
+            .cornerRadius(10)
+            .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered in
+            isHovered = hovered
+        }
+    }
+}
+
 // MARK: - Main Panel View
 struct GroupConfigPanelView: View {
     @EnvironmentObject var appData: AppData
@@ -173,17 +198,6 @@ struct GroupConfigPanelView: View {
     private func chordManagementView(groupBinding: Binding<PatternGroup>) -> some View {
         Section(header: Text("已分配的和弦").font(.headline)) {
             assignedChordsView(groupBinding: groupBinding)
-            
-            // 和弦管理按钮组
-            HStack(spacing: 12) {
-                Button(action: { showChordLibrary = true }) {
-                    Label("从和弦库添加", systemImage: "plus.circle.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                
-                
-            }
-            .padding(.top)
         }
     }
     
@@ -196,6 +210,7 @@ struct GroupConfigPanelView: View {
                     chordName in
                     assignedChordButton(chordName: chordName, groupBinding: groupBinding)
                 }
+                AddChordButtonView(action: { showChordLibrary = true })
             }
         }
     }
