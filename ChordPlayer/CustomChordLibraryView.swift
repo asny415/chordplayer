@@ -18,7 +18,7 @@ struct CustomChordLibraryView: View {
     @State private var editingFingering: [StringOrInt] = []
     
     var body: some View {
-        NavigationView {
+        NavigationView { // Re-introducing NavigationView
             VStack(spacing: 0) {
                 // 标题栏
                 headerView
@@ -38,9 +38,11 @@ struct CustomChordLibraryView: View {
                 // 和弦网格
                 chordGrid
             }
-            .frame(minWidth: 600, idealWidth: 800, minHeight: 500, idealHeight: 700)
-            .background(Color(NSColor.windowBackgroundColor))
+            // Removed .frame(maxWidth: .infinity, maxHeight: .infinity) from VStack
+            // Removed .background(Color(NSColor.windowBackgroundColor)) from VStack
         }
+        .frame(minWidth: 600, idealWidth: 800, minHeight: 500, idealHeight: 700) // Apply frame to NavigationView
+        .background(Color(NSColor.windowBackgroundColor)) // Apply background to NavigationView
         .alert("删除和弦", isPresented: $showingDeleteAlert) {
             Button("取消", role: .cancel) { }
             Button("删除", role: .destructive) {
