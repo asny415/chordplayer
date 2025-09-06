@@ -32,16 +32,35 @@ struct ChordPlayerApp: App {
         _keyboardHandler = StateObject(wrappedValue: initialKeyboardHandler) // Assign KeyboardHandler
     }
 
+    @State private var showCustomChordCreatorFromMenu = false
+    @State private var showCustomChordManagerFromMenu = false
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(
+                showCustomChordCreatorFromMenu: $showCustomChordCreatorFromMenu,
+                showCustomChordManagerFromMenu: $showCustomChordManagerFromMenu
+            )
                 .environmentObject(appData)
                 .environmentObject(midiManager)
                 .environmentObject(metronome)
                 .environmentObject(chordPlayer)
                 .environmentObject(drumPlayer)
-                .environmentObject(keyboardHandler) // Add this
+                .environmentObject(keyboardHandler)
                 .environmentObject(PresetManager.shared)
+        }
+        .commands {
+            CommandGroup(after: .appSettings) {
+                Button("创建自定义和弦...") {
+                    showCustomChordCreatorFromMenu = true
+                }
+                .keyboardShortcut("N", modifiers: [.command, .shift])
+
+                Button("管理自定义和弦...") {
+                    showCustomChordManagerFromMenu = true
+                }
+                .keyboardShortcut("M", modifiers: [.command, .shift])
+            }
         }
     }
 }

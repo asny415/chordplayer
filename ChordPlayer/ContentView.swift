@@ -10,6 +10,14 @@ struct ContentView: View {
 
     @State private var activeGroupId: UUID? = nil // This is the corrected line
 
+    @Binding var showCustomChordCreatorFromMenu: Bool
+    @Binding var showCustomChordManagerFromMenu: Bool
+
+    init(showCustomChordCreatorFromMenu: Binding<Bool>, showCustomChordManagerFromMenu: Binding<Bool>) {
+        self._showCustomChordCreatorFromMenu = showCustomChordCreatorFromMenu
+        self._showCustomChordManagerFromMenu = showCustomChordManagerFromMenu
+    }
+
     var body: some View {
         NavigationSplitView {
             // MARK: - Column 1: Sidebar for Presets
@@ -28,6 +36,17 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .frame(minWidth: 1200, minHeight: 700)
         .onAppear(perform: setupInitialState)
+        .sheet(isPresented: $showCustomChordCreatorFromMenu) {
+            CustomChordCreatorView()
+                .environmentObject(appData)
+                .environmentObject(metronome)
+                .environmentObject(keyboardHandler)
+        }
+        .sheet(isPresented: $showCustomChordManagerFromMenu) {
+            CustomChordLibraryView()
+                .environmentObject(appData)
+                .environmentObject(metronome)
+        }
     }
 
     private func setupInitialState() {
@@ -197,7 +216,11 @@ struct ContentView_Previews: PreviewProvider {
         let drumPlayer = DrumPlayer(midiManager: midiManager, metronome: metronome, appData: appData)
         let keyboardHandler = KeyboardHandler(midiManager: midiManager, metronome: metronome, chordPlayer: chordPlayer, drumPlayer: drumPlayer, appData: appData)
 
-        return ContentView()
+        // Create dummy @State variables for the bindings
+        @State var showCustomChordCreator = false
+        @State var showCustomChordManager = false
+
+        return ContentView(showCustomChordCreatorFromMenu: $showCustomChordCreator, showCustomChordManagerFromMenu: $showCustomChordManager)
             .environmentObject(appData)
             .environmentObject(midiManager)
             .environmentObject(metronome)
