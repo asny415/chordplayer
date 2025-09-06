@@ -13,8 +13,6 @@ struct ChordLibraryView: View {
     @State private var sessionAddedChords: Set<String> // Chords added during this session of the dialog
 
     @State private var chordSearchText: String = ""
-    @State private var showingCustomChordCreator = false
-    @State private var showingCustomChordManager = false
 
     init(onAddChord: @escaping (String) -> Void, existingChordNames: Set<String>) {
         self.onAddChord = onAddChord
@@ -46,17 +44,6 @@ struct ChordLibraryView: View {
         }
         .frame(minWidth: 600, idealWidth: 700, minHeight: 500, idealHeight: 800)
         .background(Color(NSColor.windowBackgroundColor))
-        .sheet(isPresented: $showingCustomChordCreator) {
-            CustomChordCreatorView()
-                .environmentObject(appData)
-                .environmentObject(chordPlayer)
-                .environmentObject(keyboardHandler)
-        }
-        .sheet(isPresented: $showingCustomChordManager) {
-            CustomChordLibraryView()
-                .environmentObject(appData)
-                .environmentObject(chordPlayer)
-        }
     }
 
     private var headerView: some View {

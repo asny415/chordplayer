@@ -13,6 +13,7 @@ struct CustomChordLibraryView: View {
     @State private var selectedChords: Set<String> = []
     @State private var showingDeleteAlert = false
     @State private var showingEditSheet = false
+    @State private var showingCreateSheet = false // New state for creating new chord
     @State private var editingChordName: String = ""
     @State private var editingFingering: [StringOrInt] = []
     
@@ -53,6 +54,12 @@ struct CustomChordLibraryView: View {
                 chordName: editingChordName,
                 initialFingering: editingFingering
             )
+        }
+        .sheet(isPresented: $showingCreateSheet) {
+            CustomChordCreatorView()
+                .environmentObject(appData)
+                .environmentObject(chordPlayer)
+                .environmentObject(keyboardHandler)
         }
     }
     
@@ -136,15 +143,32 @@ struct CustomChordLibraryView: View {
     }
     
     private var chordGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: 200), spacing: 16)
-            ], spacing: 16) {
-                ForEach(filteredChords, id: \.self) { chordName in
-                    chordCard(chordName: chordName)
+        Group {
+            if filteredChords.isEmpty {
+                VStack {
+                    Spacer()
+                    Text("您还没有创建任何自定义和弦。")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                        .padding(.bottom, 5)
+                    Text("请通过菜单栏的 '文件' -> '创建自定义和弦...' 来添加。")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [
+                        GridItem(.adaptive(minimum: 200), spacing: 16)
+                    ], spacing: 16) {
+                        ForEach(filteredChords, id: \.self) { chordName in
+                            chordCard(chordName: chordName)
+                        }
+                    }
+                    .padding()
                 }
             }
-            .padding()
         }
     }
     
@@ -231,14 +255,7 @@ struct CustomChordLibraryView: View {
     // MARK: - 操作方法
     
     private func showCreateChord() {
-        // 这里可以打开创建和弦的界面
-        // 暂时使用简单的实现
-        let createView = CustomChordCreatorView()
-        if NSApplication.shared.keyWindow != nil {
-            let hostingController = NSHostingController(rootView: createView.environmentObject(appData).environmentObject(chordPlayer).environmentObject(keyboardHandler))
-            let windowController = NSWindowController(window: NSWindow(contentViewController: hostingController))
-            windowController.showWindow(nil as Any?)
-        }
+        showingCreateSheet = true
     }
     
     private func playChord(_ chordName: String) {
