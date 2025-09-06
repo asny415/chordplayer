@@ -13,15 +13,8 @@ struct ChordLibraryView: View {
     @State private var sessionAddedChords: Set<String> // Chords added during this session of the dialog
 
     @State private var chordSearchText: String = ""
-    @State private var selectedTab: ChordLibraryTab = .all
     @State private var showingCustomChordCreator = false
     @State private var showingCustomChordManager = false
-    
-    enum ChordLibraryTab: String, CaseIterable {
-        case all = "全部"
-        case builtIn = "内置"
-        case custom = "自定义"
-    }
 
     init(onAddChord: @escaping (String) -> Void, existingChordNames: Set<String>) {
         self.onAddChord = onAddChord
@@ -35,10 +28,6 @@ struct ChordLibraryView: View {
             headerView
 
             Divider()
-
-            // Tab Picker
-            tabPicker
-                .padding(.horizontal)
 
             // Search Bar
             searchBar
@@ -77,16 +66,6 @@ struct ChordLibraryView: View {
             Spacer()
             
             HStack(spacing: 12) {
-                Button("创建自定义和弦") {
-                    showingCustomChordCreator = true
-                }
-                .buttonStyle(.bordered)
-                
-                Button("管理自定义和弦") {
-                    showingCustomChordManager = true
-                }
-                .buttonStyle(.bordered)
-                
                 Button("完成") { 
                     dismiss() 
                 }
@@ -95,14 +74,7 @@ struct ChordLibraryView: View {
         .padding()
     }
     
-    private var tabPicker: some View {
-        Picker("和弦类型", selection: $selectedTab) {
-            ForEach(ChordLibraryTab.allCases, id: \.self) { tab in
-                Text(tab.rawValue).tag(tab)
-            }
-        }
-        .pickerStyle(.segmented)
-    }
+    
 
     private var searchBar: some View {
         TextField("chord_library_view_search_placeholder", text: $chordSearchText)
@@ -179,16 +151,6 @@ struct ChordLibraryView: View {
     private func filteredChordLibrary(prefix: String) -> [String] {
         let allChords = Array(appData.chordLibrary?.keys ?? [String: [StringOrInt]]().keys)
         var filteredChords = allChords
-        
-        // 根据选中的标签页过滤
-        switch selectedTab {
-        case .all:
-            filteredChords = allChords
-        case .builtIn:
-            filteredChords = allChords.filter { !appData.customChordManager.chordExists(name: $0) }
-        case .custom:
-            filteredChords = allChords.filter { appData.customChordManager.chordExists(name: $0) }
-        }
         
         // 根据搜索文本过滤
         if !prefix.isEmpty {
