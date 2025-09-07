@@ -427,19 +427,23 @@ private struct ChordCardView: View {
     }
 
     private func displayChordName(for chord: String) -> String {
-        let parts = chord.split(separator: "_")
-        guard parts.count >= 2 else { return chord }
+        // Handle names like "C_Sharp_Major", "A_Minor", "C_Sharp_7", etc.
+        let components = chord.split(separator: "_")
+        guard components.count >= 2 else { return chord.replacingOccurrences(of: "_Sharp", with: "#") }
 
-        let note = String(parts[0])
-        let quality = String(parts[1])
+        let quality = String(components.last!)
+        let noteParts = components.dropLast()
+        let noteRaw = noteParts.joined(separator: "_") // e.g. "C" or "C_Sharp"
+        let noteDisplay = noteRaw.replacingOccurrences(of: "_Sharp", with: "#")
 
         switch quality {
         case "Major":
-            return note
+            return noteDisplay
         case "Minor":
-            return note + "m"
+            return noteDisplay + "m"
         default:
-            return chord
+            // Full name: replace _Sharp -> # and remove other underscores so "C_Sharp_7" -> "C#7"
+            return chord.replacingOccurrences(of: "_Sharp", with: "#").replacingOccurrences(of: "_", with: "")
         }
     }
 }
@@ -486,19 +490,25 @@ private struct ChordProgressionView: View {
                                     .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 6))
                                     .offset(x: -8, y: 8)
                             } else {
-                                if parts.count >= 2 {
-                                    let letter = String(parts[0])
-                                    let quality = String(parts[1])
-                                    if letter.count == 1 {
+                                // parse note and quality robustly (note may be like "C_Sharp")
+                                let components = chord.split(separator: "_")
+                                if components.count >= 2 {
+                                    let quality = String(components.last!)
+                                    let noteParts = components.dropLast()
+                                    let noteRaw = noteParts.joined(separator: "_")
+                                    let noteDisplay = noteRaw.replacingOccurrences(of: "_Sharp", with: "#")
+
+                                    // only provide the default single-letter mapping for plain single-letter notes
+                                    if noteDisplay.count == 1 {
                                         if quality == "Major" {
-                                            Text(letter.uppercased())
+                                            Text(noteDisplay.uppercased())
                                                 .font(.caption2).bold()
                                                 .foregroundColor(.white)
                                                 .padding(.horizontal, 6).padding(.vertical, 3)
                                                 .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
                                                 .offset(x: -8, y: 8)
                                         } else if quality == "Minor" {
-                                            Text("⇧\(letter.uppercased())")
+                                            Text("⇧\(noteDisplay.uppercased())")
                                                 .font(.caption2).bold()
                                                 .foregroundColor(.white)
                                                 .padding(.horizontal, 6).padding(.vertical, 3)
