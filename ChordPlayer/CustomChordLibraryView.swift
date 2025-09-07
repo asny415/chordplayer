@@ -5,6 +5,7 @@ struct CustomChordLibraryView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var chordPlayer: ChordPlayer
     @EnvironmentObject var keyboardHandler: KeyboardHandler
+    @EnvironmentObject var midiManager: MidiManager
     @Environment(\.dismiss) var dismiss
     
     @StateObject private var customChordManager = CustomChordManager.shared
@@ -61,7 +62,7 @@ struct CustomChordLibraryView: View {
             CustomChordCreatorView()
                 .environmentObject(appData)
                 .environmentObject(chordPlayer)
-                .environmentObject(keyboardHandler)
+                .environmentObject(midiManager)
         }
     }
     
@@ -324,39 +325,63 @@ struct CustomChordEditorView: View {
     @StateObject private var customChordManager = CustomChordManager.shared
     
     let chordName: String
-    @State private var fingering: [StringOrInt]
+    
+    // States for the new FretboardView
+    @State private var frets: [Int]
+    @State private var fretPosition: Int = 1
+    
+    // Legacy state for saving, kept in sync
+    @State private var fingeringForSave: [StringOrInt]
     
     init(chordName: String, initialFingering: [StringOrInt]) {
         self.chordName = chordName
-        self._fingering = State(initialValue: initialFingering)
+        
+        // Initialize the states upon creation
+        let initialFrets = initialFingering.map { item -> Int in
+            switch item {
+            case .int(let fret):
+                return fret
+            default:
+                return -1 // "x" or other strings become -1
+            }
+        }
+        self._frets = State(initialValue: initialFrets)
+        self._fingeringForSave = State(initialValue: initialFingering)
     }
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                Text("编辑和弦: \(chordName)")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                FretboardEditor(fingering: $fingering)
-                
-                HStack(spacing: 12) {
-                    Button("取消", role: .cancel) {
-                        dismiss()
-                    }
-                    .buttonStyle(.bordered)
-                    
-                    Spacer()
-                    
-                    Button("保存") {
-                        customChordManager.updateChord(name: chordName, fingering: fingering)
-                        dismiss()
-                    }
-                    .buttonStyle(.borderedProminent)
+        VStack(spacing: 20) {
+            Text("编辑和弦: \(chordName)")
+                .font(.title2)
+                .fontWeight(.bold)
+            
+            // Use the new, modern FretboardView
+            FretboardView(frets: $frets, fretPosition: $fretPosition)
+            
+            Stepper("把位 (Fret Position): \(fretPosition)", value: $fretPosition, in: 1...15)
+            
+            HStack(spacing: 12) {
+                Button("取消", role: .cancel) {
+                    dismiss()
                 }
+                .buttonStyle(.bordered)
+                
+                Spacer()
+                
+                Button("保存") {
+                    customChordManager.updateChord(name: chordName, fingering: fingeringForSave)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .padding(24)
-            .frame(minWidth: 500, minHeight: 400)
+        }
+        .padding(24)
+        .frame(minWidth: 500, idealWidth: 600, minHeight: 600)
+        .onChange(of: frets) { newFrets in
+            // Keep the saving model in sync with the editor state
+            self.fingeringForSave = newFrets.map {
+                $0 < 0 ? .string("x") : .int($0)
+            }
         }
     }
 }

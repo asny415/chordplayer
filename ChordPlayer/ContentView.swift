@@ -6,6 +6,8 @@ struct ContentView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     @EnvironmentObject var metronome: Metronome
+    @EnvironmentObject var chordPlayer: ChordPlayer
+    @EnvironmentObject var midiManager: MidiManager
 
     @Binding var showCustomChordCreatorFromMenu: Bool
     @Binding var showCustomChordManagerFromMenu: Bool
@@ -23,6 +25,9 @@ struct ContentView: View {
         .onAppear(perform: setupInitialState)
     .sheet(isPresented: $showCustomChordCreatorFromMenu) {
             CustomChordCreatorView()
+                .environmentObject(appData)
+                .environmentObject(chordPlayer)
+                .environmentObject(midiManager)
         }
         .sheet(isPresented: $showCustomChordManagerFromMenu) {
             CustomChordLibraryView()

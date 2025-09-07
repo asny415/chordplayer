@@ -1,16 +1,25 @@
-
-
 import SwiftUI
 
 struct CustomChordCreatorView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var chordPlayer: ChordPlayer
+    @EnvironmentObject var midiManager: MidiManager
     @Environment(\.dismiss) var dismiss
     
     @StateObject private var customChordManager = CustomChordManager.shared
     
+    // --- State ---
     @State private var chordName: String = ""
-    @State private var fingering: [StringOrInt] = Array(repeating: .string("x"), count: 6)
+    // New state for the interactive fretboard, using simple integers.
+    // -1 = muted, 0 = open, >0 = fret number.
+    @State private var frets: [Int] = Array(repeating: -1, count: 6)
+    // New state to control the position/offset of the fretboard view.
+    @State private var fretPosition: Int = 1
+    
+    // This remains for saving/compatibility with the existing system.
+    // It's updated automatically when `frets` changes.
+    @State private var fingering: [StringOrInt] = []
+
     @State private var showingNameConflictAlert = false
     @State private var showingSaveSuccessAlert = false
     @State private var isPlaying = false
@@ -27,11 +36,14 @@ struct CustomChordCreatorView: View {
                         .padding(.horizontal, 24)
                         .padding(.top, 20)
                     
-                    FretboardEditor(fingering: $fingering)
-                        .padding(.horizontal, 24)
+                    // --- New Fretboard Implementation ---
+                    FretboardView(frets: $frets, fretPosition: $fretPosition)
                     
+                    Stepper("把位 (Fret Position): \(fretPosition)", value: $fretPosition, in: 1...15)
+                        .padding(.horizontal, 24)
+
                     if !hasValidFingering() {
-                        Text("和弦指法至少需要1个按弦音。")
+                        Text("和弦指法至少需要1个有效音（按品或空弦）。")
                             .font(.caption)
                             .foregroundColor(.red)
                             .padding(.horizontal, 24)
@@ -46,23 +58,31 @@ struct CustomChordCreatorView: View {
                 }
             }
         }
-        .frame(minWidth: 500, idealWidth: 600, minHeight: 500, idealHeight: 600)
+        .frame(minWidth: 500, idealWidth: 600, minHeight: 650, idealHeight: 700) // Increased height for new layout
         .background(Color(NSColor.windowBackgroundColor))
         .alert("和弦名称冲突", isPresented: $showingNameConflictAlert) {
             Button("取消", role: .cancel) { }
-            Button("覆盖") {
-                saveChord(overwrite: true)
-            }
+            Button("覆盖") { saveChord(overwrite: true) }
         } message: {
             Text("和弦名称 \"\(chordName)\" 已存在。是否要覆盖现有的和弦？")
         }
         .alert("保存成功", isPresented: $showingSaveSuccessAlert) {
-            Button("确定") {
-                dismiss()
-            }
+            Button("确定") { dismiss() }
         } message: {
             Text("自定义和弦 \"\(chordName)\" 已成功保存！")
         }
+        .onChange(of: frets) { newFrets in
+            // Synchronize the new `frets` array with the old `fingering` array
+            // to maintain compatibility with the saving mechanism.
+            self.fingering = newFrets.map { fret in
+                if fret < 0 {
+                    return .string("x")
+                } else {
+                    return .int(fret)
+                }
+            }
+        }
+        .onAppear(perform: clearAll) // Start with a clean slate
     }
     
     private var headerView: some View {
@@ -71,7 +91,7 @@ struct CustomChordCreatorView: View {
                 Text("创建自定义和弦")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text("使用指板编辑器创建您的专属和弦")
+                Text("使用可视化指板编辑器创建您的专属和弦")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -94,7 +114,7 @@ struct CustomChordCreatorView: View {
             }
             TextField("例如: C_Custom, Am7_Custom", text: $chordName)
                 .textFieldStyle(.roundedBorder)
-                .onChange(of: chordName) { _, newValue in
+                .onChange(of: chordName) { newValue in
                     if newValue.count > maxNameLength {
                         chordName = String(newValue.prefix(maxNameLength))
                     }
@@ -112,12 +132,10 @@ struct CustomChordCreatorView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("指法:").font(.caption).foregroundColor(.secondary)
                     HStack(spacing: 4) {
-                        ForEach(0..<6, id: \.self) {
-                            stringIndex in
-                            let value = fingering[stringIndex]
-                            Text(fingeringDisplayText(value))
+                        ForEach(0..<6, id: \.self) { stringIndex in
+                            Text(fingeringDisplayText(from: frets[stringIndex]))
                                 .font(.caption).fontWeight(.medium).foregroundColor(.primary)
-                                .frame(width: 24, height: 24)
+                                .frame(width: 28, height: 28)
                                 .background(RoundedRectangle(cornerRadius: 4).fill(Color(NSColor.controlBackgroundColor)))
                                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(NSColor.separatorColor), lineWidth: 1))
                         }
@@ -131,7 +149,7 @@ struct CustomChordCreatorView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(chordName.isEmpty || !hasValidFingering())
+                .disabled(!canSave())
             }
         }
         .padding()
@@ -146,75 +164,67 @@ struct CustomChordCreatorView: View {
         }
     }
     
+    // --- Updated Logic ---
+    
     private func hasValidFingering() -> Bool {
-        let frettedNotesCount = fingering.filter {
-            if case .int = $0 { return true } else { return false }
-        }.count
-        return frettedNotesCount >= 1 // Require at least 1 fretted notes for a valid chord
+        // A valid chord must have at least one sounding note (not muted).
+        return frets.contains { $0 >= 0 }
     }
     
     private func canSave() -> Bool {
-        return !chordName.isEmpty && chordName.count <= maxNameLength && hasValidFingering()
+        return !chordName.trimmingCharacters(in: .whitespaces).isEmpty && chordName.count <= maxNameLength && hasValidFingering()
     }
     
     private func clearAll() {
         chordName = ""
-        fingering = Array(repeating: .string("x"), count: 6)
+        frets = [0, 0, 0, 0, 0, 0] // Default to all open strings
+        fretPosition = 1
     }
     
     private func playChord() {
         if isPlaying {
-            chordPlayer.panic()
+            midiManager.sendPanic()
             isPlaying = false
         } else {
-            if let patternId = appData.performanceConfig.activePlayingPatternId,
-               let pattern = appData.patternLibrary?[appData.performanceConfig.timeSignature]?.first(where: { $0.id == patternId }) {
-                playChordWithPattern(chordDefinition: fingering, pattern: pattern)
-            } else {
-                chordPlayer.playChordDirectly(chordDefinition: fingering, key: appData.performanceConfig.key, capo: 0, velocity: 100, duration: 2.0)
-            }
+            let notesToPlay = MusicTheory.chordToMidiNotes(chordDefinition: fingering, tuning: MusicTheory.standardGuitarTuning)
+                .filter { $0 >= 0 } // Filter out muted strings
+
+            guard !notesToPlay.isEmpty else { return }
+
             isPlaying = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { isPlaying = false }
-        }
-    }
-    
-    private func playChordWithPattern(chordDefinition: [StringOrInt], pattern: GuitarPattern) {
-        let tempChordLibrary: ChordLibrary = [chordName: chordDefinition]
-        let originalChordLibrary = appData.chordLibrary
-        appData.chordLibrary = tempChordLibrary
-        
-        chordPlayer.playChord(
-            chordName: chordName,
-            pattern: pattern,
-            tempo: appData.performanceConfig.tempo,
-            key: appData.performanceConfig.key,
-            capo: 0,
-            velocity: 100,
-            duration: 2.0,
-            quantizationMode: .none,
-            drumClockInfo: (false, 0, 0)
-        )
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            appData.chordLibrary = originalChordLibrary
+            
+            for note in notesToPlay {
+                midiManager.sendNoteOn(note: UInt8(note), velocity: 100)
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                if isPlaying { // Only stop if it's still in the playing state
+                    for note in notesToPlay {
+                        midiManager.sendNoteOff(note: UInt8(note), velocity: 100)
+                    }
+                    isPlaying = false
+                }
+            }
         }
     }
     
     private func saveChord(overwrite: Bool) {
-        guard canSave() else { return }
-        if customChordManager.chordExists(name: chordName) && !overwrite {
+        let trimmedName = chordName.trimmingCharacters(in: .whitespaces)
+        guard !trimmedName.isEmpty else { return }
+        
+        if customChordManager.chordExists(name: trimmedName) && !overwrite {
             showingNameConflictAlert = true
             return
         }
-        customChordManager.addChord(name: chordName, fingering: fingering)
+        customChordManager.addChord(name: trimmedName, fingering: self.fingering)
         showingSaveSuccessAlert = true
     }
     
-    private func fingeringDisplayText(_ value: StringOrInt) -> String {
-        switch value {
-        case .string("x"): return "×"
-        case .int(let fret): return "\(fret)"
-        case .string(let s): return s
+    private func fingeringDisplayText(from fret: Int) -> String {
+        if fret < 0 {
+            return "×"
+        } else {
+            return "\(fret)"
         }
     }
 }
