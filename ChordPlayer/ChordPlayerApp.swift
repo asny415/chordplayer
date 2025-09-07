@@ -35,13 +35,15 @@ struct ChordPlayerApp: App {
     @State private var showCustomChordCreatorFromMenu = false
     @State private var showCustomChordManagerFromMenu = false
     @State private var showAddDrumPatternSheet = false
+    @State private var showAddPlayingPatternSheet = false
 
     var body: some Scene {
         WindowGroup {
             ContentView(
                 showCustomChordCreatorFromMenu: $showCustomChordCreatorFromMenu,
                 showCustomChordManagerFromMenu: $showCustomChordManagerFromMenu,
-                showAddDrumPatternSheet: $showAddDrumPatternSheet
+                showAddDrumPatternSheet: $showAddDrumPatternSheet,
+                showAddPlayingPatternSheet: $showAddPlayingPatternSheet
             )
                 .environmentObject(appData)
                 .environmentObject(midiManager)
@@ -67,6 +69,11 @@ struct ChordPlayerApp: App {
                     showAddDrumPatternSheet = true
                 }
                 .keyboardShortcut("D", modifiers: [.command, .shift])
+                
+                Button("添加和弦指法...") {
+                    showAddPlayingPatternSheet = true
+                }
+                .keyboardShortcut("P", modifiers: [.command, .shift])
             }
         }
     }

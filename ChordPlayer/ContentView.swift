@@ -10,6 +10,7 @@ struct ContentView: View {
     @Binding var showCustomChordCreatorFromMenu: Bool
     @Binding var showCustomChordManagerFromMenu: Bool
     @Binding var showAddDrumPatternSheet: Bool
+    @Binding var showAddPlayingPatternSheet: Bool
 
     var body: some View {
         NavigationSplitView {
@@ -29,6 +30,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showAddDrumPatternSheet) {
             AddDrumPatternSheetView()
+        }
+        .sheet(isPresented: $showAddPlayingPatternSheet) {
+            AddPlayingPatternSheetView()
         }
     }
 
