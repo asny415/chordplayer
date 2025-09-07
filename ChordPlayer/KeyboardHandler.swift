@@ -55,6 +55,14 @@ class KeyboardHandler: ObservableObject {
     }
 
     private func handleKeyEvent(event: NSEvent) {
+        // First try to resolve as a chord shortcut (user-assigned or default)
+        if let shortcut = Shortcut.from(event: event) {
+            if let chord = resolveChordForShortcut(shortcut) {
+                playChord(chordName: chord)
+                return
+            }
+        }
+
         guard let characters = event.charactersIgnoringModifiers?.lowercased() else { return }
         let flags = event.modifierFlags
 
@@ -75,6 +83,37 @@ class KeyboardHandler: ObservableObject {
                 }
             }
         }
+    }
+
+    // Resolve a shortcut to a chord name.
+    private func resolveChordForShortcut(_ shortcut: Shortcut) -> String? {
+        // 1. Check current preset custom mappings
+        if let preset = PresetManager.shared.currentPreset {
+            for (chord, s) in preset.chordShortcuts {
+                if s == shortcut { return chord }
+            }
+        }
+
+        // 2. Fallback to default rule: Letter_Major -> lowercase letter (no shift) ; Letter_Minor -> Shift+Letter
+        guard let chords = appData.performanceConfig.chords as [String]? else { return nil }
+        for chord in chords {
+            let parts = chord.split(separator: "_")
+            if parts.count >= 2 {
+                let letter = String(parts[0])
+                let quality = String(parts[1])
+                if letter.count == 1 {
+                    let upper = letter.uppercased()
+                    if quality == "Major" && shortcut.modifiersShift == false && shortcut.key == upper {
+                        return chord
+                    }
+                    if quality == "Minor" && shortcut.modifiersShift == true && shortcut.key == upper {
+                        return chord
+                    }
+                }
+            }
+        }
+
+        return nil
     }
 
     private func handleCommandShortcuts(characters: String) {

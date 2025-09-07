@@ -5,6 +5,8 @@ struct Preset: Codable, Identifiable, Equatable {
     let id: UUID
     var name: String
     var description: String?
+    // map chordID (e.g. "A_Major") -> Shortcut (user assigned)
+    var chordShortcuts: [String: Shortcut]
     var performanceConfig: PerformanceConfig
     var appConfig: AppConfig
     var createdAt: Date
@@ -14,6 +16,7 @@ struct Preset: Codable, Identifiable, Equatable {
         self.id = id
         self.name = name
         self.description = description
+    self.chordShortcuts = [:]
         self.performanceConfig = performanceConfig
         self.appConfig = appConfig
         self.createdAt = Date()
@@ -138,13 +141,31 @@ class PresetManager: ObservableObject {
         )
         let defaultAppConfig = AppConfig(midiPortName: "IAC Driver Bus 1", note: 60, velocity: 64, duration: 4000, channel: 0)
         
-        return Preset(
+        var preset = Preset(
             id: isUnnamed ? unnamedPresetId : UUID(),
             name: isUnnamed ? String(localized: "preset_manager_unnamed_preset_name") : "Default Preset",
             description: isUnnamed ? String(localized: "preset_manager_unnamed_preset_description") : nil,
             performanceConfig: defaultConfig,
             appConfig: defaultAppConfig
         )
+        preset.chordShortcuts = [:]
+        return preset
+    }
+
+    // Assign or remove a shortcut for a chord in the currently loaded preset
+    func setShortcut(_ shortcut: Shortcut?, forChord chord: String) {
+        guard let current = currentPreset, let index = presets.firstIndex(where: { $0.id == current.id }) else { return }
+
+        if let s = shortcut {
+            presets[index].chordShortcuts[chord] = s
+        } else {
+            presets[index].chordShortcuts.removeValue(forKey: chord)
+        }
+
+        presets[index].updatedAt = Date()
+        // reflect change to currentPreset reference
+        currentPreset = presets[index]
+        scheduleAutoSave()
     }
     
     private func loadPresets() {

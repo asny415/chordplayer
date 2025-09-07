@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct PresetWorkspaceView: View {
     @EnvironmentObject var appData: AppData
@@ -365,6 +366,8 @@ private struct ChordProgressionView: View {
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     @State private var flashingChord: String? = nil
     @State private var showAddChordSheet: Bool = false
+    @State private var capturingChord: String? = nil
+    @State private var captureMonitor: Any? = nil
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -384,13 +387,79 @@ private struct ChordProgressionView: View {
                     Button(action: {
                         keyboardHandler.playChordByName(chord)
                     }) {
-                        ChordCardView(chord: chord, isFlashing: flashingChord == chord)
-                            .animation(.easeInOut(duration: 0.15), value: flashingChord)
+                        // local values
+                        let parts = chord.split(separator: "_")
+
+                        ZStack(alignment: .topTrailing) {
+                            ChordCardView(chord: chord, isFlashing: flashingChord == chord)
+                                .animation(.easeInOut(duration: 0.15), value: flashingChord)
+
+                            // Shortcut badge (custom or default)
+                            if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chord] {
+                                Text(s.displayText)
+                                    .font(.caption2).bold()
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6).padding(.vertical, 3)
+                                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 6))
+                                    .offset(x: -8, y: 8)
+                            } else {
+                                if parts.count >= 2 {
+                                    let letter = String(parts[0])
+                                    let quality = String(parts[1])
+                                    if letter.count == 1 {
+                                        if quality == "Major" {
+                                            Text(letter.lowercased())
+                                                .font(.caption2).bold()
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 6).padding(.vertical, 3)
+                                                .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                                .offset(x: -8, y: 8)
+                                        } else if quality == "Minor" {
+                                            Text("⇧\(letter.uppercased())")
+                                                .font(.caption2).bold()
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 6).padding(.vertical, 3)
+                                                .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                                .offset(x: -8, y: 8)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Assign Shortcut") {
+                            captureShortcutForChord(chord: chord)
+                        }
+                        Button("Remove Shortcut") {
+                            PresetManager.shared.setShortcut(nil, forChord: chord)
+                        }
+                    }
                 }
             }
         }
+        .overlay(
+            Group {
+                if capturingChord != nil {
+                    ZStack {
+                        Color.black.opacity(0.4)
+                        VStack(spacing: 12) {
+                            Text("Press a key to assign shortcut")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Text("Press Esc to cancel")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.85))
+                        }
+                        .padding(24)
+                        .background(Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .transition(.opacity)
+                }
+            }
+        )
+
         .onReceive(keyboardHandler.$lastPlayedChord) { chord in
             guard let chord = chord else { return }
             flashingChord = chord
@@ -402,6 +471,30 @@ private struct ChordProgressionView: View {
             ChordLibraryView(onAddChord: { chordName in
                 appData.performanceConfig.chords.append(chordName)
             }, existingChordNames: Set(appData.performanceConfig.chords))
+        }
+    }
+
+    private func captureShortcutForChord(chord: String) {
+        // start capturing
+        capturingChord = chord
+        // add local monitor to capture next keyDown
+        captureMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Escape key to cancel
+            if event.keyCode == 53 {
+                if let m = captureMonitor { NSEvent.removeMonitor(m) }
+                captureMonitor = nil
+                capturingChord = nil
+                return nil
+            }
+
+            if let s = Shortcut.from(event: event) {
+                PresetManager.shared.setShortcut(s, forChord: chord)
+            }
+
+            if let m = captureMonitor { NSEvent.removeMonitor(m) }
+            captureMonitor = nil
+            capturingChord = nil
+            return nil
         }
     }
 }
