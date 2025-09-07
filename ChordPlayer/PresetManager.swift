@@ -31,19 +31,22 @@ class PresetManager: ObservableObject {
     @Published var currentPreset: Preset?
     
     private let unnamedPresetId = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
-    private let presetsFile: URL
+    private let presetsDirectory: URL
     
     private var autoSaveTimer: Timer?
     private let autoSaveDelay: TimeInterval = 1.0
     
     private init() {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let presetsDirectory = documentsPath.appendingPathComponent("ChordPlayer")
-        presetsFile = presetsDirectory.appendingPathComponent("presets_v2.json")
-        
-        try? FileManager.default.createDirectory(at: presetsDirectory, withIntermediateDirectories: true)
-        
-        loadPresets()
+    let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    let baseDirectory = documentsPath.appendingPathComponent("ChordPlayer")
+    presetsDirectory = baseDirectory.appendingPathComponent("Presets")
+
+    try? FileManager.default.createDirectory(at: presetsDirectory, withIntermediateDirectories: true)
+
+    // If there's an old combined file, migrate it to per-preset files.
+    migrateCombinedFileIfNeeded(in: baseDirectory)
+
+    loadPresets()
         
         if presets.isEmpty {
             let defaultPreset = createDefaultPreset()
@@ -168,23 +171,78 @@ class PresetManager: ObservableObject {
         scheduleAutoSave()
     }
     
+    // MARK: - File storage helpers
+
+    private func presetFileURL(for id: UUID) -> URL {
+        return presetsDirectory.appendingPathComponent("preset_\(id.uuidString).json")
+    }
+
     private func loadPresets() {
         do {
-            let data = try Data(contentsOf: presetsFile)
-            self.presets = try JSONDecoder().decode([Preset].self, from: data)
+            let files = try FileManager.default.contentsOfDirectory(at: presetsDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+            var loaded: [Preset] = []
+            for file in files where file.pathExtension.lowercased() == "json" {
+                do {
+                    let data = try Data(contentsOf: file)
+                    let p = try JSONDecoder().decode(Preset.self, from: data)
+                    loaded.append(p)
+                } catch {
+                    print("[PresetManager] ⚠️ Failed to load preset file \(file.lastPathComponent): \(error)")
+                }
+            }
+            // Keep the on-disk order; if none, empty array.
+            self.presets = loaded
         } catch {
-            print("[PresetManager] ❌ Failed to load presets: \(error). Creating default.")
+            print("[PresetManager] ❌ Failed to read presets directory: \(error). Creating default.")
             self.presets = []
         }
     }
-    
+
     func savePresetsToFile() {
+        // Save each preset into its own file. Remove orphaned files that don't correspond to current presets.
         do {
-            let data = try JSONEncoder().encode(presets)
-            try data.write(to: presetsFile, options: .atomic)
-            print("[PresetManager] ✅ Presets saved to file.")
+            var expectedFiles = Set<String>()
+            for preset in presets {
+                let url = presetFileURL(for: preset.id)
+                let data = try JSONEncoder().encode(preset)
+                try data.write(to: url, options: .atomic)
+                expectedFiles.insert(url.lastPathComponent)
+            }
+
+            // Clean up any other JSON files in the presets directory that are not part of current presets
+            let existing = try FileManager.default.contentsOfDirectory(at: presetsDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+            for file in existing where file.pathExtension.lowercased() == "json" {
+                if !expectedFiles.contains(file.lastPathComponent) {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
+
+            print("[PresetManager] ✅ Presets saved to individual files. Count: \(presets.count)")
         } catch {
             print("[PresetManager] ❌ Failed to save presets: \(error)")
+        }
+    }
+
+    // If the old single-file format exists, migrate it into per-preset files and remove the old file.
+    private func migrateCombinedFileIfNeeded(in baseDirectory: URL) {
+        let combined = baseDirectory.appendingPathComponent("presets_v2.json")
+        guard FileManager.default.fileExists(atPath: combined.path) else { return }
+
+        do {
+            let data = try Data(contentsOf: combined)
+            let combinedPresets = try JSONDecoder().decode([Preset].self, from: data)
+            if !combinedPresets.isEmpty {
+                for preset in combinedPresets {
+                    let url = presetFileURL(for: preset.id)
+                    let pData = try JSONEncoder().encode(preset)
+                    try pData.write(to: url, options: .atomic)
+                }
+                // remove old combined file
+                try FileManager.default.removeItem(at: combined)
+                print("[PresetManager] 🔁 Migrated \(combinedPresets.count) presets from presets_v2.json to individual files.")
+            }
+        } catch {
+            print("[PresetManager] ⚠️ Migration failed: \(error)")
         }
     }
 }
