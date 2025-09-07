@@ -631,9 +631,9 @@ private struct ChordProgressionView: View {
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 6).padding(.vertical, 3)
                                     .background(badgeColor, in: RoundedRectangle(cornerRadius: 6))
-                                    .offset(x: -8, y: 8)
                             }
                             .buttonStyle(.plain)
+                            .offset(x: -8, y: 8)
                         }
                         // Tapping anywhere else on the card plays the chord
                         .onTapGesture {
