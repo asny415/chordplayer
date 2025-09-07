@@ -134,17 +134,17 @@ struct PlayingPatternView: View {
         let arrowSize = stringSpacing * 0.4
 
         if direction == .down {
-            path.move(to: CGPoint(x: x, y: startY))
-            path.addLine(to: CGPoint(x: x, y: endY))
-            path.move(to: CGPoint(x: x - arrowSize, y: endY - arrowSize))
-            path.addLine(to: CGPoint(x: x, y: endY))
-            path.addLine(to: CGPoint(x: x + arrowSize, y: endY - arrowSize))
-        } else { // Up
             path.move(to: CGPoint(x: x, y: endY))
             path.addLine(to: CGPoint(x: x, y: startY))
             path.move(to: CGPoint(x: x - arrowSize, y: startY + arrowSize))
             path.addLine(to: CGPoint(x: x, y: startY))
             path.addLine(to: CGPoint(x: x + arrowSize, y: startY + arrowSize))
+        } else { // Up
+            path.move(to: CGPoint(x: x, y: startY))
+            path.addLine(to: CGPoint(x: x, y: endY))
+            path.move(to: CGPoint(x: x - arrowSize, y: endY - arrowSize))
+            path.addLine(to: CGPoint(x: x, y: endY))
+            path.addLine(to: CGPoint(x: x + arrowSize, y: endY - arrowSize))
         }
         return path
     }
