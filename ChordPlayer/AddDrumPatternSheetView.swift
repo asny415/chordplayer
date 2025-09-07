@@ -5,7 +5,7 @@ struct AddDrumPatternSheetView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var selectedPatternIds: Set<String> = []
-    @State private var availablePatterns: [String: [(String, DrumPattern)]] = [:] // Store patterns grouped by category with their IDs
+    @State private var availablePatterns: [(id: String, pattern: DrumPattern)] = []
     
     var body: some View {
         VStack(spacing: 0) {
@@ -17,28 +17,38 @@ struct AddDrumPatternSheetView: View {
             Divider()
             
             List {
-                ForEach(availablePatterns.keys.sorted(), id: \.self) { category in
-                    Section(header: Text(category)) {
-                        ForEach(availablePatterns[category] ?? [], id: \.0) { patternId, drumPattern in // Use .0 for patternId as ID
-                            Button(action: {
-                                if selectedPatternIds.contains(patternId) {
-                                    selectedPatternIds.remove(patternId)
-                                } else {
-                                    selectedPatternIds.insert(patternId)
-                                }
-                            }) {
-                                HStack {
-                                    Text(drumPattern.displayName)
-                                    Spacer()
-                                    if selectedPatternIds.contains(patternId) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(.accentColor)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
+                ForEach(availablePatterns, id: \.id) { patternInfo in
+                    Button(action: {
+                        if selectedPatternIds.contains(patternInfo.id) {
+                            selectedPatternIds.remove(patternInfo.id)
+                        } else {
+                            selectedPatternIds.insert(patternInfo.id)
                         }
+                    }) {
+                        HStack(spacing: 15) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(patternInfo.pattern.displayName)
+                                    .font(.headline)
+                                DrumPatternGridView(
+                                    pattern: patternInfo.pattern,
+                                    timeSignature: appData.performanceConfig.timeSignature,
+                                    activeColor: .primary,
+                                    inactiveColor: .secondary
+                                )
+                                .frame(height: 40)
+                            }
+                            
+                            Spacer()
+                            
+                            if selectedPatternIds.contains(patternInfo.id) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                        .padding(.vertical, 8)
                     }
+                    .buttonStyle(.plain)
                 }
             }
             .onAppear(perform: loadAvailablePatterns)
@@ -58,24 +68,21 @@ struct AddDrumPatternSheetView: View {
             }
             .padding()
         }
-        .frame(minWidth: 400, minHeight: 300)
+        .frame(minWidth: 480, minHeight: 400)
     }
     
     private func loadAvailablePatterns() {
         guard let drumLibrary = appData.drumPatternLibrary else { return }
         
-        var patternsGroupedByCategory: [String: [(String, DrumPattern)]] = [:]
+        let currentTimeSignature = appData.performanceConfig.timeSignature
+        let patternsForCurrentTS = drumLibrary[currentTimeSignature] ?? [:]
+        
         let currentSelectedIds = Set(appData.performanceConfig.selectedDrumPatterns)
         
-        for (category, patternsById) in drumLibrary {
-            for (patternId, drumPattern) in patternsById {
-                // Only add patterns not already selected in the current preset
-                if !currentSelectedIds.contains(patternId) {
-                    patternsGroupedByCategory[category, default: []].append((patternId, drumPattern))
-                }
-            }
-        }
-        self.availablePatterns = patternsGroupedByCategory
+        self.availablePatterns = patternsForCurrentTS
+            .filter { !currentSelectedIds.contains($0.key) }
+            .map { (id: $0.key, pattern: $0.value) }
+            .sorted { $0.pattern.displayName < $1.pattern.displayName }
     }
     
     private func addSelectedPatterns() {

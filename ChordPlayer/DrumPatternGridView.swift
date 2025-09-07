@@ -34,11 +34,17 @@ struct DrumPatternGridView: View {
         self.totalSteps = (beats * 4) / (beatType / 4) // e.g. 4/4 -> 16 steps, 3/4 -> 12 steps
 
         var gridData = Array(repeating: Array(repeating: false, count: totalSteps), count: DrumInstrument.allCases.count)
-        var currentTime: Double = 0.0
+        var absoluteTime: Double = 0.0
 
-        for event in pattern.pattern {
+        for (index, event) in pattern.pattern.enumerated() {
             if let delayFraction = MusicTheory.parseDelay(delayString: event.delay) {
-                let timeStep = Int(round(currentTime * Double(totalSteps)))
+                // For the first event, delay is 0, so absoluteTime remains 0.
+                // For subsequent events, add the delay from the previous event.
+                if index > 0 { 
+                    absoluteTime += delayFraction
+                }
+                
+                let timeStep = Int(round(absoluteTime * Double(totalSteps)))
 
                 if timeStep < totalSteps {
                     for note in event.notes {
@@ -48,7 +54,6 @@ struct DrumPatternGridView: View {
                         }
                     }
                 }
-                currentTime += delayFraction
             }
         }
         self.grid = gridData
@@ -60,6 +65,12 @@ struct DrumPatternGridView: View {
             let instrumentHeight = size.height / CGFloat(DrumInstrument.allCases.count)
 
             // Draw grid lines
+            // Draw vertical line at x=0
+            var initialPath = Path()
+            initialPath.move(to: CGPoint(x: 0, y: 0))
+            initialPath.addLine(to: CGPoint(x: 0, y: size.height))
+            context.stroke(initialPath, with: .color(inactiveColor.opacity(0.2)))
+
             for i in 1..<totalSteps {
                 let x = CGFloat(i) * stepWidth
                 var path = Path()
@@ -88,5 +99,6 @@ struct DrumPatternGridView: View {
                 }
             }
         }
+        .border(inactiveColor.opacity(0.5), width: 1)
     }
 }
