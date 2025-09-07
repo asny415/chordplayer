@@ -233,32 +233,80 @@ private struct DrumPatternsView: View {
     }
 }
 
+private struct PlayingPatternCardView: View {
+    let index: Int
+    let pattern: GuitarPattern
+    let isActive: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("\(index + 1)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.white)
+                    .padding(5)
+                    .background(Color.black.opacity(0.3), in: Circle())
+                Spacer()
+            }
+            
+            Spacer()
+
+            Text(pattern.name)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+
+            // You can add more details here if needed, e.g., pattern.id or a summary of pattern.events
+            // Text(pattern.id)
+            //     .font(.caption)
+            //     .foregroundColor(.secondary)
+        }
+        .foregroundColor(.primary)
+        .padding(8)
+        .frame(width: 140, height: 80)
+        .background(isActive ? Material.thick : Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isActive ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isActive ? 2.5 : 1)
+        )
+    }
+}
+
 private struct PlayingPatternsView: View {
     @EnvironmentObject var appData: AppData
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack {
-                ForEach(appData.performanceConfig.selectedPlayingPatterns.indices, id: \.self) { index in
-                    let patternId = appData.performanceConfig.selectedPlayingPatterns[index]
-                    let isActive = appData.performanceConfig.activePlayingPatternId == patternId
-                    Button(action: {
-                        appData.performanceConfig.activePlayingPatternId = patternId
-                    }) {
-                        Text("\(index + 1): \(patternId)")
-                            .font(.subheadline)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .foregroundColor(isActive ? .white : .primary)
-                            .background(
-                                Capsule().fill(isActive ? Color.accentColor : Color.secondary.opacity(0.2))
+            HStack(spacing: 10) {
+                ForEach(Array(appData.performanceConfig.selectedPlayingPatterns.enumerated()), id: \.element) { index, patternId in
+                    if let details = findPlayingPatternDetails(for: patternId) {
+                        let isActive = appData.performanceConfig.activePlayingPatternId == patternId
+                        Button(action: {
+                            appData.performanceConfig.activePlayingPatternId = patternId
+                        }) {
+                            PlayingPatternCardView(
+                                index: index,
+                                pattern: details,
+                                isActive: isActive
                             )
+                        }
+                        .buttonStyle(.plain)
+                        .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activePlayingPatternId)
                     }
-                    .buttonStyle(.plain)
-                    .animation(.easeInOut(duration: 0.2), value: appData.performanceConfig.activePlayingPatternId)
                 }
             }
+            .padding(1)
         }
+    }
+    
+    private func findPlayingPatternDetails(for patternId: String) -> GuitarPattern? {
+        guard let library = appData.patternLibrary else { return nil }
+        for (_, patterns) in library {
+            if let pattern = patterns.first(where: { $0.id == patternId }) {
+                return pattern
+            }
+        }
+        return nil
     }
 }
 
