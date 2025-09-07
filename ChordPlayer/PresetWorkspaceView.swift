@@ -126,35 +126,84 @@ private struct GlobalSettingsView: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            DraggableValueCard(
-                label: "调性",
-                selection: $appData.performanceConfig.key,
-                options: appData.KEY_CYCLE
-            )
-            .frame(maxWidth: .infinity)
-
-            DraggableValueCard(
-                label: "拍号",
-                selection: $appData.performanceConfig.timeSignature,
-                options: appData.TIME_SIGNATURE_CYCLE
-            )
-            .frame(maxWidth: .infinity)
-
-            TempoDashboardCard(tempo: $appData.performanceConfig.tempo)
+            // Key selector with shortcut badge (- / =)
+            ZStack(alignment: .topTrailing) {
+                DraggableValueCard(
+                    label: "调性",
+                    selection: $appData.performanceConfig.key,
+                    options: appData.KEY_CYCLE
+                )
                 .frame(maxWidth: .infinity)
 
-            DraggableValueCard(
-                label: "量化",
-                selection: Binding<QuantizationMode>(
-                    get: { QuantizationMode(rawValue: appData.performanceConfig.quantize ?? "NONE") ?? .none },
-                    set: { appData.performanceConfig.quantize = $0.rawValue }
-                ),
-                options: QuantizationMode.allCases
-            )
-            .frame(maxWidth: .infinity)
-            
-            DrumMachineStatusCard() // Add this line
+                Text("-/=")
+                    .font(.caption2).bold()
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                    .offset(x: -8, y: 8)
+            }
+
+            // Time signature selector with shortcut badge (T)
+            ZStack(alignment: .topTrailing) {
+                DraggableValueCard(
+                    label: "拍号",
+                    selection: $appData.performanceConfig.timeSignature,
+                    options: appData.TIME_SIGNATURE_CYCLE
+                )
                 .frame(maxWidth: .infinity)
+
+                Text("T")
+                    .font(.caption2).bold()
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                    .offset(x: -8, y: 8)
+            }
+
+            // Tempo card with arrow badge (↑/↓)
+            ZStack(alignment: .topTrailing) {
+                TempoDashboardCard(tempo: $appData.performanceConfig.tempo)
+                    .frame(maxWidth: .infinity)
+
+                Text("↑/↓")
+                    .font(.caption2).bold()
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                    .offset(x: -8, y: 8)
+            }
+
+            // Quantize selector with badge (Q)
+            ZStack(alignment: .topTrailing) {
+                DraggableValueCard(
+                    label: "量化",
+                    selection: Binding<QuantizationMode>(
+                        get: { QuantizationMode(rawValue: appData.performanceConfig.quantize ?? "NONE") ?? .none },
+                        set: { appData.performanceConfig.quantize = $0.rawValue }
+                    ),
+                    options: QuantizationMode.allCases
+                )
+                .frame(maxWidth: .infinity)
+
+                Text("Q")
+                    .font(.caption2).bold()
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                    .offset(x: -8, y: 8)
+            }
+
+            ZStack(alignment: .topTrailing) {
+                DrumMachineStatusCard()
+                    .frame(maxWidth: .infinity)
+
+                Text("P")
+                    .font(.caption2).bold()
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                    .offset(x: -8, y: 8)
+            }
         }
         .padding(.vertical, 4)
     }
