@@ -126,6 +126,11 @@ class KeyboardHandler: ObservableObject {
         }
     }
 
+    // Public wrapper so UI code can request a chord to be played.
+    func playChordByName(_ chordName: String) {
+        playChord(chordName: chordName)
+    }
+
     deinit {
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)

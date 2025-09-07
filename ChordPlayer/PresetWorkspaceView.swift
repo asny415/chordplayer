@@ -381,8 +381,13 @@ private struct ChordProgressionView: View {
             
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                 ForEach(appData.performanceConfig.chords, id: \.self) { chord in
-                    ChordCardView(chord: chord, isFlashing: flashingChord == chord)
-                        .animation(.easeInOut(duration: 0.15), value: flashingChord)
+                    Button(action: {
+                        keyboardHandler.playChordByName(chord)
+                    }) {
+                        ChordCardView(chord: chord, isFlashing: flashingChord == chord)
+                            .animation(.easeInOut(duration: 0.15), value: flashingChord)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

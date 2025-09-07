@@ -130,7 +130,7 @@ class PresetManager: ObservableObject {
             timeSignature: "4/4",
             key: "C",
             quantize: QuantizationMode.measure.rawValue,
-            chords: ["Am", "G", "C", "F"],
+            chords: [],
             selectedDrumPatterns: ["ROCK_4_4_BASIC"],
             selectedPlayingPatterns: ["4-4-1-1"],
             activeDrumPatternId: "ROCK_4_4_BASIC",
