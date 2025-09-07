@@ -346,7 +346,7 @@ private struct ChordCardView: View {
 
     var body: some View {
         VStack(alignment: .center) {
-            Text(chord)
+            Text(displayChordName(for: chord))
                 .font(.title3.weight(.medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -358,6 +358,23 @@ private struct ChordCardView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(isFlashing ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isFlashing ? 2.5 : 1)
         )
+    }
+
+    private func displayChordName(for chord: String) -> String {
+        let parts = chord.split(separator: "_")
+        guard parts.count >= 2 else { return chord }
+
+        let note = String(parts[0])
+        let quality = String(parts[1])
+
+        switch quality {
+        case "Major":
+            return note
+        case "Minor":
+            return note + "m"
+        default:
+            return chord
+        }
     }
 }
 
@@ -408,7 +425,7 @@ private struct ChordProgressionView: View {
                                     let quality = String(parts[1])
                                     if letter.count == 1 {
                                         if quality == "Major" {
-                                            Text(letter.lowercased())
+                                            Text(letter.uppercased())
                                                 .font(.caption2).bold()
                                                 .foregroundColor(.white)
                                                 .padding(.horizontal, 6).padding(.vertical, 3)
