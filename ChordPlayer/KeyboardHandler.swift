@@ -59,8 +59,8 @@ class KeyboardHandler: ObservableObject {
     private func setupEventMonitor() {
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
-            
-            if let responder = NSApp.keyWindow?.firstResponder, 
+
+            if let responder = NSApp.keyWindow?.firstResponder,
                let view = responder as? NSView, view.isDescendant(of: NSApp.keyWindow?.contentView ?? NSView()) {
                 let className = String(describing: type(of: responder))
                 if className.contains("NSText") { return event }
@@ -68,13 +68,15 @@ class KeyboardHandler: ObservableObject {
 
             if self.isTextInputActive { return event }
 
-            self.handleKeyEvent(event: event)
-            return nil
+            // Only swallow the event when our handler actually handled it.
+            let handled = self.handleKeyEvent(event: event)
+            return handled ? nil : event
         }
     }
 
-    private func handleKeyEvent(event: NSEvent) {
-        guard let charactersRaw = event.charactersIgnoringModifiers else { return }
+    // Return true when the event was handled and should be consumed.
+    private func handleKeyEvent(event: NSEvent) -> Bool {
+        guard let charactersRaw = event.charactersIgnoringModifiers else { return false }
         let characters = charactersRaw.lowercased()
         let flags = event.modifierFlags
 
@@ -83,15 +85,15 @@ class KeyboardHandler: ObservableObject {
         if event.keyCode == 126 { // Up arrow
             appData.performanceConfig.tempo = min(240, appData.performanceConfig.tempo + 5)
             PresetManager.shared.scheduleAutoSave()
-            return
+            return true
         } else if event.keyCode == 125 { // Down arrow
             appData.performanceConfig.tempo = max(40, appData.performanceConfig.tempo - 5)
             PresetManager.shared.scheduleAutoSave()
-            return
+            return true
         }
 
         // Quantize toggle: 'q'
-        if characters == "q" && !flags.contains(.command) {
+    if characters == "q" && !flags.contains(.command) {
             let current = QuantizationMode(rawValue: appData.performanceConfig.quantize ?? "NONE") ?? .none
             let all = QuantizationMode.allCases
             if let idx = all.firstIndex(of: current) {
@@ -102,11 +104,11 @@ class KeyboardHandler: ObservableObject {
                 appData.performanceConfig.quantize = first.rawValue
                 PresetManager.shared.scheduleAutoSave()
             }
-            return
+            return true
         }
 
         // Time signature toggle: 't'
-        if characters == "t" && !flags.contains(.command) {
+    if characters == "t" && !flags.contains(.command) {
             let options = appData.TIME_SIGNATURE_CYCLE
             if let idx = options.firstIndex(of: appData.performanceConfig.timeSignature) {
                 let next = options[(idx + 1) % options.count]
@@ -116,13 +118,13 @@ class KeyboardHandler: ObservableObject {
                 appData.performanceConfig.timeSignature = first
                 PresetManager.shared.scheduleAutoSave()
             }
-            return
+            return true
         }
 
         // Key cycling: '-' previous, '=' next
-        if (characters == "-" || characters == "=") && !flags.contains(.command) {
+    if (characters == "-" || characters == "=") && !flags.contains(.command) {
             let cycle = appData.KEY_CYCLE
-            guard !cycle.isEmpty else { return }
+            guard !cycle.isEmpty else { return true }
             if let idx = cycle.firstIndex(of: appData.performanceConfig.key) {
                 let nextIdx: Int
                 if characters == "=" {
@@ -136,19 +138,17 @@ class KeyboardHandler: ObservableObject {
                 appData.performanceConfig.key = (characters == "=") ? cycle.first! : cycle.last!
                 PresetManager.shared.scheduleAutoSave()
             }
-            return
+            return true
         }
 
         // Command shortcuts (e.g., Cmd+number) handled separately
         if flags.contains(.command) {
-            handleCommandShortcuts(characters: characters)
-            return
+            return handleCommandShortcuts(characters: characters)
         }
 
         // Numeric shortcuts (1-9)
         if let number = Int(characters), number >= 1 && number <= 9 {
-            handleNumericShortcuts(number: number)
-            return
+            return handleNumericShortcuts(number: number)
         }
 
         // Space / simple letter actions
@@ -156,7 +156,7 @@ class KeyboardHandler: ObservableObject {
             if let firstChord = appData.performanceConfig.chords.first {
                 playChord(chordName: firstChord)
             }
-            return
+            return true
         }
 
         if characters == "p" {
@@ -165,16 +165,18 @@ class KeyboardHandler: ObservableObject {
             } else {
                 drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
             }
-            return
+            return true
         }
 
         // If none of the above, try chord shortcuts
         if let shortcut = Shortcut.from(event: event) {
             if let chord = resolveChordForShortcut(shortcut) {
                 playChord(chordName: chord)
-                return
+                return true
             }
         }
+
+        return false
     }
 
     // Resolve a shortcut to a chord name.
@@ -208,23 +210,28 @@ class KeyboardHandler: ObservableObject {
         return nil
     }
 
-    private func handleCommandShortcuts(characters: String) {
+    // Return true when a command-modified shortcut was handled (and should be consumed).
+    private func handleCommandShortcuts(characters: String) -> Bool {
         if let number = Int(characters), number >= 1 && number <= 9 {
             let index = number - 1
             if appData.performanceConfig.selectedDrumPatterns.indices.contains(index) {
                 let patternId = appData.performanceConfig.selectedDrumPatterns[index]
                 appData.performanceConfig.activeDrumPatternId = patternId
                 drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
+                return true
             }
         }
+        return false
     }
 
-    private func handleNumericShortcuts(number: Int) {
+    private func handleNumericShortcuts(number: Int) -> Bool {
         let index = number - 1
         if appData.performanceConfig.selectedPlayingPatterns.indices.contains(index) {
             let patternId = appData.performanceConfig.selectedPlayingPatterns[index]
             appData.performanceConfig.activePlayingPatternId = patternId
+            return true
         }
+        return false
     }
 
     private func playChord(chordName: String) {
