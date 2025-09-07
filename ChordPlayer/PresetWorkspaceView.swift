@@ -364,13 +364,14 @@ private struct ChordProgressionView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     @State private var flashingChord: String? = nil
+    @State private var showAddChordSheet: Bool = false
 
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
                 Text("和弦进行").font(.headline)
                 Spacer()
-                Button(action: { /* Add chord action */ }) {
+                Button(action: { showAddChordSheet = true }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
                         .foregroundColor(.accentColor)
@@ -391,6 +392,11 @@ private struct ChordProgressionView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 flashingChord = nil
             }
+        }
+        .sheet(isPresented: $showAddChordSheet) {
+            ChordLibraryView(onAddChord: { chordName in
+                appData.performanceConfig.chords.append(chordName)
+            }, existingChordNames: Set(appData.performanceConfig.chords))
         }
     }
 }
