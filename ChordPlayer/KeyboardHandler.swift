@@ -67,6 +67,12 @@ class KeyboardHandler: ObservableObject {
                 if let firstChord = appData.performanceConfig.chords.first {
                     playChord(chordName: firstChord)
                 }
+            } else if characters == "p" {
+                if drumPlayer.isPlaying {
+                    drumPlayer.stop()
+                } else {
+                    drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
+                }
             }
         }
     }

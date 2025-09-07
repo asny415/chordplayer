@@ -121,6 +121,7 @@ private struct DraggableValueCard<T: Equatable & CustomStringConvertible>: View 
 
 private struct GlobalSettingsView: View {
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var drumPlayer: DrumPlayer
     
     var body: some View {
         HStack(spacing: 12) {
@@ -150,8 +151,34 @@ private struct GlobalSettingsView: View {
                 options: QuantizationMode.allCases
             )
             .frame(maxWidth: .infinity)
+            
+            DrumMachineStatusCard() // Add this line
+                .frame(maxWidth: .infinity)
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct DrumMachineStatusCard: View {
+    @EnvironmentObject var drumPlayer: DrumPlayer
+    @EnvironmentObject var appData: AppData // Needed for tempo for playPattern
+
+    var body: some View {
+        DashboardCardView(
+            label: "鼓机", // "Drum Machine"
+            value: drumPlayer.isPlaying ? "运行中" : "停止" // "Running" : "Stopped"
+        )
+        .onTapGesture {
+            if drumPlayer.isPlaying {
+                drumPlayer.stop()
+            } else {
+                drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(drumPlayer.isPlaying ? Color.green : Color.secondary.opacity(0.2), lineWidth: drumPlayer.isPlaying ? 2.5 : 1)
+        )
     }
 }
 
