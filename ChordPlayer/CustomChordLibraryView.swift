@@ -1,5 +1,11 @@
 import SwiftUI
 
+// 1. Identifiable Data Model for the sheet
+fileprivate struct ChordEditorData: Identifiable {
+    let id: String // Chord name can be the ID
+    let fingering: [StringOrInt]
+}
+
 /// 自定义和弦管理界面
 struct CustomChordLibraryView: View {
     @EnvironmentObject var appData: AppData
@@ -13,37 +19,33 @@ struct CustomChordLibraryView: View {
     @State private var searchText: String = ""
     @State private var selectedChords: Set<String> = []
     @State private var showingDeleteAlert = false
-    @State private var showingEditSheet = false
-    @State private var showingCreateSheet = false // New state for creating new chord
-    @State private var editingChordName: String = ""
-    @State private var editingFingering: [StringOrInt] = []
+    
+    // 2. State now uses the identifiable item for sheet presentation
+    @State private var showingCreateSheet = false
+    @State private var chordToEdit: ChordEditorData? = nil
     
     var body: some View {
-        NavigationView { // Re-introducing NavigationView
-            VStack(spacing: 0) {
-                // 标题栏
-                headerView
-                
-                Divider()
-                
-                // 搜索栏
-                searchBar
-                    .padding()
-                
-                // 工具栏
-                toolbar
-                    .padding(.horizontal)
-                
-                Divider()
-                
-                // 和弦网格
-                chordGrid
-            }
-            // Removed .frame(maxWidth: .infinity, maxHeight: .infinity) from VStack
-            // Removed .background(Color(NSColor.windowBackgroundColor)) from VStack
+        VStack(spacing: 0) {
+            // 标题栏
+            headerView
+            
+            Divider()
+            
+            // 搜索栏
+            searchBar
+                .padding()
+            
+            // 工具栏
+            toolbar
+                .padding(.horizontal)
+            
+            Divider()
+            
+            // 和弦网格
+            chordGrid
         }
-        .frame(minWidth: 600, idealWidth: 800, minHeight: 500, idealHeight: 700) // Apply frame to NavigationView
-        .background(Color(NSColor.windowBackgroundColor)) // Apply background to NavigationView
+        .frame(minWidth: 600, idealWidth: 800, minHeight: 500, idealHeight: 700)
+        .background(Color(NSColor.windowBackgroundColor))
         .alert("删除和弦", isPresented: $showingDeleteAlert) {
             Button("取消", role: .cancel) { }
             Button("删除", role: .destructive) {
@@ -52,11 +54,15 @@ struct CustomChordLibraryView: View {
         } message: {
             Text("确定要删除选中的 \(selectedChords.count) 个和弦吗？此操作无法撤销。")
         }
-        .sheet(isPresented: $showingEditSheet) {
+        // 3. Replaced the old sheet modifier with the new .sheet(item:...) modifier
+        .sheet(item: $chordToEdit) { data in
             CustomChordEditorView(
-                chordName: editingChordName,
-                initialFingering: editingFingering
+                chordName: data.id,
+                initialFingering: data.fingering
             )
+            .environmentObject(appData)
+            .environmentObject(chordPlayer)
+            .environmentObject(midiManager)
         }
         .sheet(isPresented: $showingCreateSheet) {
             CustomChordCreatorView()
@@ -198,7 +204,7 @@ struct CustomChordLibraryView: View {
             // 指法图
             HStack(spacing: 4) {
                 ForEach(0..<6, id: \.self) { stringIndex in
-                    let value = fingering[stringIndex]
+                    let value = fingering.indices.contains(stringIndex) ? fingering[stringIndex] : .string("x")
                     Text(fingeringDisplayText(value))
                         .font(.caption)
                         .fontWeight(.medium)
@@ -289,10 +295,10 @@ struct CustomChordLibraryView: View {
         editChord(chordName)
     }
     
+    // 4. Updated editChord function to use the new state model
     private func editChord(_ chordName: String) {
-        editingChordName = chordName
-        editingFingering = customChordManager.customChords[chordName] ?? []
-        showingEditSheet = true
+        let fingering = customChordManager.customChords[chordName] ?? []
+        self.chordToEdit = ChordEditorData(id: chordName, fingering: fingering)
     }
     
     private func deleteChord(_ chordName: String) {
@@ -326,36 +332,48 @@ struct CustomChordEditorView: View {
     
     let chordName: String
     
-    // States for the new FretboardView
+    // State variables that are safely initialized before body is called.
     @State private var frets: [Int]
-    @State private var fretPosition: Int = 1
-    
-    // Legacy state for saving, kept in sync
+    @State private var fretPosition: Int
     @State private var fingeringForSave: [StringOrInt]
-    
+
     init(chordName: String, initialFingering: [StringOrInt]) {
         self.chordName = chordName
         
-        // Initialize the states upon creation
+        // --- Critical Fix: Initialize all state safely before the view renders. ---
+        
+        // 1. Convert the input [StringOrInt] to a clean [Int] array.
         let initialFrets = initialFingering.map { item -> Int in
             switch item {
-            case .int(let fret):
-                return fret
-            default:
-                return -1 // "x" or other strings become -1
+            case .int(let fret): return fret
+            default: return -1
             }
         }
-        self._frets = State(initialValue: initialFrets)
-        self._fingeringForSave = State(initialValue: initialFingering)
+        
+        // 2. Guarantee the array has exactly 6 elements to prevent crashes.
+        var correctedFrets = initialFrets
+        while correctedFrets.count < 6 { correctedFrets.append(-1) }
+        if correctedFrets.count > 6 { correctedFrets = Array(correctedFrets.prefix(6)) }
+        
+        // 3. Initialize the @State properties using the corrected, safe data.
+        self._frets = State(initialValue: correctedFrets)
+        self._fingeringForSave = State(initialValue: correctedFrets.map { $0 < 0 ? .string("x") : .int($0) })
+        
+        // 4. Calculate and set the initial fretboard position for better UX.
+        let nonZeroFrets = correctedFrets.filter { $0 > 0 }
+        if let minFret = nonZeroFrets.min(), minFret > 1 {
+            self._fretPosition = State(initialValue: minFret)
+        } else {
+            self._fretPosition = State(initialValue: 1)
+        }
     }
-    
+
     var body: some View {
         VStack(spacing: 20) {
             Text("编辑和弦: \(chordName)")
                 .font(.title2)
                 .fontWeight(.bold)
             
-            // Use the new, modern FretboardView
             FretboardView(frets: $frets, fretPosition: $fretPosition)
             
             Stepper("把位 (Fret Position): \(fretPosition)", value: $fretPosition, in: 1...15)
@@ -378,7 +396,7 @@ struct CustomChordEditorView: View {
         .padding(24)
         .frame(minWidth: 500, idealWidth: 600, minHeight: 600)
         .onChange(of: frets) { newFrets in
-            // Keep the saving model in sync with the editor state
+            // When the user interacts with the fretboard, keep the save model in sync.
             self.fingeringForSave = newFrets.map {
                 $0 < 0 ? .string("x") : .int($0)
             }
