@@ -60,13 +60,23 @@ class KeyboardHandler: ObservableObject {
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
 
+
+            // If the current first responder appears to be a text input control
+            // that belongs to the key window's view hierarchy, let the event
+            // pass through so the control can receive typing.
             if let responder = NSApp.keyWindow?.firstResponder,
-               let view = responder as? NSView, view.isDescendant(of: NSApp.keyWindow?.contentView ?? NSView()) {
-                let className = String(describing: type(of: responder))
-                if className.contains("NSText") { return event }
+               let view = responder as? NSView,
+               view.isDescendant(of: NSApp.keyWindow?.contentView ?? NSView()) {
+
+                // Common Cocoa text input classes
+                if responder is NSTextView || responder is NSTextField {
+                    return event
+                }
             }
 
-            if self.isTextInputActive { return event }
+            if self.isTextInputActive {
+                return event
+            }
 
             // Only swallow the event when our handler actually handled it.
             let handled = self.handleKeyEvent(event: event)
