@@ -1,68 +1,40 @@
 import SwiftUI
 
-// 1. Identifiable Data Model for the sheet
 fileprivate struct ChordEditorData: Identifiable {
-    let id: String // Chord name can be the ID
+    let id: String
     let fingering: [StringOrInt]
 }
 
-/// 自定义和弦管理界面
+/// A visually enhanced view for managing custom chords.
 struct CustomChordLibraryView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var chordPlayer: ChordPlayer
-    @EnvironmentObject var keyboardHandler: KeyboardHandler
     @EnvironmentObject var midiManager: MidiManager
     @Environment(\.dismiss) var dismiss
     
     @StateObject private var customChordManager = CustomChordManager.shared
     
     @State private var searchText: String = ""
-    @State private var selectedChords: Set<String> = []
-    @State private var showingDeleteAlert = false
-    
-    // 2. State now uses the identifiable item for sheet presentation
     @State private var showingCreateSheet = false
     @State private var chordToEdit: ChordEditorData? = nil
     
+    // For hover effects
+    @State private var hoveredChord: String? = nil
+    
     var body: some View {
         VStack(spacing: 0) {
-            // 标题栏
             headerView
-            
+            searchBar.padding([.horizontal, .bottom])
             Divider()
-            
-            // 搜索栏
-            searchBar
-                .padding()
-            
-            // 工具栏
-            toolbar
-                .padding(.horizontal)
-            
-            Divider()
-            
-            // 和弦网格
             chordGrid
         }
-        .frame(minWidth: 600, idealWidth: 800, minHeight: 500, idealHeight: 700)
-        .background(Color(NSColor.windowBackgroundColor))
-        .alert("删除和弦", isPresented: $showingDeleteAlert) {
-            Button("取消", role: .cancel) { }
-            Button("删除", role: .destructive) {
-                deleteSelectedChords()
-            }
-        } message: {
-            Text("确定要删除选中的 \(selectedChords.count) 个和弦吗？此操作无法撤销。")
-        }
-        // 3. Replaced the old sheet modifier with the new .sheet(item:...) modifier
+        .frame(minWidth: 700, idealWidth: 900, minHeight: 500, idealHeight: 700)
+        .background(Color.black.opacity(0.2))
         .sheet(item: $chordToEdit) { data in
-            CustomChordEditorView(
-                chordName: data.id,
-                initialFingering: data.fingering
-            )
-            .environmentObject(appData)
-            .environmentObject(chordPlayer)
-            .environmentObject(midiManager)
+            CustomChordEditorView(chordName: data.id, initialFingering: data.fingering)
+                .environmentObject(appData)
+                .environmentObject(chordPlayer)
+                .environmentObject(midiManager)
         }
         .sheet(isPresented: $showingCreateSheet) {
             CustomChordCreatorView()
@@ -72,267 +44,133 @@ struct CustomChordLibraryView: View {
         }
     }
     
-    // MARK: - 子视图
-    
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("自定义和弦管理")
-                    .font(.title2)
+                Text("自定义和弦库")
+                    .font(.largeTitle)
                     .fontWeight(.bold)
-                Text("管理您的自定义和弦库")
-                    .font(.caption)
+                Text("管理您的专属和弦收藏")
+                    .font(.title3)
                     .foregroundColor(.secondary)
             }
-            
             Spacer()
-            
-            HStack(spacing: 12) {
-                Button("创建新和弦") {
-                    showCreateChord()
-                }
+            Button("完成") { dismiss() }
                 .buttonStyle(.borderedProminent)
-                
-                Button("完成") {
-                    dismiss()
-                }
-                .buttonStyle(.bordered)
-            }
+                .controlSize(.large)
         }
         .padding(20)
     }
     
     private var searchBar: some View {
         HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.secondary)
-            
-            TextField("搜索和弦名称...", text: $searchText)
+            TextField("􀊫 搜索和弦...", text: $searchText)
                 .textFieldStyle(.plain)
+                .padding(10)
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(8)
             
-            if !searchText.isEmpty {
-                Button(action: { searchText = "" }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
+            Button(action: { showingCreateSheet = true }) {
+                Label("创建新和弦", systemImage: "plus")
             }
-        }
-        .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(NSColor.controlBackgroundColor))
-        )
-    }
-    
-    private var toolbar: some View {
-        HStack {
-            Text("\(filteredChords.count) 个和弦")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            
-            Spacer()
-            
-            if !selectedChords.isEmpty {
-                HStack(spacing: 8) {
-                    Button("编辑") {
-                        editSelectedChord()
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(selectedChords.count != 1)
-                    
-                    Button("删除") {
-                        showingDeleteAlert = true
-                    }
-                    .buttonStyle(.bordered)
-                    .foregroundColor(.red)
-                }
-            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .keyboardShortcut("n", modifiers: .command)
         }
     }
     
     private var chordGrid: some View {
-        Group {
-            if filteredChords.isEmpty {
-                VStack {
-                    Spacer()
-                    Text("您还没有创建任何自定义和弦。")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
-                        .padding(.bottom, 5)
-                    Text("请通过菜单栏的 '文件' -> '创建自定义和弦...' 来添加。")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: [
-                        GridItem(.adaptive(minimum: 200), spacing: 16)
-                    ], spacing: 16) {
-                        ForEach(filteredChords, id: \.self) { chordName in
-                            chordCard(chordName: chordName)
-                        }
-                    }
-                    .padding()
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 20)], spacing: 20) {
+                ForEach(customChordManager.customChordNames.filter { searchText.isEmpty ? true : $0.localizedCaseInsensitiveContains(searchText) }, id: \.self) { chordName in
+                    chordCard(chordName: chordName)
                 }
             }
+            .padding(20)
+            .animation(.default, value: customChordManager.customChordNames)
         }
     }
     
     private func chordCard(chordName: String) -> some View {
         let fingering = customChordManager.customChords[chordName] ?? []
-        let isSelected = selectedChords.contains(chordName)
+        let isHovered = hoveredChord == chordName
         
-        return VStack(spacing: 12) {
-            // 和弦名称
+        return VStack(spacing: 8) { // Reduced spacing
+            // Chord Name
+            Text(chordName)
+                .font(.headline) // Reduced font size
+                .fontWeight(.heavy)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            
+            // Use the existing, correct ChordDiagramView
+            ChordDiagramView(frets: fingering, color: .primary)
+                .frame(height: 80) // Reduced height
+            
+            // Action Buttons (Icon-only with tooltips)
             HStack {
-                Text(chordName)
-                    .font(.headline)
-                    .lineLimit(1)
+                Button(action: { playChord(chordName) }) {
+                    Image(systemName: "play.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.accentColor)
+                .help("试听")
                 
                 Spacer()
                 
-                Button(action: { playChord(chordName) }) {
-                    Image(systemName: "play.circle.fill")
-                        .foregroundColor(.accentColor)
+                Button(action: { editChord(chordName) }) {
+                    Image(systemName: "pencil")
                 }
                 .buttonStyle(.plain)
-            }
-            
-            // 指法图
-            HStack(spacing: 4) {
-                ForEach(0..<6, id: \.self) { stringIndex in
-                    let value = fingering.indices.contains(stringIndex) ? fingering[stringIndex] : .string("x")
-                    Text(fingeringDisplayText(value))
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.primary)
-                        .frame(width: 24, height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color(NSColor.controlBackgroundColor))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                        )
-                }
-            }
-            
-            // 操作按钮
-            HStack(spacing: 8) {
-                Button("编辑") {
-                    editChord(chordName)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .help("编辑")
                 
-                Button("删除") {
-                    deleteChord(chordName)
+                Button(action: { deleteChord(chordName) }) {
+                    Image(systemName: "trash")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
                 .foregroundColor(.red)
-                .controlSize(.small)
+                .help("删除")
+            }
+            .font(.body) // Reduced icon size
+        }
+        .padding(12) // Reduced padding
+        .background(Color(NSColor.windowBackgroundColor).opacity(isHovered ? 0.9 : 1.0))
+        .cornerRadius(16)
+        .shadow(radius: isHovered ? 8 : 2)
+        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .onHover { hovering in
+            withAnimation(.spring()) {
+                hoveredChord = hovering ? chordName : nil
             }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isSelected ? Color.accentColor.opacity(0.1) : Color(NSColor.controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(isSelected ? Color.accentColor : Color(NSColor.separatorColor), lineWidth: isSelected ? 2 : 1)
-                )
-        )
-        .onTapGesture {
-            toggleSelection(chordName)
-        }
-    }
-    
-    // MARK: - 计算属性
-    
-    private var filteredChords: [String] {
-        let chords = customChordManager.customChordNames
-        if searchText.isEmpty {
-            return chords
-        }
-        return chords.filter { $0.localizedCaseInsensitiveContains(searchText) }
-    }
-    
-    // MARK: - 操作方法
-    
-    private func showCreateChord() {
-        showingCreateSheet = true
     }
     
     private func playChord(_ chordName: String) {
-        
         if let pattern = appData.patternLibrary?[appData.performanceConfig.timeSignature]?.first {
-            chordPlayer.playChord(
-                chordName: chordName,
-                pattern: pattern,
-                tempo: appData.performanceConfig.tempo,
-                key: appData.performanceConfig.key,
-                capo: 0,
-                velocity: 100,
-                duration: 1.0
-            )
+            chordPlayer.playChord(chordName: chordName, pattern: pattern, tempo: appData.performanceConfig.tempo, key: appData.performanceConfig.key, capo: 0, velocity: 100, duration: 1.0)
         }
     }
     
-    private func toggleSelection(_ chordName: String) {
-        if selectedChords.contains(chordName) {
-            selectedChords.remove(chordName)
-        } else {
-            selectedChords.insert(chordName)
-        }
-    }
-    
-    private func editSelectedChord() {
-        guard let chordName = selectedChords.first else { return }
-        editChord(chordName)
-    }
-    
-    // 4. Updated editChord function to use the new state model
     private func editChord(_ chordName: String) {
         let fingering = customChordManager.customChords[chordName] ?? []
         self.chordToEdit = ChordEditorData(id: chordName, fingering: fingering)
     }
     
     private func deleteChord(_ chordName: String) {
-        customChordManager.deleteChord(name: chordName)
-        selectedChords.remove(chordName)
-    }
-    
-    private func deleteSelectedChords() {
-        for chordName in selectedChords {
+        withAnimation {
             customChordManager.deleteChord(name: chordName)
-        }
-        selectedChords.removeAll()
-    }
-    
-    private func fingeringDisplayText(_ value: StringOrInt) -> String {
-        switch value {
-        case .string("x"):
-            return "×"
-        case .int(let fret):
-            return "\(fret)"
-        case .string(let s):
-            return s
         }
     }
 }
 
-// MARK: - 和弦编辑器
+// MARK: - Chord Editor View (Restored)
 struct CustomChordEditorView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var customChordManager = CustomChordManager.shared
     
     let chordName: String
     
-    // State variables that are safely initialized before body is called.
     @State private var frets: [Int]
     @State private var fretPosition: Int
     @State private var fingeringForSave: [StringOrInt]
@@ -340,9 +178,6 @@ struct CustomChordEditorView: View {
     init(chordName: String, initialFingering: [StringOrInt]) {
         self.chordName = chordName
         
-        // --- Critical Fix: Initialize all state safely before the view renders. ---
-        
-        // 1. Convert the input [StringOrInt] to a clean [Int] array.
         let initialFrets = initialFingering.map { item -> Int in
             switch item {
             case .int(let fret): return fret
@@ -350,16 +185,13 @@ struct CustomChordEditorView: View {
             }
         }
         
-        // 2. Guarantee the array has exactly 6 elements to prevent crashes.
         var correctedFrets = initialFrets
         while correctedFrets.count < 6 { correctedFrets.append(-1) }
         if correctedFrets.count > 6 { correctedFrets = Array(correctedFrets.prefix(6)) }
         
-        // 3. Initialize the @State properties using the corrected, safe data.
         self._frets = State(initialValue: correctedFrets)
         self._fingeringForSave = State(initialValue: correctedFrets.map { $0 < 0 ? .string("x") : .int($0) })
         
-        // 4. Calculate and set the initial fretboard position for better UX.
         let nonZeroFrets = correctedFrets.filter { $0 > 0 }
         if let minFret = nonZeroFrets.min(), minFret > 1 {
             self._fretPosition = State(initialValue: minFret)
@@ -396,7 +228,6 @@ struct CustomChordEditorView: View {
         .padding(24)
         .frame(minWidth: 500, idealWidth: 600, minHeight: 600)
         .onChange(of: frets) { newFrets in
-            // When the user interacts with the fretboard, keep the save model in sync.
             self.fingeringForSave = newFrets.map {
                 $0 < 0 ? .string("x") : .int($0)
             }
@@ -404,10 +235,12 @@ struct CustomChordEditorView: View {
     }
 }
 
-// MARK: - 预览
+// MARK: - Preview Provider
 struct CustomChordLibraryView_Previews: PreviewProvider {
     static var previews: some View {
         CustomChordLibraryView()
             .environmentObject(AppData())
+            .environmentObject(MidiManager())
+            .environmentObject(ChordPlayer(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), appData: AppData()))
     }
 }
