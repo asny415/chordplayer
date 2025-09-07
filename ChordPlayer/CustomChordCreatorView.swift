@@ -30,6 +30,13 @@ struct CustomChordCreatorView: View {
                     FretboardEditor(fingering: $fingering)
                         .padding(.horizontal, 24)
                     
+                    if !hasValidFingering() {
+                        Text("和弦指法至少需要3个按弦音。")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 24)
+                    }
+                    
                     previewSection
                         .padding(.horizontal, 24)
                     
@@ -140,10 +147,10 @@ struct CustomChordCreatorView: View {
     }
     
     private func hasValidFingering() -> Bool {
-        return fingering.contains {
-            value in
-            if case .int = value { return true } else { return false }
-        }
+        let frettedNotesCount = fingering.filter {
+            if case .int = $0 { return true } else { return false }
+        }.count
+        return frettedNotesCount >= 3 // Require at least 3 fretted notes for a valid chord
     }
     
     private func canSave() -> Bool {

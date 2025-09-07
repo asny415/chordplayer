@@ -132,9 +132,9 @@ class PresetManager: ObservableObject {
             quantize: QuantizationMode.measure.rawValue,
             chords: ["Am", "G", "C", "F"],
             selectedDrumPatterns: ["ROCK_4_4_BASIC"],
-            selectedPlayingPatterns: ["ARPEGGIO_4_4_BASIC"],
+            selectedPlayingPatterns: ["4-4-1-1"],
             activeDrumPatternId: "ROCK_4_4_BASIC",
-            activePlayingPatternId: "ARPEGGIO_4_4_BASIC"
+            activePlayingPatternId: "4-4-1-1"
         )
         let defaultAppConfig = AppConfig(midiPortName: "IAC Driver Bus 1", note: 60, velocity: 64, duration: 4000, channel: 0)
         
