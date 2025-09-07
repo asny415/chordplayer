@@ -366,16 +366,23 @@ private struct PlayingPatternCardView: View {
     let index: Int
     let pattern: GuitarPattern
     let category: String
+    let timeSignature: String
     let isActive: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Spacer()
+            PlayingPatternView(
+                pattern: pattern,
+                timeSignature: timeSignature,
+                color: isActive ? .accentColor : .primary
+            )
+            .opacity(isActive ? 1.0 : 0.7)
+            .padding(.bottom, 4)
 
             HStack {
                 Text(pattern.name)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
+                    .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer()
             }
@@ -444,6 +451,7 @@ private struct PlayingPatternsView: View {
                                             index: index,
                                             pattern: details.pattern,
                                             category: details.category,
+                                            timeSignature: appData.performanceConfig.timeSignature,
                                             isActive: isActive
                                         )
 
