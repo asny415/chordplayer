@@ -455,6 +455,7 @@ private struct ChordProgressionView: View {
     @State private var showAddChordSheet: Bool = false
     @State private var capturingChord: String? = nil
     @State private var captureMonitor: Any? = nil
+    @State private var isHoveringAddButton: Bool = false
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -464,9 +465,16 @@ private struct ChordProgressionView: View {
                 Button(action: { showAddChordSheet = true }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
-                        .foregroundColor(.accentColor)
+                        // Subdued by default, highlight when hovering
+                        .foregroundColor(isHoveringAddButton ? .accentColor : Color.primary.opacity(0.55))
+                        .animation(.easeInOut(duration: 0.12), value: isHoveringAddButton)
                 }
                 .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.12)) {
+                        isHoveringAddButton = hovering
+                    }
+                }
             }
             
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
