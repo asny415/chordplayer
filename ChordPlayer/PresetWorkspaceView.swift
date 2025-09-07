@@ -191,25 +191,22 @@ private struct DrumPatternCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("\(index + 1)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
-                    .padding(5)
-                    .background(Color.black.opacity(0.3), in: Circle())
-                Spacer()
-            }
-            
             Spacer()
 
-            Text(pattern.displayName)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
+            HStack {
+                Text(pattern.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                Spacer()
+            }
 
-            Text(category)
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack {
+                Text(category)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
         }
         .foregroundColor(.primary)
         .padding(8)
@@ -236,12 +233,23 @@ private struct DrumPatternsView: View {
                             appData.performanceConfig.activeDrumPatternId = patternId
                             drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
                         }) {
-                            DrumPatternCardView(
-                                index: index,
-                                pattern: details.pattern,
-                                category: details.category,
-                                isActive: isActive
-                            )
+                            ZStack(alignment: .topTrailing) {
+                                DrumPatternCardView(
+                                    index: index,
+                                    pattern: details.pattern,
+                                    category: details.category,
+                                    isActive: isActive
+                                )
+
+                                if index < 9 {
+                                    Text("⌘\(index + 1)")
+                                        .font(.caption2).bold()
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6).padding(.vertical, 3)
+                                        .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                        .offset(x: -8, y: 8)
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
                         .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activeDrumPatternId)
@@ -266,30 +274,27 @@ private struct DrumPatternsView: View {
 private struct PlayingPatternCardView: View {
     let index: Int
     let pattern: GuitarPattern
+    let category: String
     let isActive: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("\(index + 1)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
-                    .padding(5)
-                    .background(Color.black.opacity(0.3), in: Circle())
-                Spacer()
-            }
-            
             Spacer()
 
-            Text(pattern.name)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
+            HStack {
+                Text(pattern.name)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                Spacer()
+            }
 
-            // You can add more details here if needed, e.g., pattern.id or a summary of pattern.events
-            // Text(pattern.id)
-            //     .font(.caption)
-            //     .foregroundColor(.secondary)
+            HStack {
+                Text(category)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
         }
         .foregroundColor(.primary)
         .padding(8)
@@ -314,11 +319,23 @@ private struct PlayingPatternsView: View {
                         Button(action: {
                             appData.performanceConfig.activePlayingPatternId = patternId
                         }) {
-                            PlayingPatternCardView(
-                                index: index,
-                                pattern: details,
-                                isActive: isActive
-                            )
+                            ZStack(alignment: .topTrailing) {
+                                PlayingPatternCardView(
+                                    index: index,
+                                    pattern: details.pattern,
+                                    category: details.category,
+                                    isActive: isActive
+                                )
+
+                                if index < 9 {
+                                    Text("\(index + 1)")
+                                        .font(.caption2).bold()
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6).padding(.vertical, 3)
+                                        .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                        .offset(x: -8, y: 8)
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
                         .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activePlayingPatternId)
@@ -329,11 +346,11 @@ private struct PlayingPatternsView: View {
         }
     }
     
-    private func findPlayingPatternDetails(for patternId: String) -> GuitarPattern? {
+    private func findPlayingPatternDetails(for patternId: String) -> (pattern: GuitarPattern, category: String)? {
         guard let library = appData.patternLibrary else { return nil }
-        for (_, patterns) in library {
+        for (category, patterns) in library {
             if let pattern = patterns.first(where: { $0.id == patternId }) {
-                return pattern
+                return (pattern, category)
             }
         }
         return nil
