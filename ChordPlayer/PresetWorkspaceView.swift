@@ -481,16 +481,14 @@ private struct ChordProgressionView: View {
                             ChordCardView(chord: chord, isFlashing: flashingChord == chord)
                                 .animation(.easeInOut(duration: 0.15), value: flashingChord)
 
-                            // Shortcut badge (custom or default)
-                            if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chord] {
-                                Text(s.displayText)
-                                    .font(.caption2).bold()
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6).padding(.vertical, 3)
-                                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 6))
-                                    .offset(x: -8, y: 8)
-                            } else {
-                                // parse note and quality robustly (note may be like "C_Sharp")
+                            // Shortcut badge (custom or default). Always show a Text badge.
+                            let (badgeText, badgeColor): (String, Color) = {
+                                // 1) user-assigned shortcut
+                                if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chord] {
+                                    return (s.displayText, Color.accentColor)
+                                }
+
+                                // 2) fallback to sensible default mapping for simple single-letter notes
                                 let components = chord.split(separator: "_")
                                 if components.count >= 2 {
                                     let quality = String(components.last!)
@@ -498,26 +496,26 @@ private struct ChordProgressionView: View {
                                     let noteRaw = noteParts.joined(separator: "_")
                                     let noteDisplay = noteRaw.replacingOccurrences(of: "_Sharp", with: "#")
 
-                                    // only provide the default single-letter mapping for plain single-letter notes
                                     if noteDisplay.count == 1 {
                                         if quality == "Major" {
-                                            Text(noteDisplay.uppercased())
-                                                .font(.caption2).bold()
-                                                .foregroundColor(.white)
-                                                .padding(.horizontal, 6).padding(.vertical, 3)
-                                                .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                                                .offset(x: -8, y: 8)
+                                            return (noteDisplay.uppercased(), Color.gray.opacity(0.6))
                                         } else if quality == "Minor" {
-                                            Text("⇧\(noteDisplay.uppercased())")
-                                                .font(.caption2).bold()
-                                                .foregroundColor(.white)
-                                                .padding(.horizontal, 6).padding(.vertical, 3)
-                                                .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                                                .offset(x: -8, y: 8)
+                                            return ("⇧\(noteDisplay.uppercased())", Color.gray.opacity(0.6))
                                         }
                                     }
                                 }
-                            }
+
+                                // 3) otherwise show a marker indicating the user can set a shortcut
+                                // 使用单字标记以保持徽章简洁（假设为中文环境，使用“设”表示“设置快捷键”）
+                                return ("+", Color.gray.opacity(0.6))
+                            }()
+
+                            Text(badgeText)
+                                .font(.caption2).bold()
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6).padding(.vertical, 3)
+                                .background(badgeColor, in: RoundedRectangle(cornerRadius: 6))
+                                .offset(x: -8, y: 8)
                         }
                     }
                     .buttonStyle(.plain)
