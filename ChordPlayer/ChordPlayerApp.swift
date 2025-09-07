@@ -49,6 +49,9 @@ struct ChordPlayerApp: App {
                 .environmentObject(drumPlayer)
                 .environmentObject(keyboardHandler)
                 .environmentObject(PresetManager.shared)
+                .environmentObject(CustomChordManager.shared)
+                .environmentObject(CustomDrumPatternManager.shared)
+                .environmentObject(CustomPlayingPatternManager.shared)
         }
         .commands {
             CommandGroup(after: .appSettings) {

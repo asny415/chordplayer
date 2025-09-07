@@ -212,3 +212,17 @@ struct Preset: Codable, Equatable {
         return PresetInfo(id: self.id, name: self.name, description: self.description, createdAt: self.createdAt, updatedAt: self.updatedAt)
     }
 }
+
+// MARK: - Editor Data Models
+
+struct DrumPatternEditorData: Identifiable {
+    let id: String
+    let timeSignature: String
+    let pattern: DrumPattern
+}
+
+struct PlayingPatternEditorData: Identifiable {
+    let id: String
+    let timeSignature: String
+    let pattern: GuitarPattern
+}
