@@ -310,6 +310,27 @@ private struct PlayingPatternsView: View {
     }
 }
 
+private struct ChordCardView: View {
+    let chord: String
+    let isFlashing: Bool
+
+    var body: some View {
+        VStack(alignment: .center) {
+            Text(chord)
+                .font(.title3.weight(.medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .foregroundColor(.primary)
+        .frame(width: 140, height: 80)
+        .background(isFlashing ? Material.thick : Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isFlashing ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isFlashing ? 2.5 : 1)
+        )
+    }
+}
+
 private struct ChordProgressionView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
@@ -328,23 +349,9 @@ private struct ChordProgressionView: View {
                 .buttonStyle(.plain)
             }
             
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                 ForEach(appData.performanceConfig.chords, id: \.self) { chord in
-                    Text(chord)
-                        .font(.title3.weight(.medium))
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(.thinMaterial)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                        )
-                        .overlay( 
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(flashingChord == chord ? Color.accentColor.opacity(0.5) : Color.clear)
-                        )
+                    ChordCardView(chord: chord, isFlashing: flashingChord == chord)
                         .animation(.easeInOut(duration: 0.15), value: flashingChord)
                 }
             }

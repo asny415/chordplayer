@@ -152,7 +152,7 @@ private struct PresetRow: View {
         }
         .alert("content_view_delete_preset_alert_title", isPresented: $showingDeleteConfirmation) {
             Button("content_view_cancel_button", role: .cancel) { }
-            Button("content_view_delete_button", role: .destructive) { _ = presetManager.deletePreset(preset) }
+            Button("content_view_delete_button", role: .destructive) { presetManager.deletePreset(preset) }
         } message: {
             Text(String(format: "content_view_delete_preset_confirmation_message", preset.name))
         }
