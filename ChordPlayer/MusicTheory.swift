@@ -117,6 +117,16 @@ struct MusicTheory {
         // The actual time interval will depend on the tempo, which is handled elsewhere.
         return numerator / denominator
     }
+
+    static func parseTimeSignature(_ signature: String) -> (beats: Int, beatType: Int) {
+        let components = signature.split(separator: "/").map { String($0) }
+        guard components.count == 2,
+              let beats = Int(components[0]),
+              let beatType = Int(components[1]) else {
+            return (4, 4) // Default to 4/4 if parsing fails
+        }
+        return (beats, beatType)
+    }
 }
 
 

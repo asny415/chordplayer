@@ -236,16 +236,23 @@ private struct DrumPatternCardView: View {
     let index: Int
     let pattern: DrumPattern
     let category: String
+    let timeSignature: String
     let isActive: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Spacer()
+            DrumPatternGridView(
+                pattern: pattern,
+                timeSignature: timeSignature,
+                activeColor: isActive ? .accentColor : .primary,
+                inactiveColor: .secondary
+            )
+            .opacity(isActive ? 0.9 : 0.6)
 
             HStack {
                 Text(pattern.displayName)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
+                    .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer()
             }
@@ -316,6 +323,7 @@ private struct DrumPatternsView: View {
                                             index: index,
                                             pattern: details.pattern,
                                             category: details.category,
+                                            timeSignature: appData.performanceConfig.timeSignature,
                                             isActive: isActive
                                         )
 
