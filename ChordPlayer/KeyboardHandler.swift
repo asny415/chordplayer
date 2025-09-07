@@ -33,6 +33,25 @@ class KeyboardHandler: ObservableObject {
             .store(in: &cancellables)
     }
 
+    // Allow UI to temporarily pause/resume the shared event monitor so UI-level
+    // capture flows can get the raw key events without being intercepted.
+    func pauseEventMonitoring() {
+        DispatchQueue.main.async {
+            if let monitor = self.eventMonitor {
+                NSEvent.removeMonitor(monitor)
+                self.eventMonitor = nil
+            }
+        }
+    }
+
+    func resumeEventMonitoring() {
+        DispatchQueue.main.async {
+            if self.eventMonitor == nil {
+                self.setupEventMonitor()
+            }
+        }
+    }
+
     func updateWithNewConfig(_ config: PerformanceConfig) {
         metronome.update(from: config)
     }

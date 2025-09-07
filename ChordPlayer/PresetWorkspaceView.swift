@@ -471,45 +471,46 @@ private struct ChordProgressionView: View {
             
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                 ForEach(appData.performanceConfig.chords, id: \.self) { chord in
-                    Button(action: {
-                        keyboardHandler.playChordByName(chord)
-                    }) {
-                        // local values
-                        let parts = chord.split(separator: "_")
+                    // local values
+                    let parts = chord.split(separator: "_")
 
-                        ZStack(alignment: .topTrailing) {
-                            ChordCardView(chord: chord, isFlashing: flashingChord == chord)
-                                .animation(.easeInOut(duration: 0.15), value: flashingChord)
+                    ZStack(alignment: .topTrailing) {
+                        ChordCardView(chord: chord, isFlashing: flashingChord == chord)
+                            .animation(.easeInOut(duration: 0.15), value: flashingChord)
 
-                            // Shortcut badge (custom or default). Always show a Text badge.
-                            let (badgeText, badgeColor): (String, Color) = {
-                                // 1) user-assigned shortcut
-                                if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chord] {
-                                    return (s.displayText, Color.accentColor)
-                                }
+                        // Shortcut badge (custom or default). Always show a Text badge.
+                        let (badgeText, badgeColor): (String, Color) = {
+                            // 1) user-assigned shortcut
+                            if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chord] {
+                                return (s.displayText, Color.accentColor)
+                            }
 
-                                // 2) fallback to sensible default mapping for simple single-letter notes
-                                let components = chord.split(separator: "_")
-                                if components.count >= 2 {
-                                    let quality = String(components.last!)
-                                    let noteParts = components.dropLast()
-                                    let noteRaw = noteParts.joined(separator: "_")
-                                    let noteDisplay = noteRaw.replacingOccurrences(of: "_Sharp", with: "#")
+                            // 2) fallback to sensible default mapping for simple single-letter notes
+                            let components = chord.split(separator: "_")
+                            if components.count >= 2 {
+                                let quality = String(components.last!)
+                                let noteParts = components.dropLast()
+                                let noteRaw = noteParts.joined(separator: "_")
+                                let noteDisplay = noteRaw.replacingOccurrences(of: "_Sharp", with: "#")
 
-                                    if noteDisplay.count == 1 {
-                                        if quality == "Major" {
-                                            return (noteDisplay.uppercased(), Color.gray.opacity(0.6))
-                                        } else if quality == "Minor" {
-                                            return ("⇧\(noteDisplay.uppercased())", Color.gray.opacity(0.6))
-                                        }
+                                if noteDisplay.count == 1 {
+                                    if quality == "Major" {
+                                        return (noteDisplay.uppercased(), Color.gray.opacity(0.6))
+                                    } else if quality == "Minor" {
+                                        return ("⇧\(noteDisplay.uppercased())", Color.gray.opacity(0.6))
                                     }
                                 }
+                            }
 
-                                // 3) otherwise show a marker indicating the user can set a shortcut
-                                // 使用单字标记以保持徽章简洁（假设为中文环境，使用“设”表示“设置快捷键”）
-                                return ("+", Color.gray.opacity(0.6))
-                            }()
+                            // 3) otherwise show a marker indicating the user can set a shortcut
+                            // 使用单字标记以保持徽章简洁（假设为中文环境，使用“设”表示“设置快捷键”）
+                            return ("+", Color.gray.opacity(0.6))
+                        }()
 
+                        // Badge button: tapping this starts capturing a new shortcut for this chord.
+                        Button(action: {
+                            captureShortcutForChord(chord: chord)
+                        }) {
                             Text(badgeText)
                                 .font(.caption2).bold()
                                 .foregroundColor(.white)
@@ -517,15 +518,11 @@ private struct ChordProgressionView: View {
                                 .background(badgeColor, in: RoundedRectangle(cornerRadius: 6))
                                 .offset(x: -8, y: 8)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Assign Shortcut") {
-                            captureShortcutForChord(chord: chord)
-                        }
-                        Button("Remove Shortcut") {
-                            PresetManager.shared.setShortcut(nil, forChord: chord)
-                        }
+                    // Tapping anywhere else on the card plays the chord
+                    .onTapGesture {
+                        keyboardHandler.playChordByName(chord)
                     }
                 }
             }
@@ -568,6 +565,10 @@ private struct ChordProgressionView: View {
     private func captureShortcutForChord(chord: String) {
         // start capturing
         capturingChord = chord
+        // Temporarily pause the global keyboard handler so it doesn't intercept
+        // the key event we're trying to capture.
+        keyboardHandler.pauseEventMonitoring()
+
         // add local monitor to capture next keyDown
         captureMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             // Escape key to cancel
@@ -575,6 +576,8 @@ private struct ChordProgressionView: View {
                 if let m = captureMonitor { NSEvent.removeMonitor(m) }
                 captureMonitor = nil
                 capturingChord = nil
+                // restore global handler
+                keyboardHandler.resumeEventMonitoring()
                 return nil
             }
 
@@ -585,6 +588,8 @@ private struct ChordProgressionView: View {
             if let m = captureMonitor { NSEvent.removeMonitor(m) }
             captureMonitor = nil
             capturingChord = nil
+            // restore global handler
+            keyboardHandler.resumeEventMonitoring()
             return nil
         }
     }
