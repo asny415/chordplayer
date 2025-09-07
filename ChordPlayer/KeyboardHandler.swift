@@ -83,6 +83,7 @@ class KeyboardHandler: ObservableObject {
             if appData.performanceConfig.selectedDrumPatterns.indices.contains(index) {
                 let patternId = appData.performanceConfig.selectedDrumPatterns[index]
                 appData.performanceConfig.activeDrumPatternId = patternId
+                drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
             }
         }
     }

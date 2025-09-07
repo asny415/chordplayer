@@ -223,6 +223,7 @@ private struct DrumPatternCardView: View {
 
 private struct DrumPatternsView: View {
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var drumPlayer: DrumPlayer
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -232,6 +233,7 @@ private struct DrumPatternsView: View {
                         let isActive = appData.performanceConfig.activeDrumPatternId == patternId
                         Button(action: {
                             appData.performanceConfig.activeDrumPatternId = patternId
+                            drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
                         }) {
                             DrumPatternCardView(
                                 index: index,
