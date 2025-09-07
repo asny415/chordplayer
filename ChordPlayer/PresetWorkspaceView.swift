@@ -289,39 +289,53 @@ private struct DrumPatternsView: View {
                     withAnimation(.easeInOut(duration: 0.12)) { isHoveringAddDrumButton = hovering }
                 }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(Array(appData.performanceConfig.selectedDrumPatterns.enumerated()), id: \.element) { index, patternId in
-                        if let details = findPatternDetails(for: patternId) {
-                            let isActive = appData.performanceConfig.activeDrumPatternId == patternId
-                            Button(action: {
-                                appData.performanceConfig.activeDrumPatternId = patternId
-                                drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
-                            }) {
-                                ZStack(alignment: .topTrailing) {
-                                    DrumPatternCardView(
-                                        index: index,
-                                        pattern: details.pattern,
-                                        category: details.category,
-                                        isActive: isActive
-                                    )
+            if appData.performanceConfig.selectedDrumPatterns.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 6) {
+                        Text("当前没有鼓点模式。")
+                            .font(.subheadline).foregroundColor(.secondary)
+                        Text("点击右上角“+”添加鼓点模式，或使用快捷键 ⌘1/⌘2... 进行切换")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .frame(height: 80)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(appData.performanceConfig.selectedDrumPatterns.enumerated()), id: \.element) { index, patternId in
+                            if let details = findPatternDetails(for: patternId) {
+                                let isActive = appData.performanceConfig.activeDrumPatternId == patternId
+                                Button(action: {
+                                    appData.performanceConfig.activeDrumPatternId = patternId
+                                    drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
+                                }) {
+                                    ZStack(alignment: .topTrailing) {
+                                        DrumPatternCardView(
+                                            index: index,
+                                            pattern: details.pattern,
+                                            category: details.category,
+                                            isActive: isActive
+                                        )
 
-                                    if index < 9 {
-                                        Text("⌘\(index + 1)")
-                                            .font(.caption2).bold()
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 6).padding(.vertical, 3)
-                                            .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                                            .offset(x: -8, y: 8)
+                                        if index < 9 {
+                                            Text("⌘\(index + 1)")
+                                                .font(.caption2).bold()
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 6).padding(.vertical, 3)
+                                                .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                                .offset(x: -8, y: 8)
+                                        }
                                     }
                                 }
+                                .buttonStyle(.plain)
+                                .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activeDrumPatternId)
                             }
-                            .buttonStyle(.plain)
-                            .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activeDrumPatternId)
                         }
                     }
+                    .padding(1)
                 }
-                .padding(1)
             }
         }
         .sheet(isPresented: $showAddDrumPatternSheet) {
@@ -396,38 +410,52 @@ private struct PlayingPatternsView: View {
                     withAnimation(.easeInOut(duration: 0.12)) { isHoveringAddPlayingButton = hovering }
                 }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(Array(appData.performanceConfig.selectedPlayingPatterns.enumerated()), id: \.element) { index, patternId in
-                        if let details = findPlayingPatternDetails(for: patternId) {
-                            let isActive = appData.performanceConfig.activePlayingPatternId == patternId
-                            Button(action: {
-                                appData.performanceConfig.activePlayingPatternId = patternId
-                            }) {
-                                ZStack(alignment: .topTrailing) {
-                                    PlayingPatternCardView(
-                                        index: index,
-                                        pattern: details.pattern,
-                                        category: details.category,
-                                        isActive: isActive
-                                    )
+            if appData.performanceConfig.selectedPlayingPatterns.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 6) {
+                        Text("当前没有和弦指法。")
+                            .font(.subheadline).foregroundColor(.secondary)
+                        Text("点击右上角“+”添加和弦指法，或使用数字键 1/2... 快速选择")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .frame(height: 80)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(appData.performanceConfig.selectedPlayingPatterns.enumerated()), id: \.element) { index, patternId in
+                            if let details = findPlayingPatternDetails(for: patternId) {
+                                let isActive = appData.performanceConfig.activePlayingPatternId == patternId
+                                Button(action: {
+                                    appData.performanceConfig.activePlayingPatternId = patternId
+                                }) {
+                                    ZStack(alignment: .topTrailing) {
+                                        PlayingPatternCardView(
+                                            index: index,
+                                            pattern: details.pattern,
+                                            category: details.category,
+                                            isActive: isActive
+                                        )
 
-                                    if index < 9 {
-                                        Text("\(index + 1)")
-                                            .font(.caption2).bold()
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 6).padding(.vertical, 3)
-                                            .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                                            .offset(x: -8, y: 8)
+                                        if index < 9 {
+                                            Text("\(index + 1)")
+                                                .font(.caption2).bold()
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 6).padding(.vertical, 3)
+                                                .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                                .offset(x: -8, y: 8)
+                                        }
                                     }
                                 }
+                                .buttonStyle(.plain)
+                                .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activePlayingPatternId)
                             }
-                            .buttonStyle(.plain)
-                            .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activePlayingPatternId)
                         }
                     }
+                    .padding(1)
                 }
-                .padding(1)
             }
         }
         .sheet(isPresented: $showAddPlayingPatternSheet) {
@@ -517,60 +545,74 @@ private struct ChordProgressionView: View {
                 }
             }
             
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
-                ForEach(appData.performanceConfig.chords, id: \.self) { chord in
-                    // local values
-                    let parts = chord.split(separator: "_")
+            if appData.performanceConfig.chords.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        Text("当前没有和弦进行。")
+                            .font(.subheadline).foregroundColor(.secondary)
+                        Text("点击右上角“+”添加和弦，或在和弦库中选择并添加到进行中。")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .frame(height: 120)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
+                    ForEach(appData.performanceConfig.chords, id: \.self) { chord in
+                        // local values
+                        let parts = chord.split(separator: "_")
 
-                    ZStack(alignment: .topTrailing) {
-                        ChordCardView(chord: chord, isFlashing: flashingChord == chord)
-                            .animation(.easeInOut(duration: 0.15), value: flashingChord)
+                        ZStack(alignment: .topTrailing) {
+                            ChordCardView(chord: chord, isFlashing: flashingChord == chord)
+                                .animation(.easeInOut(duration: 0.15), value: flashingChord)
 
-                        // Shortcut badge (custom or default). Always show a Text badge.
-                        let (badgeText, badgeColor): (String, Color) = {
-                            // 1) user-assigned shortcut
-                            if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chord] {
-                                return (s.displayText, Color.accentColor)
-                            }
+                            // Shortcut badge (custom or default). Always show a Text badge.
+                            let (badgeText, badgeColor): (String, Color) = {
+                                // 1) user-assigned shortcut
+                                if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chord] {
+                                    return (s.displayText, Color.accentColor)
+                                }
 
-                            // 2) fallback to sensible default mapping for simple single-letter notes
-                            let components = chord.split(separator: "_")
-                            if components.count >= 2 {
-                                let quality = String(components.last!)
-                                let noteParts = components.dropLast()
-                                let noteRaw = noteParts.joined(separator: "_")
-                                let noteDisplay = noteRaw.replacingOccurrences(of: "_Sharp", with: "#")
+                                // 2) fallback to sensible default mapping for simple single-letter notes
+                                let components = chord.split(separator: "_")
+                                if components.count >= 2 {
+                                    let quality = String(components.last!)
+                                    let noteParts = components.dropLast()
+                                    let noteRaw = noteParts.joined(separator: "_")
+                                    let noteDisplay = noteRaw.replacingOccurrences(of: "_Sharp", with: "#")
 
-                                if noteDisplay.count == 1 {
-                                    if quality == "Major" {
-                                        return (noteDisplay.uppercased(), Color.gray.opacity(0.6))
-                                    } else if quality == "Minor" {
-                                        return ("⇧\(noteDisplay.uppercased())", Color.gray.opacity(0.6))
+                                    if noteDisplay.count == 1 {
+                                        if quality == "Major" {
+                                            return (noteDisplay.uppercased(), Color.gray.opacity(0.6))
+                                        } else if quality == "Minor" {
+                                            return ("⇧\(noteDisplay.uppercased())", Color.gray.opacity(0.6))
+                                        }
                                     }
                                 }
+
+                                // 3) otherwise show a marker indicating the user can set a shortcut
+                                // 使用单字标记以保持徽章简洁（假设为中文环境，使用“设”表示“设置快捷键”）
+                                return ("+", Color.gray.opacity(0.6))
+                            }()
+
+                            // Badge button: tapping this starts capturing a new shortcut for this chord.
+                            Button(action: {
+                                captureShortcutForChord(chord: chord)
+                            }) {
+                                Text(badgeText)
+                                    .font(.caption2).bold()
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6).padding(.vertical, 3)
+                                    .background(badgeColor, in: RoundedRectangle(cornerRadius: 6))
+                                    .offset(x: -8, y: 8)
                             }
-
-                            // 3) otherwise show a marker indicating the user can set a shortcut
-                            // 使用单字标记以保持徽章简洁（假设为中文环境，使用“设”表示“设置快捷键”）
-                            return ("+", Color.gray.opacity(0.6))
-                        }()
-
-                        // Badge button: tapping this starts capturing a new shortcut for this chord.
-                        Button(action: {
-                            captureShortcutForChord(chord: chord)
-                        }) {
-                            Text(badgeText)
-                                .font(.caption2).bold()
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6).padding(.vertical, 3)
-                                .background(badgeColor, in: RoundedRectangle(cornerRadius: 6))
-                                .offset(x: -8, y: 8)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                    }
-                    // Tapping anywhere else on the card plays the chord
-                    .onTapGesture {
-                        keyboardHandler.playChordByName(chord)
+                        // Tapping anywhere else on the card plays the chord
+                        .onTapGesture {
+                            keyboardHandler.playChordByName(chord)
+                        }
                     }
                 }
             }

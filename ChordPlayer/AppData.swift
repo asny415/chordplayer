@@ -129,10 +129,10 @@ class AppData: ObservableObject {
             key: "C",
             quantize: QuantizationMode.measure.rawValue,
             chords: [],
-            selectedDrumPatterns: ["ROCK_4_4_BASIC"],
-            selectedPlayingPatterns: ["4-4-1-1"],
-            activeDrumPatternId: "ROCK_4_4_BASIC",
-            activePlayingPatternId: "4-4-1-1"
+            selectedDrumPatterns: [],
+            selectedPlayingPatterns: [],
+            activeDrumPatternId: "",
+            activePlayingPatternId: ""
         )
     }
     
