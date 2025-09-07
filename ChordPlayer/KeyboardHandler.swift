@@ -11,7 +11,6 @@ class KeyboardHandler: ObservableObject {
     private var appData: AppData
 
     @Published var lastPlayedChord: String? = nil
-    @Published var isTextInputActive: Bool = false
 
     private var eventMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
@@ -74,9 +73,7 @@ class KeyboardHandler: ObservableObject {
                 }
             }
 
-            if self.isTextInputActive {
-                return event
-            }
+            // Note: text-input responder checks are handled via firstResponder detection above.
 
             // Only swallow the event when our handler actually handled it.
             let handled = self.handleKeyEvent(event: event)
