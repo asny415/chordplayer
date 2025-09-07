@@ -248,6 +248,7 @@ private struct DrumPatternCardView: View {
                 inactiveColor: .secondary
             )
             .opacity(isActive ? 0.9 : 0.6)
+            .padding(.trailing, 35)
 
             HStack {
                 Text(pattern.displayName)
@@ -378,6 +379,7 @@ private struct PlayingPatternCardView: View {
             )
             .opacity(isActive ? 1.0 : 0.7)
             .padding(.bottom, 4)
+            .padding(.trailing, 35)
 
             HStack {
                 Text(pattern.name)
