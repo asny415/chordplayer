@@ -5,7 +5,7 @@ struct AddPlayingPatternSheetView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var selectedPatternIds: Set<String> = []
-    @State private var availablePatterns: [String: [(String, GuitarPattern)]] = [:] // Store patterns grouped by category with their IDs
+    @State private var availablePatterns: [(id: String, pattern: GuitarPattern)] = []
     
     var body: some View {
         VStack(spacing: 0) {
@@ -17,28 +17,37 @@ struct AddPlayingPatternSheetView: View {
             Divider()
             
             List {
-                ForEach(availablePatterns.keys.sorted(), id: \.self) { category in
-                    Section(header: Text(category)) {
-                        ForEach(availablePatterns[category] ?? [], id: \.0) { patternId, guitarPattern in // Use .0 for patternId as ID
-                            Button(action: {
-                                if selectedPatternIds.contains(patternId) {
-                                    selectedPatternIds.remove(patternId)
-                                } else {
-                                    selectedPatternIds.insert(patternId)
-                                }
-                            }) {
-                                HStack {
-                                    Text(guitarPattern.name)
-                                    Spacer()
-                                    if selectedPatternIds.contains(patternId) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(.accentColor)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
+                ForEach(availablePatterns, id: \.id) { patternInfo in
+                    Button(action: {
+                        if selectedPatternIds.contains(patternInfo.id) {
+                            selectedPatternIds.remove(patternInfo.id)
+                        } else {
+                            selectedPatternIds.insert(patternInfo.id)
                         }
+                    }) {
+                        HStack(spacing: 15) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(patternInfo.pattern.name)
+                                    .font(.headline)
+                                PlayingPatternView(
+                                    pattern: patternInfo.pattern,
+                                    timeSignature: appData.performanceConfig.timeSignature,
+                                    color: .primary
+                                )
+                                .frame(height: 40)
+                            }
+                            
+                            Spacer()
+                            
+                            if selectedPatternIds.contains(patternInfo.id) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                        .padding(.vertical, 8)
                     }
+                    .buttonStyle(.plain)
                 }
             }
             .onAppear(perform: loadAvailablePatterns)
@@ -58,24 +67,20 @@ struct AddPlayingPatternSheetView: View {
             }
             .padding()
         }
-        .frame(minWidth: 400, minHeight: 300)
+        .frame(minWidth: 480, minHeight: 400)
     }
     
     private func loadAvailablePatterns() {
         guard let patternLibrary = appData.patternLibrary else { return }
         
-        var patternsGroupedByCategory: [String: [(String, GuitarPattern)]] = [:]
+        let currentTimeSignature = appData.performanceConfig.timeSignature
+        let patternsForCurrentTS = patternLibrary[currentTimeSignature] ?? []
+        
         let currentSelectedIds = Set(appData.performanceConfig.selectedPlayingPatterns)
         
-        for (category, patternsArray) in patternLibrary {
-            for guitarPattern in patternsArray {
-                // Only add patterns not already selected in the current preset
-                if !currentSelectedIds.contains(guitarPattern.id) {
-                    patternsGroupedByCategory[category, default: []].append((guitarPattern.id, guitarPattern))
-                }
-            }
-        }
-        self.availablePatterns = patternsGroupedByCategory
+        self.availablePatterns = patternsForCurrentTS
+            .filter { !currentSelectedIds.contains($0.id) }
+            .map { (id: $0.id, pattern: $0) }
     }
     
     private func addSelectedPatterns() {
