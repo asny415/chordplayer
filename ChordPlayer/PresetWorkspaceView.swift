@@ -475,23 +475,34 @@ private struct PlayingPatternsView: View {
 }
 
 private struct ChordCardView: View {
+    @EnvironmentObject var appData: AppData
     let chord: String
     let isFlashing: Bool
 
     var body: some View {
-        VStack(alignment: .center) {
-            Text(displayChordName(for: chord))
-                .font(.title3.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+        ZStack(alignment: .bottomLeading) {
+            // Main content - chord name
+            VStack(alignment: .center) {
+                Text(displayChordName(for: chord))
+                    .font(.title3.weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundColor(.primary)
+            .frame(width: 140, height: 80)
+            .background(isFlashing ? Material.thick : Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isFlashing ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isFlashing ? 2.5 : 1)
+            )
+
+            // Chord diagram in the bottom-left corner
+            if let frets = appData.chordLibrary?[chord] {
+                ChordDiagramView(frets: frets, color: .primary.opacity(0.8))
+                    .frame(width: 40, height: 48)
+                    .padding(6)
+            }
         }
-        .foregroundColor(.primary)
-        .frame(width: 140, height: 80)
-        .background(isFlashing ? Material.thick : Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(isFlashing ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isFlashing ? 2.5 : 1)
-        )
     }
 
     private func displayChordName(for chord: String) -> String {
