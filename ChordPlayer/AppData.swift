@@ -102,12 +102,9 @@ class AppData: ObservableObject {
             .store(in: &cancellables)
     }
     
-    func loadPreset(_ preset: Preset) {
-        let (newPerformanceConfig, newAppConfig) = presetManager.loadPreset(preset)
-        self.performanceConfig = newPerformanceConfig
-        self.CONFIG = newAppConfig
-        self.initializeActivePatterns()
-        print("[AppData] ✅ Loaded preset: \(preset.name)")
+    func loadPreset(_ presetInfo: PresetInfo) {
+        presetManager.loadPreset(presetInfo)
+        // The presetManager's publisher will update the config
     }
     
     func createNewPreset(name: String, description: String? = nil) -> Preset? {
@@ -118,7 +115,7 @@ class AppData: ObservableObject {
         guard let newPreset = presetManager.createNewPreset(name: name, description: description, performanceConfig: config, appConfig: appConfig) else {
             return nil
         }
-        loadPreset(newPreset)
+        // The presetManager's publisher will update the config, so no need to call loadPreset here
         return newPreset
     }
     
@@ -150,7 +147,8 @@ class AppData: ObservableObject {
     
     func saveAllData() {
         print("[AppData] Saving data...")
-        presetManager.savePresetsToFile()
+        presetManager.saveCurrentPresetToFile()
+        presetManager.savePresetsList()
     }
     
     func resetToDefaults() {

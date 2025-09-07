@@ -560,9 +560,6 @@ private struct ChordProgressionView: View {
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                     ForEach(appData.performanceConfig.chords, id: \.self) { chord in
-                        // local values
-                        let parts = chord.split(separator: "_")
-
                         ZStack(alignment: .topTrailing) {
                             ChordCardView(chord: chord, isFlashing: flashingChord == chord)
                                 .animation(.easeInOut(duration: 0.15), value: flashingChord)

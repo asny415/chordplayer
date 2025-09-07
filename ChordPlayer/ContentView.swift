@@ -46,14 +46,14 @@ private struct PresetSidebar: View {
         VStack(alignment: .leading, spacing: 0) {
             List(selection: .constant(presetManager.currentPreset?.id)) {
                 Section(header: Text("content_view_presets_section_header")) {
-                    ForEach(presetManager.presets) { preset in
+                    ForEach(presetManager.presets) { presetInfo in
                         PresetRow(
-                            preset: preset,
-                            isCurrent: preset.id == presetManager.currentPreset?.id,
-                            onSelect: { appData.loadPreset(preset) },
-                            isEditing: .constant(editingPresetId == preset.id),
+                            presetInfo: presetInfo,
+                            isCurrent: presetInfo.id == presetManager.currentPreset?.id,
+                            onSelect: { appData.loadPreset(presetInfo) },
+                            isEditing: .constant(editingPresetId == presetInfo.id),
                             onRename: { newName in
-                                presetManager.renamePreset(preset, newName: newName)
+                                presetManager.renamePreset(presetInfo, newName: newName)
                                 editingPresetId = nil
                             },
                             onStartEditing: { presetId in
@@ -100,7 +100,7 @@ private struct PresetSidebar: View {
 
 private struct PresetRow: View {
     @EnvironmentObject var presetManager: PresetManager
-    let preset: Preset
+    let presetInfo: PresetInfo
     let isCurrent: Bool
     let onSelect: () -> Void
     @Binding var isEditing: Bool
@@ -124,14 +124,14 @@ private struct PresetRow: View {
                     .textFieldStyle(.plain)
                     .focused($isNameFieldFocused)
                     .onAppear {
-                        newName = preset.name
+                        newName = presetInfo.name
                         isNameFieldFocused = true
                     }
                 } else {
-                    Text(preset.name)
+                    Text(presetInfo.name)
                         .fontWeight(isCurrent ? .bold : .regular)
                 }
-                if let desc = preset.description, !desc.isEmpty {
+                if let desc = presetInfo.description, !desc.isEmpty {
                     Text(desc).font(.caption).foregroundColor(.secondary)
                 }
             }
@@ -139,7 +139,7 @@ private struct PresetRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture { if !isEditing { onSelect() } }
-        .highPriorityGesture(TapGesture(count: 2).onEnded { onStartEditing(preset.id) })
+        .highPriorityGesture(TapGesture(count: 2).onEnded { onStartEditing(presetInfo.id) })
         .contextMenu {
             Button(role: .destructive) {
                 showingDeleteConfirmation = true
@@ -149,9 +149,9 @@ private struct PresetRow: View {
         }
         .alert("content_view_delete_preset_alert_title", isPresented: $showingDeleteConfirmation) {
             Button("content_view_cancel_button", role: .cancel) { }
-            Button("content_view_delete_button", role: .destructive) { presetManager.deletePreset(preset) }
+            Button("content_view_delete_button", role: .destructive) { presetManager.deletePreset(presetInfo) }
         } message: {
-            Text(String(format: "content_view_delete_preset_confirmation_message", preset.name))
+            Text(String(format: "content_view_delete_preset_confirmation_message", presetInfo.name))
         }
     }
 }

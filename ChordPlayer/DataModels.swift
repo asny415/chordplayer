@@ -167,10 +167,48 @@ struct OldPatternGroup: Codable {
     var chordsOrder: [String]
 }
 
+
 struct AppConfig: Codable, Equatable {
     let midiPortName: String
     let note: Int
     let velocity: Int
     let duration: Int
     let channel: Int
+}
+
+// MARK: - Preset Models
+
+struct PresetInfo: Codable, Identifiable, Equatable, Hashable {
+    let id: UUID
+    var name: String
+    var description: String?
+    var createdAt: Date
+    var updatedAt: Date
+}
+
+struct Preset: Codable, Equatable {
+    let id: UUID
+    var name: String
+    var description: String?
+    // map chordID (e.g. "A_Major") -> Shortcut (user assigned)
+    var chordShortcuts: [String: Shortcut]
+    var performanceConfig: PerformanceConfig
+    var appConfig: AppConfig
+    var createdAt: Date
+    var updatedAt: Date
+    
+    init(id: UUID = UUID(), name: String, description: String? = nil, performanceConfig: PerformanceConfig, appConfig: AppConfig) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.chordShortcuts = [:]
+        self.performanceConfig = performanceConfig
+        self.appConfig = appConfig
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+    
+    func toInfo() -> PresetInfo {
+        return PresetInfo(id: self.id, name: self.name, description: self.description, createdAt: self.createdAt, updatedAt: self.updatedAt)
+    }
 }
