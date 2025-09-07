@@ -34,16 +34,13 @@ struct ChordPlayerApp: App {
 
     @State private var showCustomChordCreatorFromMenu = false
     @State private var showCustomChordManagerFromMenu = false
-    @State private var showAddDrumPatternSheet = false
-    @State private var showAddPlayingPatternSheet = false
+    // 添加鼓点/指法的面板已移到对应的工作区视图中，因此不再需要全局 sheet 状态
 
     var body: some Scene {
         WindowGroup {
             ContentView(
                 showCustomChordCreatorFromMenu: $showCustomChordCreatorFromMenu,
-                showCustomChordManagerFromMenu: $showCustomChordManagerFromMenu,
-                showAddDrumPatternSheet: $showAddDrumPatternSheet,
-                showAddPlayingPatternSheet: $showAddPlayingPatternSheet
+                showCustomChordManagerFromMenu: $showCustomChordManagerFromMenu
             )
                 .environmentObject(appData)
                 .environmentObject(midiManager)
@@ -65,15 +62,8 @@ struct ChordPlayerApp: App {
                 }
                 .keyboardShortcut("M", modifiers: [.command, .shift])
 
-                Button("添加鼓点模式...") {
-                    showAddDrumPatternSheet = true
-                }
-                .keyboardShortcut("D", modifiers: [.command, .shift])
-                
-                Button("添加和弦指法...") {
-                    showAddPlayingPatternSheet = true
-                }
-                .keyboardShortcut("P", modifiers: [.command, .shift])
+                // 移除菜单中的“添加鼓点模式”和“添加和弦指法”项，
+                // 使用面板内的添加按钮替代以改善可发现性和上下文相关性。
             }
         }
     }

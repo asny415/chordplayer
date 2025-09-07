@@ -271,41 +271,61 @@ private struct DrumPatternCardView: View {
 private struct DrumPatternsView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var drumPlayer: DrumPlayer
+    @State private var showAddDrumPatternSheet: Bool = false
+    @State private var isHoveringAddDrumButton: Bool = false
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(Array(appData.performanceConfig.selectedDrumPatterns.enumerated()), id: \.element) { index, patternId in
-                    if let details = findPatternDetails(for: patternId) {
-                        let isActive = appData.performanceConfig.activeDrumPatternId == patternId
-                        Button(action: {
-                            appData.performanceConfig.activeDrumPatternId = patternId
-                            drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
-                        }) {
-                            ZStack(alignment: .topTrailing) {
-                                DrumPatternCardView(
-                                    index: index,
-                                    pattern: details.pattern,
-                                    category: details.category,
-                                    isActive: isActive
-                                )
-
-                                if index < 9 {
-                                    Text("⌘\(index + 1)")
-                                        .font(.caption2).bold()
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 6).padding(.vertical, 3)
-                                        .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                                        .offset(x: -8, y: 8)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activeDrumPatternId)
-                    }
+        VStack(alignment: .leading) {
+            HStack {
+                Spacer()
+                Button(action: { showAddDrumPatternSheet = true }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(isHoveringAddDrumButton ? .accentColor : Color.primary.opacity(0.55))
+                        .animation(.easeInOut(duration: 0.12), value: isHoveringAddDrumButton)
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.12)) { isHoveringAddDrumButton = hovering }
                 }
             }
-            .padding(1)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(appData.performanceConfig.selectedDrumPatterns.enumerated()), id: \.element) { index, patternId in
+                        if let details = findPatternDetails(for: patternId) {
+                            let isActive = appData.performanceConfig.activeDrumPatternId == patternId
+                            Button(action: {
+                                appData.performanceConfig.activeDrumPatternId = patternId
+                                drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
+                            }) {
+                                ZStack(alignment: .topTrailing) {
+                                    DrumPatternCardView(
+                                        index: index,
+                                        pattern: details.pattern,
+                                        category: details.category,
+                                        isActive: isActive
+                                    )
+
+                                    if index < 9 {
+                                        Text("⌘\(index + 1)")
+                                            .font(.caption2).bold()
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6).padding(.vertical, 3)
+                                            .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                            .offset(x: -8, y: 8)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activeDrumPatternId)
+                        }
+                    }
+                }
+                .padding(1)
+            }
+        }
+        .sheet(isPresented: $showAddDrumPatternSheet) {
+            AddDrumPatternSheetView()
         }
     }
 
@@ -358,40 +378,60 @@ private struct PlayingPatternCardView: View {
 
 private struct PlayingPatternsView: View {
     @EnvironmentObject var appData: AppData
+    @State private var showAddPlayingPatternSheet: Bool = false
+    @State private var isHoveringAddPlayingButton: Bool = false
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(Array(appData.performanceConfig.selectedPlayingPatterns.enumerated()), id: \.element) { index, patternId in
-                    if let details = findPlayingPatternDetails(for: patternId) {
-                        let isActive = appData.performanceConfig.activePlayingPatternId == patternId
-                        Button(action: {
-                            appData.performanceConfig.activePlayingPatternId = patternId
-                        }) {
-                            ZStack(alignment: .topTrailing) {
-                                PlayingPatternCardView(
-                                    index: index,
-                                    pattern: details.pattern,
-                                    category: details.category,
-                                    isActive: isActive
-                                )
-
-                                if index < 9 {
-                                    Text("\(index + 1)")
-                                        .font(.caption2).bold()
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 6).padding(.vertical, 3)
-                                        .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                                        .offset(x: -8, y: 8)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activePlayingPatternId)
-                    }
+        VStack(alignment: .leading) {
+            HStack {
+                Spacer()
+                Button(action: { showAddPlayingPatternSheet = true }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(isHoveringAddPlayingButton ? .accentColor : Color.primary.opacity(0.55))
+                        .animation(.easeInOut(duration: 0.12), value: isHoveringAddPlayingButton)
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.12)) { isHoveringAddPlayingButton = hovering }
                 }
             }
-            .padding(1)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(appData.performanceConfig.selectedPlayingPatterns.enumerated()), id: \.element) { index, patternId in
+                        if let details = findPlayingPatternDetails(for: patternId) {
+                            let isActive = appData.performanceConfig.activePlayingPatternId == patternId
+                            Button(action: {
+                                appData.performanceConfig.activePlayingPatternId = patternId
+                            }) {
+                                ZStack(alignment: .topTrailing) {
+                                    PlayingPatternCardView(
+                                        index: index,
+                                        pattern: details.pattern,
+                                        category: details.category,
+                                        isActive: isActive
+                                    )
+
+                                    if index < 9 {
+                                        Text("\(index + 1)")
+                                            .font(.caption2).bold()
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6).padding(.vertical, 3)
+                                            .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                            .offset(x: -8, y: 8)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activePlayingPatternId)
+                        }
+                    }
+                }
+                .padding(1)
+            }
+        }
+        .sheet(isPresented: $showAddPlayingPatternSheet) {
+            AddPlayingPatternSheetView()
         }
     }
     
