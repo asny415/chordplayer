@@ -11,11 +11,11 @@ struct PresetWorkspaceView: View {
                     GlobalSettingsView()
                 }
                 
-                GroupBox(label: Text("鼓点模式 (Cmd + 1, 2...)").font(.headline)) {
+                GroupBox {
                     DrumPatternsView()
                 }
 
-                GroupBox(label: Text("和弦指法 (1, 2...)").font(.headline)) {
+                GroupBox {
                     PlayingPatternsView()
                 }
 
@@ -288,6 +288,7 @@ private struct DrumPatternsView: View {
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
+                Text("鼓点模式").font(.headline)
                 Spacer()
 
                 // Add Pattern to Workspace Button
@@ -425,6 +426,7 @@ private struct PlayingPatternsView: View {
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
+                Text("和弦指法").font(.headline)
                 Spacer()
 
                 // Add Pattern to Workspace Button
