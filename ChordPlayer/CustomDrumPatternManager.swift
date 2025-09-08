@@ -54,7 +54,7 @@ class CustomDrumPatternManager: ObservableObject {
     func saveCustomPatterns() {
         do {
             let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             let data = try encoder.encode(customDrumPatterns)
             try data.write(to: customPatternsFile)
             print("[CustomDrumPatternManager] ✅ Saved custom drum patterns")

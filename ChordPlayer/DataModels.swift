@@ -53,11 +53,11 @@ struct DrumPattern: Codable, Hashable {
         // First, determine the most likely subdivision by inspecting the delays
         var is16th = false
         for event in pattern.pattern {
-            if let delay = Double(event.delay.split(separator: "/").first.map(String.init) ?? "0"), delay.truncatingRemainder(dividingBy: 1) != 0 {
+            if event.delay.contains("16") {
                 is16th = true
                 break
             }
-            if event.delay.contains("16") {
+            if let den = event.delay.split(separator: "/").last.flatMap({ Double($0) }), den > 8 {
                 is16th = true
                 break
             }
@@ -65,28 +65,27 @@ struct DrumPattern: Codable, Hashable {
         let subdivision = is16th ? 16 : 8
         
         let beats = Int(timeSignature.split(separator: "/").first.map(String.init) ?? "4") ?? 4
-        let totalSteps = beats * (subdivision == 8 ? 2 : 4)
+        let stepsPerBeat = subdivision / (timeSignature == "6/8" ? 2 : 4) // For 6/8, a beat is a dotted quarter
+        let totalSteps = beats * stepsPerBeat
         
         var grid = Array(repeating: Array(repeating: false, count: totalSteps), count: instruments.count)
         
-        var currentTime: Double = 0.0
-        let timePerStep = 1.0 / Double(subdivision)
+        var cumulativeTime: Double = 0.0 // Time as a fraction of a whole note
 
         for event in pattern.pattern {
-            let step = Int(round(currentTime / timePerStep))
+            if let delayFraction = MusicTheory.parseDelay(delayString: event.delay) {
+                cumulativeTime += delayFraction
+            }
             
+            // Convert fraction of whole note to step index
+            let step = Int(round(cumulativeTime * Double(subdivision))) // Assuming 4/4, whole note = 16 steps for 16th subdivision
+
             if step < totalSteps {
                 for note in event.notes {
                     if let instrumentIndex = instruments.firstIndex(of: note) {
                         grid[instrumentIndex][step] = true
                     }
                 }
-            }
-            
-            // Calculate time for the next event
-            let delayParts = event.delay.split(separator: "/").map { Double($0) ?? 0 }
-            if delayParts.count == 2 && delayParts[1] != 0 {
-                currentTime += (delayParts[0] / delayParts[1]) * 4.0 // Delay is fraction of a whole note (4 beats)
             }
         }
         
@@ -97,11 +96,9 @@ struct DrumPattern: Codable, Hashable {
     static func fromGrid(grid: [[Bool]], subdivision: Int, instruments: [Int]) -> [DrumPatternEvent] {
         var patternEvents: [DrumPatternEvent] = []
         guard !grid.isEmpty, !grid[0].isEmpty else { return [] }
-        
-        let totalSteps = grid[0].count
-        let timePerStep = 4.0 / Double(totalSteps) // Time per step as a fraction of a whole note
 
-        var lastEventTime: Double = 0.0
+        let totalSteps = grid[0].count
+        var lastEventStep = 0
 
         for col in 0..<totalSteps {
             let notesForThisStep: [Int] = instruments.indices.compactMap { row in
@@ -109,48 +106,15 @@ struct DrumPattern: Codable, Hashable {
             }
 
             if !notesForThisStep.isEmpty {
-                let eventTime = Double(col) * timePerStep
-                let delayValue = eventTime - lastEventTime
+                let stepDifference = col - lastEventStep
+                let delayString = "\(stepDifference)/\(subdivision)"
                 
-                // Express delay as a fraction of a whole note (4 beats)
-                // Find simplest fraction for the delay
-                
-                var (num, den) = (0, 1)
-
-                // Simplified fraction conversion
-                if abs(delayValue).isZero {
-                    num = 0
-                    den = 1
-                } else {
-                    let targetDenominators = [4, 8, 12, 16, 24, 32]
-                    var bestMatch = (num: 1, den: 1)
-                    var minError = Double.greatestFiniteMagnitude
-
-                    for d in targetDenominators {
-                        let n = Int(round(delayValue * Double(d)))
-                        let error = abs(delayValue - Double(n) / Double(d))
-                        if error < minError {
-                            minError = error
-                            bestMatch = (n, d)
-                        }
-                    }
-                    num = bestMatch.num
-                    den = bestMatch.den
-                }
-                
-                let delayString = "\(num)/\(den)"
-
+                // For the very first event, if it's at step 0, the format should be 0/X, not 0.0
+                // The logic naturally handles this now. If col is 0, stepDifference is 0.
                 patternEvents.append(DrumPatternEvent(delay: delayString, notes: notesForThisStep))
-                lastEventTime = eventTime
+                lastEventStep = col
             }
         }
-        
-        // If the first event has a delay of "0/1", it should be "0.0" as per convention in drums.json
-        if var firstEvent = patternEvents.first, firstEvent.delay == "0/1" {
-            firstEvent.delay = "0.0"
-            patternEvents[0] = firstEvent
-        }
-
         return patternEvents
     }
 }

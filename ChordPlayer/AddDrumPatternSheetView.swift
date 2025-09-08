@@ -16,30 +16,33 @@ struct AddDrumPatternSheetView: View {
     
     private let instruments: [Int] = [36, 38, 42] // MIDI notes for Kick, Snare, Hi-Hat
     private let instrumentNames: [String] = ["Kick", "Snare", "Hi-Hat"]
-    
+    // 1. Add distinct colors for each instrument
+    private let instrumentColors: [Color] = [.red.opacity(0.8), .orange.opacity(0.8), .yellow.opacity(0.8)]
+
     let editingPatternData: DrumPatternEditorData?
     private var isEditing: Bool { editingPatternData != nil }
 
     init(editingPatternData: DrumPatternEditorData? = nil) {
         self.editingPatternData = editingPatternData
-        // Initialize gridState here to avoid "cannot use instance member within property initializer"
         _gridState = State(initialValue: Array(repeating: Array(repeating: false, count: 16), count: 3))
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        // 2. Reduce vertical spacing for a more compact layout
+        VStack(spacing: 12) {
             headerView
                 .padding(.horizontal)
-                .padding(.top, 20)
-                .padding(.bottom, 10)
+                .padding(.top, 16)
             
             Divider()
             
             toolbarView
-                .padding()
+                .padding(.horizontal)
             
+            // 3. Remove horizontal scroll and use dynamic sizing
             gridEditorView
                 .padding(.horizontal)
+                .padding(.bottom, 8)
 
             Spacer()
             
@@ -48,11 +51,10 @@ struct AddDrumPatternSheetView: View {
             footerButtons
                 .padding()
         }
-        .frame(minWidth: 700, idealWidth: 800, minHeight: 550)
+        .frame(minWidth: 680, idealWidth: 750, minHeight: 480, idealHeight: 520) // Adjusted frame
         .background(Color(.windowBackgroundColor))
         .onAppear(perform: setupInitialState)
         .onDisappear {
-            // Ensure playback stops when the view is closed
             if drumPlayer.isPlaying {
                 drumPlayer.stop()
             }
@@ -64,7 +66,7 @@ struct AddDrumPatternSheetView: View {
     private var headerView: some View {
         HStack {
             Text(isEditing ? "编辑鼓点模式" : "创建新鼓点模式")
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: 22, weight: .bold))
             Spacer()
             TextField("显示名称 (例如: Funky Beat)", text: $displayName)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -99,65 +101,68 @@ struct AddDrumPatternSheetView: View {
     }
 
     private var gridEditorView: some View {
-        HStack(spacing: 15) {
-            VStack(alignment: .leading, spacing: 0) {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
                 ForEach(instrumentNames, id: \.self) { name in
                     Text(name)
                         .font(.headline)
-                        .frame(width: 80, height: 44, alignment: .leading)
+                        .frame(height: 35, alignment: .leading) // Dynamic height
                 }
             }
+            .frame(width: 60)
             
-            ScrollView(.horizontal, showsIndicators: true) {
-                HStack(spacing: 0) {
-                    let beats = Int(timeSignature.split(separator: "/").first.map(String.init) ?? "4") ?? 4
+            // Use GeometryReader to calculate cell width dynamically
+            GeometryReader { geometry in
+                let numberOfSteps = gridState[0].count
+                let totalSpacing = CGFloat(numberOfSteps - 1) * 2 // Spacing between cells
+                let stepWidth = (geometry.size.width - totalSpacing) / CGFloat(numberOfSteps)
+
+                HStack(spacing: 2) {
                     let stepsPerBeat = subdivision == 8 ? 2 : 4
                     
-                    ForEach(0..<gridState[0].count, id: \.self) { col in
-                        VStack(spacing: 0) {
+                    ForEach(0..<numberOfSteps, id: \.self) { col in
+                        VStack(spacing: 2) {
                             ForEach(0..<instruments.count, id: \.self) { row in
-                                gridCell(row: row, col: col)
+                                gridCell(row: row, col: col, size: stepWidth)
                             }
                         }
                         .background(
                             (col / stepsPerBeat) % 2 == 0 ? Color.clear : Color.secondary.opacity(0.1)
                         )
                         
-                        if (col + 1) % stepsPerBeat == 0 && col < gridState[0].count - 1 {
+                        if (col + 1) % stepsPerBeat == 0 && col < numberOfSteps - 1 {
                             Divider()
                         }
                     }
                 }
-                .padding(.top, 4) // Padding to allow for playback indicator
-                .overlay(playbackIndicator)
+                .overlay(playbackIndicator(stepWidth: stepWidth, spacing: 2))
             }
         }
     }
     
-    private func gridCell(row: Int, col: Int) -> some View {
+    private func gridCell(row: Int, col: Int, size: CGFloat) -> some View {
         let isActive = gridState[row][col]
         
-        return RoundedRectangle(cornerRadius: 5)
-            .fill(isActive ? Color.accentColor : Color.primary.opacity(0.2))
-            .frame(width: 40, height: 40)
-            .padding(2)
+        return RoundedRectangle(cornerRadius: 4)
+            // Use instrument-specific color
+            .fill(isActive ? instrumentColors[row] : Color.primary.opacity(0.2))
+            .frame(width: size, height: 35) // Use dynamic width
             .onTapGesture {
                 gridState[row][col].toggle()
-                // Play sound on tap if the note is being turned on
                 if gridState[row][col] {
                     drumPlayer.playNote(midiNumber: instruments[row])
                 }
             }
     }
     
-    private var playbackIndicator: some View {
+    private func playbackIndicator(stepWidth: CGFloat, spacing: CGFloat) -> some View {
         GeometryReader { geometry in
             if let currentStep = drumPlayer.currentStep, drumPlayer.isPlaying {
-                let stepWidth = geometry.size.width / CGFloat(gridState[0].count)
+                let position = (CGFloat(currentStep) * (stepWidth + spacing)) + (stepWidth / 2)
                 Rectangle()
-                    .fill(Color.red.opacity(0.7))
+                    .fill(Color.red.opacity(0.8))
                     .frame(width: 2)
-                    .offset(x: (CGFloat(currentStep) + 0.5) * stepWidth)
+                    .offset(x: position)
                     .animation(.linear(duration: 0.05), value: drumPlayer.currentStep)
             }
         }
@@ -197,7 +202,6 @@ struct AddDrumPatternSheetView: View {
             self.subdivision = parsedSubdivision
             
         } else {
-            // For new patterns, just ensure the grid size is correct
             updateGridSize()
         }
     }
@@ -206,7 +210,6 @@ struct AddDrumPatternSheetView: View {
         let beats = Int(timeSignature.split(separator: "/").first.map(String.init) ?? "4") ?? 4
         let columns = beats * (subdivision == 8 ? 2 : 4)
         
-        // Preserve existing pattern when resizing
         var newGrid = Array(repeating: Array(repeating: false, count: columns), count: instruments.count)
         let oldColumns = gridState[0].count
         let minColumns = min(oldColumns, columns)
@@ -242,13 +245,11 @@ struct AddDrumPatternSheetView: View {
             drumPlayer.stop()
         }
         
-        // If it's a new pattern, generate a unique ID
         if !isEditing {
             self.id = "CUSTOM_\(UUID().uuidString)"
         }
         
         guard !id.isEmpty, !displayName.isEmpty else {
-            // Optional: Show an alert to the user
             print("ID and Display Name cannot be empty.")
             return
         }
