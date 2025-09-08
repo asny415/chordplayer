@@ -8,10 +8,13 @@ struct ContentView: View {
     @EnvironmentObject var metronome: Metronome
     @EnvironmentObject var chordPlayer: ChordPlayer
     @EnvironmentObject var midiManager: MidiManager
+    @EnvironmentObject var drumPlayer: DrumPlayer
 
     @Binding var showCustomChordCreatorFromMenu: Bool
     @Binding var showCustomChordManagerFromMenu: Bool
+    @Binding var showDrumPatternCreatorFromMenu: Bool
     @Binding var showCustomDrumPatternManagerFromMenu: Bool
+    @Binding var showPlayingPatternCreatorFromMenu: Bool
     @Binding var showCustomPlayingPatternManagerFromMenu: Bool
 
     var body: some View {
@@ -32,12 +35,31 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showCustomChordManagerFromMenu) {
             CustomChordLibraryView()
+                .environmentObject(appData)
+                .environmentObject(chordPlayer)
+                .environmentObject(midiManager)
+        }
+        .sheet(isPresented: $showDrumPatternCreatorFromMenu) {
+            AddDrumPatternSheetView()
+                .environmentObject(CustomDrumPatternManager.shared)
+                .environmentObject(drumPlayer)
         }
         .sheet(isPresented: $showCustomDrumPatternManagerFromMenu) {
             CustomDrumPatternLibraryView()
+                .environmentObject(CustomDrumPatternManager.shared)
+                .environmentObject(drumPlayer)
+        }
+        .sheet(isPresented: $showPlayingPatternCreatorFromMenu) {
+            PlayingPatternEditorView()
+                .environmentObject(CustomPlayingPatternManager.shared)
+                .environmentObject(chordPlayer)
+                .environmentObject(midiManager)
         }
         .sheet(isPresented: $showCustomPlayingPatternManagerFromMenu) {
             CustomPlayingPatternLibraryView()
+                .environmentObject(CustomPlayingPatternManager.shared)
+                .environmentObject(chordPlayer)
+                .environmentObject(midiManager)
         }
     }
 

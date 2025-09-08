@@ -34,15 +34,20 @@ struct ChordPlayerApp: App {
 
     @State private var showCustomChordCreatorFromMenu = false
     @State private var showCustomChordManagerFromMenu = false
+    @State private var showDrumPatternCreatorFromMenu = false
     @State private var showCustomDrumPatternManagerFromMenu = false
+    @State private var showPlayingPatternCreatorFromMenu = false
     @State private var showCustomPlayingPatternManagerFromMenu = false
+
 
     var body: some Scene {
         WindowGroup {
             ContentView(
                 showCustomChordCreatorFromMenu: $showCustomChordCreatorFromMenu,
                 showCustomChordManagerFromMenu: $showCustomChordManagerFromMenu,
+                showDrumPatternCreatorFromMenu: $showDrumPatternCreatorFromMenu,
                 showCustomDrumPatternManagerFromMenu: $showCustomDrumPatternManagerFromMenu,
+                showPlayingPatternCreatorFromMenu: $showPlayingPatternCreatorFromMenu,
                 showCustomPlayingPatternManagerFromMenu: $showCustomPlayingPatternManagerFromMenu
             )
                 .environmentObject(appData)
@@ -62,13 +67,21 @@ struct ChordPlayerApp: App {
                     showCustomChordCreatorFromMenu = true
                 }
                 .keyboardShortcut("N", modifiers: [.command, .shift])
+                
+                Button("创建自定义鼓点...") {
+                    showDrumPatternCreatorFromMenu = true
+                }
+                
+                Button("创建自定义演奏模式...") {
+                    showPlayingPatternCreatorFromMenu = true
+                }
+                
+                Divider()
 
                 Button("管理自定义和弦...") {
                     showCustomChordManagerFromMenu = true
                 }
                 .keyboardShortcut("M", modifiers: [.command, .shift])
-                
-                Divider()
                 
                 Button("管理自定义鼓点...") {
                     showCustomDrumPatternManagerFromMenu = true
