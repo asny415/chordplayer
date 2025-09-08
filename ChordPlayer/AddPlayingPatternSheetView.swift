@@ -86,9 +86,14 @@ struct AddPlayingPatternSheetView: View {
     private func addSelectedPatterns() {
         // Append new patterns to the existing selectedPlayingPatterns
         appData.performanceConfig.selectedPlayingPatterns.append(contentsOf: Array(selectedPatternIds))
-        // Optionally, set the first newly added pattern as active
-        if let firstNewId = selectedPatternIds.first {
-            appData.performanceConfig.activePlayingPatternId = firstNewId
+        
+        // After adding, check if the active ID is still valid. If not, set the first available one.
+        let fullList = appData.performanceConfig.selectedPlayingPatterns
+        let currentActiveId = appData.performanceConfig.activePlayingPatternId
+        let isActiveIdValid = currentActiveId != nil && fullList.contains(currentActiveId!)
+
+        if !isActiveIdValid {
+            appData.performanceConfig.activePlayingPatternId = fullList.first
         }
     }
 }

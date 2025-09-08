@@ -376,6 +376,16 @@ private struct DrumPatternsView: View {
         .sheet(isPresented: $showAddDrumPatternSheet) {
             SelectDrumPatternsSheet(initialSelection: appData.performanceConfig.selectedDrumPatterns, onDone: { selectedIDs in
                 appData.performanceConfig.selectedDrumPatterns = selectedIDs
+                
+                // Check if the current active pattern is still valid.
+                // If not, set the first available pattern as active.
+                let currentActiveId = appData.performanceConfig.activeDrumPatternId
+                let isActiveIdValid = currentActiveId != nil && selectedIDs.contains(currentActiveId!)
+                
+                if !isActiveIdValid {
+                    appData.performanceConfig.activeDrumPatternId = selectedIDs.first
+                }
+                
                 showAddDrumPatternSheet = false
             })
             .environmentObject(appData)
