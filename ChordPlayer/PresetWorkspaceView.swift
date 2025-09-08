@@ -329,40 +329,37 @@ private struct DrumPatternsView: View {
                 }
                 .frame(height: 80)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(Array(appData.performanceConfig.selectedDrumPatterns.enumerated()), id: \.element) { index, patternId in
-                            if let details = findPatternDetails(for: patternId) {
-                                let isActive = appData.performanceConfig.activeDrumPatternId == patternId
-                                Button(action: {
-                                    appData.performanceConfig.activeDrumPatternId = patternId
-                                    drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
-                                }) {
-                                    ZStack(alignment: .topTrailing) {
-                                        DrumPatternCardView(
-                                            index: index,
-                                            pattern: details.pattern,
-                                            category: details.category,
-                                            timeSignature: appData.performanceConfig.timeSignature,
-                                            isActive: isActive
-                                        )
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
+                    ForEach(Array(appData.performanceConfig.selectedDrumPatterns.enumerated()), id: \.element) { index, patternId in
+                        if let details = findPatternDetails(for: patternId) {
+                            let isActive = appData.performanceConfig.activeDrumPatternId == patternId
+                            Button(action: {
+                                appData.performanceConfig.activeDrumPatternId = patternId
+                                drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
+                            }) {
+                                ZStack(alignment: .topTrailing) {
+                                    DrumPatternCardView(
+                                        index: index,
+                                        pattern: details.pattern,
+                                        category: details.category,
+                                        timeSignature: appData.performanceConfig.timeSignature,
+                                        isActive: isActive
+                                    )
 
-                                        if index < 9 {
-                                            Text("⌘\(index + 1)")
-                                                .font(.caption2).bold()
-                                                .foregroundColor(.white)
-                                                .padding(.horizontal, 6).padding(.vertical, 3)
-                                                .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                                                .offset(x: -8, y: 8)
-                                        }
+                                    if index < 9 {
+                                        Text("⌘\(index + 1)")
+                                            .font(.caption2).bold()
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6).padding(.vertical, 3)
+                                            .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                            .offset(x: -8, y: 8)
                                     }
                                 }
-                                .buttonStyle(.plain)
-                                .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activeDrumPatternId)
                             }
+                            .buttonStyle(.plain)
+                            .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activeDrumPatternId)
                         }
                     }
-                    .padding(1)
                 }
             }
         }
@@ -482,39 +479,36 @@ private struct PlayingPatternsView: View {
                 }
                 .frame(height: 80)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(Array(appData.performanceConfig.selectedPlayingPatterns.enumerated()), id: \.element) { index, patternId in
-                            if let details = findPlayingPatternDetails(for: patternId) {
-                                let isActive = appData.performanceConfig.activePlayingPatternId == patternId
-                                Button(action: {
-                                    appData.performanceConfig.activePlayingPatternId = patternId
-                                }) {
-                                    ZStack(alignment: .topTrailing) {
-                                        PlayingPatternCardView(
-                                            index: index,
-                                            pattern: details.pattern,
-                                            category: details.category,
-                                            timeSignature: appData.performanceConfig.timeSignature,
-                                            isActive: isActive
-                                        )
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
+                    ForEach(Array(appData.performanceConfig.selectedPlayingPatterns.enumerated()), id: \.element) { index, patternId in
+                        if let details = findPlayingPatternDetails(for: patternId) {
+                            let isActive = appData.performanceConfig.activePlayingPatternId == patternId
+                            Button(action: {
+                                appData.performanceConfig.activePlayingPatternId = patternId
+                            }) {
+                                ZStack(alignment: .topTrailing) {
+                                    PlayingPatternCardView(
+                                        index: index,
+                                        pattern: details.pattern,
+                                        category: details.category,
+                                        timeSignature: appData.performanceConfig.timeSignature,
+                                        isActive: isActive
+                                    )
 
-                                        if index < 9 {
-                                            Text("\(index + 1)")
-                                                .font(.caption2).bold()
-                                                .foregroundColor(.white)
-                                                .padding(.horizontal, 6).padding(.vertical, 3)
-                                                .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                                                .offset(x: -8, y: 8)
-                                        }
+                                    if index < 9 {
+                                        Text("\(index + 1)")
+                                            .font(.caption2).bold()
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6).padding(.vertical, 3)
+                                            .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                            .offset(x: -8, y: 8)
                                     }
                                 }
-                                .buttonStyle(.plain)
-                                .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activePlayingPatternId)
                             }
+                            .buttonStyle(.plain)
+                            .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activePlayingPatternId)
                         }
                     }
-                    .padding(1)
                 }
             }
         }
