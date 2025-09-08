@@ -356,6 +356,13 @@ private struct DrumPatternsView: View {
                             }
                             .buttonStyle(.plain)
                             .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activeDrumPatternId)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    appData.removeDrumPattern(patternId: patternId)
+                                } label: {
+                                    Label("移除鼓点", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                 }
@@ -503,6 +510,13 @@ private struct PlayingPatternsView: View {
                             }
                             .buttonStyle(.plain)
                             .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activePlayingPatternId)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    appData.removePlayingPattern(patternId: patternId)
+                                } label: {
+                                    Label("移除指法", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                 }
@@ -696,6 +710,13 @@ private struct ChordProgressionView: View {
                             }
                             .help("编辑快捷键")
                             .offset(x: -8, y: 8)
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                appData.removeChord(chordName: chord)
+                            } label: {
+                                Label("移除和弦", systemImage: "trash")
+                            }
                         }
                     }
                 }

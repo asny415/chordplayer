@@ -158,4 +158,24 @@ class AppData: ObservableObject {
         saveAllData()
         print("[AppData] ✅ Configuration reset to defaults")
     }
+    
+    // MARK: - Removal Methods
+    
+    func removeDrumPattern(patternId: String) {
+        performanceConfig.selectedDrumPatterns.removeAll { $0 == patternId }
+        if performanceConfig.activeDrumPatternId == patternId {
+            performanceConfig.activeDrumPatternId = performanceConfig.selectedDrumPatterns.first
+        }
+    }
+    
+    func removePlayingPattern(patternId: String) {
+        performanceConfig.selectedPlayingPatterns.removeAll { $0 == patternId }
+        if performanceConfig.activePlayingPatternId == patternId {
+            performanceConfig.activePlayingPatternId = performanceConfig.selectedPlayingPatterns.first
+        }
+    }
+    
+    func removeChord(chordName: String) {
+        performanceConfig.chords.removeAll { $0 == chordName }
+    }
 }
