@@ -3,11 +3,16 @@ import SwiftUI
 struct SelectDrumPatternsSheet: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var customDrumPatternManager: CustomDrumPatternManager
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) var dismiss
     
     var onDone: ([String]) -> Void
     
-    @State private var selectedPatternIDs: Set<String> = []
+    @State private var selectedPatternIDs: Set<String>
+    
+    init(initialSelection: [String], onDone: @escaping ([String]) -> Void) {
+        self._selectedPatternIDs = State(initialValue: Set(initialSelection))
+        self.onDone = onDone
+    }
     
     private var systemCategories: [String] {
         appData.drumPatternLibrary?.keys.sorted() ?? []
@@ -15,22 +20,13 @@ struct SelectDrumPatternsSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("从库中选择鼓点模式")
-                    .font(.title2).bold()
-                Spacer()
-                Button("完成") {
-                    onDone(Array(selectedPatternIDs))
-                    presentationMode.wrappedValue.dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding()
-            .background(Color(NSColor.windowBackgroundColor))
-            .frame(height: 55)
-
+            Text("选择鼓点模式")
+                .font(.title2)
+                .fontWeight(.bold)
+                .padding()
+            
             Divider()
-
+            
             List {
                 // System Patterns
                 if let library = appData.drumPatternLibrary {
@@ -60,22 +56,27 @@ struct SelectDrumPatternsSheet: View {
                 }
             }
             .listStyle(.sidebar)
+            
+            Divider()
+            
+            HStack {
+                Button("取消") {
+                    dismiss()
+                }
+                Spacer()
+                Button("完成") {
+                    onDone(Array(selectedPatternIDs))
+                    dismiss()
+                }
+            }
+            .padding()
         }
-        .frame(minWidth: 500, idealWidth: 600, minHeight: 400, idealHeight: 700)
+        .frame(minWidth: 500, minHeight: 400)
     }
     
     @ViewBuilder
     private func patternSelectionRow(patternId: String, pattern: DrumPattern, category: String) -> some View {
-        Toggle(isOn: Binding<Bool>(
-            get: { self.selectedPatternIDs.contains(patternId) },
-            set: { isOn in
-                if isOn {
-                    self.selectedPatternIDs.insert(patternId)
-                } else {
-                    self.selectedPatternIDs.remove(patternId)
-                }
-            }
-        )) {
+        HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(pattern.displayName).font(.headline)
                 DrumPatternGridView(pattern: pattern, timeSignature: appData.performanceConfig.timeSignature, activeColor: .primary, inactiveColor: .secondary)
@@ -86,7 +87,31 @@ struct SelectDrumPatternsSheet: View {
                     .foregroundColor(.secondary)
             }
             .padding(.vertical, 6)
+            
+            Spacer()
+            
+            if selectedPatternIDs.contains(patternId) {
+                Image(systemName: "checkmark")
+                    .foregroundColor(.accentColor)
+            }
         }
-        .toggleStyle(.switch)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if selectedPatternIDs.contains(patternId) {
+                selectedPatternIDs.remove(patternId)
+            } else {
+                selectedPatternIDs.insert(patternId)
+            }
+        }
+    }
+}
+
+struct SelectDrumPatternsSheet_Previews: PreviewProvider {
+    static var previews: some View {
+        let appData = AppData()
+        
+        SelectDrumPatternsSheet(initialSelection: [], onDone: { _ in })
+            .environmentObject(appData)
+            .environmentObject(CustomDrumPatternManager.shared)
     }
 }

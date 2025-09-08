@@ -301,7 +301,7 @@ private struct DrumPatternsView: View {
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
-                Text("鼓点模式 (Cmd + 1, 2...)").font(.headline)
+                Text("鼓点模式").font(.headline)
                 Spacer()
 
                 // Add Pattern to Workspace Button
@@ -372,12 +372,8 @@ private struct DrumPatternsView: View {
             }
         }
         .sheet(isPresented: $showAddDrumPatternSheet) {
-            SelectDrumPatternsSheet(onDone: { selectedIDs in
-                // Avoid adding duplicates
-                let existingIDs = Set(appData.performanceConfig.selectedDrumPatterns)
-                let newIDs = selectedIDs.filter { !existingIDs.contains($0) }
-                appData.performanceConfig.selectedDrumPatterns.append(contentsOf: newIDs)
-                
+            SelectDrumPatternsSheet(initialSelection: appData.performanceConfig.selectedDrumPatterns, onDone: { selectedIDs in
+                appData.performanceConfig.selectedDrumPatterns = selectedIDs
                 showAddDrumPatternSheet = false
             })
             .environmentObject(appData)
@@ -458,7 +454,7 @@ private struct PlayingPatternsView: View {
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
-                Text("和弦指法 (1, 2...)").font(.headline)
+                Text("和弦指法").font(.headline)
                 Spacer()
 
                 // Add Pattern to Workspace Button
