@@ -589,6 +589,8 @@ private struct ChordProgressionView: View {
     @State private var capturingChord: String? = nil
     @State private var captureMonitor: Any? = nil
     @State private var isHoveringGroup: Bool = false
+    @State private var playIconVisibleForChord: String? = nil
+    @State private var badgeHoveredForChord: String? = nil
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -622,11 +624,29 @@ private struct ChordProgressionView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                     ForEach(appData.performanceConfig.chords, id: \.self) { chord in
                         ZStack(alignment: .topTrailing) {
-                            ChordCardView(chord: chord, isFlashing: flashingChord == chord)
-                                .animation(.easeInOut(duration: 0.15), value: flashingChord)
+                            ZStack {
+                                ChordCardView(chord: chord, isFlashing: flashingChord == chord)
+                                    .animation(.easeInOut(duration: 0.15), value: flashingChord)
+
+                                if playIconVisibleForChord == chord && badgeHoveredForChord != chord {
+                                    Color.black.opacity(0.4).cornerRadius(12)
+                                    Image(systemName: "play.fill")
+                                        .foregroundColor(.white)
+                                        .font(.largeTitle)
+                                        .transition(.opacity.animation(.easeInOut))
+                                }
+                            }
+                            .onHover { hovering in
+                                withAnimation {
+                                    playIconVisibleForChord = hovering ? chord : nil
+                                }
+                            }
+                            .onTapGesture {
+                                keyboardHandler.playChordByName(chord)
+                            }
 
                             // Shortcut badge (custom or default). Always show a Text badge.
-                            let (badgeText, badgeColor): (String, Color) = {
+                            let (baseBadgeText, baseBadgeColor): (String, Color) = {
                                 // 1) user-assigned shortcut
                                 if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chord] {
                                     return (s.displayText, Color.accentColor)
@@ -653,6 +673,11 @@ private struct ChordProgressionView: View {
                                 // 使用单字标记以保持徽章简洁（假设为中文环境，使用“设”表示“设置快捷键”）
                                 return ("+", Color.gray.opacity(0.6))
                             }()
+                            
+                            let isBadgeHovered = badgeHoveredForChord == chord
+                            let badgeText = baseBadgeText
+                            let badgeColor = isBadgeHovered ? baseBadgeColor.opacity(0.7) : baseBadgeColor
+
 
                             // Badge button: tapping this starts capturing a new shortcut for this chord.
                             Button(action: {
@@ -665,11 +690,13 @@ private struct ChordProgressionView: View {
                                     .background(badgeColor, in: RoundedRectangle(cornerRadius: 6))
                             }
                             .buttonStyle(.plain)
+                            .onHover { hovering in
+                                withAnimation {
+                                    badgeHoveredForChord = hovering ? chord : nil
+                                }
+                            }
+                            .help("编辑快捷键")
                             .offset(x: -8, y: 8)
-                        }
-                        // Tapping anywhere else on the card plays the chord
-                        .onTapGesture {
-                            keyboardHandler.playChordByName(chord)
                         }
                     }
                 }
