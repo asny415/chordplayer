@@ -372,17 +372,32 @@ private struct DrumPatternsView: View {
             }
         }
         .sheet(isPresented: $showAddDrumPatternSheet) {
-            AddDrumPatternSheetView()
-                .environmentObject(drumPlayer)
-                .environmentObject(customDrumPatternManager)
+            SelectDrumPatternsSheet(onDone: { selectedIDs in
+                // Avoid adding duplicates
+                let existingIDs = Set(appData.performanceConfig.selectedDrumPatterns)
+                let newIDs = selectedIDs.filter { !existingIDs.contains($0) }
+                appData.performanceConfig.selectedDrumPatterns.append(contentsOf: newIDs)
+                
+                showAddDrumPatternSheet = false
+            })
+            .environmentObject(appData)
+            .environmentObject(customDrumPatternManager)
         }
     }
 
     private func findPatternDetails(for patternId: String) -> (pattern: DrumPattern, category: String)? {
-        guard let library = appData.drumPatternLibrary else { return nil }
-        for (category, patterns) in library {
+        // Also check custom patterns
+        for (_, patterns) in customDrumPatternManager.customDrumPatterns {
             if let pattern = patterns[patternId] {
-                return (pattern, category)
+                return (pattern, "自定义")
+            }
+        }
+
+        if let library = appData.drumPatternLibrary {
+            for (category, patterns) in library {
+                if let pattern = patterns[patternId] {
+                    return (pattern, category)
+                }
             }
         }
         return nil
