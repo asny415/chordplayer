@@ -123,21 +123,20 @@ struct PlayingPatternEditorView: View {
                 Spacer().frame(width: labelWidth)
                 ForEach(0..<cols, id: \.self) { col in
                     VStack(spacing: 4) {
-                        if modeIsStrum {
-                            Picker("", selection: Binding(get: {
-                                return strumDirections.indices.contains(col) ? (strumDirections[col] ?? "down") : "down"
-                            }, set: { newVal in
-                                if strumDirections.indices.contains(col) {
-                                    strumDirections[col] = newVal
+                            if modeIsStrum {
+                                // compact menu button to choose None/Down/Up to avoid overlapping segmented control
+                                let current = strumDirections.indices.contains(col) ? (strumDirections[col] ?? "none") : "none"
+                                Menu {
+                                    Button("—") { strumDirections[col] = nil }
+                                    Button("↓") { strumDirections[col] = "down" }
+                                    Button("↑") { strumDirections[col] = "up" }
+                                } label: {
+                                    Text(current == "down" ? "↓" : current == "up" ? "↑" : "—")
+                                        .font(.caption)
+                                        .frame(width: cellWidth, height: 28)
+                                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.gray.opacity(0.08)))
                                 }
-                            })) {
-                                Text("↓").tag("down")
-                                Text("↑").tag("up")
-                            }
-                            .frame(width: cellWidth)
-                            .labelsHidden()
-                            .pickerStyle(.segmented)
-                        } else {
+                            } else {
                             Text("\(col)")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -230,17 +229,17 @@ struct PlayingPatternEditorView: View {
                             Spacer().frame(width: labelWidth)
                             ForEach(0..<cols, id: \.self) { col in
                                 if modeIsStrum {
-                                    Picker("", selection: Binding(get: {
-                                        return strumDirections.indices.contains(col) ? (strumDirections[col] ?? "down") : "down"
-                                    }, set: { newVal in
-                                        if strumDirections.indices.contains(col) { strumDirections[col] = newVal }
-                                    })) {
-                                        Text("↓").tag("down")
-                                        Text("↑").tag("up")
+                                    let current = strumDirections.indices.contains(col) ? (strumDirections[col] ?? "none") : "none"
+                                    Menu {
+                                        Button("—") { strumDirections[col] = nil }
+                                        Button("↓") { strumDirections[col] = "down" }
+                                        Button("↑") { strumDirections[col] = "up" }
+                                    } label: {
+                                        Text(current == "down" ? "↓" : current == "up" ? "↑" : "—")
+                                            .font(.caption)
+                                            .frame(width: computedCellWidth, height: 28)
+                                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.gray.opacity(0.08)))
                                     }
-                                    .frame(width: computedCellWidth)
-                                    .labelsHidden()
-                                    .pickerStyle(.segmented)
                                 } else {
                                     Text("\(col)")
                                         .font(.caption2)
@@ -297,29 +296,89 @@ struct PlayingPatternEditorView: View {
         // toggle and play single note preview
         grid[string][col].toggle()
             if grid[string][col] {
-            // Play the note for preview using midiManager
-            let fret = 0 // represent as open string for preview; user can interpret as just note-on
-            // UI string index 0 == 弦1 (high E). standardGuitarTuning[0] is low E (弦6), so reverse index to get correct pitch.
-            let midiStringIndex = max(0, min(stringCount - 1, (stringCount - 1) - string))
-            let midiNote = MusicTheory.standardGuitarTuning[midiStringIndex] + fret
-            midiManager.sendNoteOn(note: UInt8(midiNote), velocity: 100)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                midiManager.sendNoteOff(note: UInt8(midiNote), velocity: 100)
-            }
+                // Play the note for preview using the C chord mapping so single-note preview
+                // matches the chord preview pitch for that string.
+                let fingering: [StringOrInt] = [.string("x"), .int(3), .int(2), .int(0), .int(1), .int(0)]
+                let chordNotes = MusicTheory.chordToMidiNotes(chordDefinition: fingering, tuning: MusicTheory.standardGuitarTuning)
+
+                // UI string index 0 == 弦1 (high E). chordNotes is indexed low->high, so map UI index -> midi index
+                let midiIndex = (stringCount - 1) - string
+                if let midiNote = chordNotes[safe: midiIndex], midiNote >= 0 {
+                    midiManager.sendNoteOn(note: UInt8(midiNote), velocity: 100)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        midiManager.sendNoteOff(note: UInt8(midiNote), velocity: 100)
+                    }
+                }
         }
     }
 
     private func previewChordC() {
         // C major fingering (E A D G B E) -> [x,3,2,0,1,0]
-        let fingering: [Any] = ["x", 3, 2, 0, 1, 0]
-        let notes = MusicTheory.chordToMidiNotes(chordDefinition: fingering, tuning: MusicTheory.standardGuitarTuning)
-        // play all notes together
-        for note in notes where note >= 0 {
-            midiManager.sendNoteOn(note: UInt8(note), velocity: 110)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            for note in notes where note >= 0 {
-                midiManager.sendNoteOff(note: UInt8(note), velocity: 0)
+        // Use StringOrInt to match MusicTheory expectations
+        let fingering: [StringOrInt] = [.string("x"), .int(3), .int(2), .int(0), .int(1), .int(0)]
+        let chordNotes = MusicTheory.chordToMidiNotes(chordDefinition: fingering, tuning: MusicTheory.standardGuitarTuning)
+
+        // Determine step timing (simple heuristic: longer for 8th, shorter for 16th)
+        let stepDuration: Double = (subdivision == 8) ? 0.35 : 0.18
+        let strumNoteSpacing: Double = 0.06
+        let noteSustain: Double = 0.45
+
+        let cols = grid.first?.count ?? 0
+
+        for col in 0..<cols {
+            // collect notes for this column according to mode and markers
+            var scheduledNotes: [(note: Int, order: Int)] = []
+
+            if modeIsStrum {
+                if let dir = (strumDirections.indices.contains(col) ? strumDirections[col] : nil) {
+                    // explicit direction -> use fixed string order (down: 6..1, up: 1..6)
+                    let fixedOrder: [Int] = (dir == "down") ? [6,5,4,3,2,1] : [1,2,3,4,5,6]
+                    var idx = 0
+                    // include all strings in fixed order regardless of which cells the user clicked
+                    for n in fixedOrder {
+                        let uiIndex = n - 1
+                        let midiIndex = (stringCount - 1) - uiIndex
+                        if let note = chordNotes[safe: midiIndex], note >= 0 {
+                            scheduledNotes.append((note: note, order: idx))
+                            idx += 1
+                        }
+                    }
+                } else {
+                    // no direction -> play simultaneously (like arpeggio/simultaneous)
+                    for s in 0..<stringCount {
+                        if grid[s][col] {
+                            let midiIndex = (stringCount - 1) - s
+                            if let note = chordNotes[safe: midiIndex], note >= 0 {
+                                scheduledNotes.append((note: note, order: 0))
+                            }
+                        }
+                    }
+                }
+            } else {
+                // arpeggio / simultaneous: play all selected strings at same time
+                for s in 0..<stringCount {
+                    if grid[s][col] {
+                        let midiIndex = (stringCount - 1) - s
+                        if let note = chordNotes[safe: midiIndex], note >= 0 {
+                            scheduledNotes.append((note: note, order: 0))
+                        }
+                    }
+                }
+            }
+
+            // schedule the notes for this column
+                let baseTime = Double(col) * stepDuration
+            for (note, order) in scheduledNotes {
+                let offset = modeIsStrum ? Double(order) * strumNoteSpacing : 0.0
+                let onTime = baseTime + offset
+                let offTime = onTime + noteSustain
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + onTime) {
+                    midiManager.sendNoteOn(note: UInt8(note), velocity: 110)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + offTime) {
+                    midiManager.sendNoteOff(note: UInt8(note), velocity: 0)
+                }
             }
         }
     }
@@ -331,6 +390,10 @@ struct PlayingPatternEditorView: View {
             self.id = data.id
             self.name = data.pattern.name
             self.timeSignature = data.timeSignature
+            // If any event has a non-zero delta, treat the whole pattern as strum mode
+            if data.pattern.pattern.contains(where: { ($0.delta ?? 0) != 0 }) {
+                self.modeIsStrum = true
+            }
             // Parse existing pattern into grid/markers/strumDirections
             let cols = grid.first?.count ?? 0
             // Clear
@@ -440,14 +503,14 @@ struct PlayingPatternEditorView: View {
             var notesForCol: [NoteValue] = []
             // If mode is strum, we will collect strings and order by direction
             if modeIsStrum {
-                // determine strum order
-                let dir = strumDirections.indices.contains(col) ? strumDirections[col] ?? "down" : "down"
-                var stringNums: [Int] = []
-                for s in 0..<stringCount { if grid[s][col] { stringNums.append(s+1) } }
-                if !stringNums.isEmpty {
-                    if dir == "down" { stringNums.sort(by: >) } else { stringNums.sort(by: <) }
-                    for n in stringNums { notesForCol.append(.int(n)) }
+                // If direction is nil, per spec we treat this as "no entry" and skip this column
+                guard let dir = (strumDirections.indices.contains(col) ? strumDirections[col] : nil) else {
+                    continue
                 }
+                // fixed strum order when a direction is set
+                    let fixedOrder: [Int] = (dir == "down") ? [6,5,4,3,2,1] : [1,2,3,4,5,6]
+                    // include all strings in fixed order regardless of clicked cells
+                    for n in fixedOrder { notesForCol.append(.int(n)) }
             } else {
                 for string in 0..<stringCount {
                     if grid[string][col] {
@@ -473,7 +536,15 @@ struct PlayingPatternEditorView: View {
             if !notesForCol.isEmpty {
                 let stepDifference = col - lastEventCol
                 let delayString = "\(stepDifference)/\(subdivision)"
-                let deltaValue: Double? = (modeIsStrum && !notesForCol.isEmpty) ? 15 : nil
+                var deltaValue: Double? = nil
+                if modeIsStrum {
+                    if let dir = (strumDirections.indices.contains(col) ? strumDirections[col] : nil) {
+                        // only treat as a strum (delta) when a direction is explicitly set
+                        deltaValue = 15
+                    } else {
+                        deltaValue = nil
+                    }
+                }
                 events.append(PatternEvent(delay: delayString, notes: notesForCol, delta: deltaValue))
                 lastEventCol = col
             }
