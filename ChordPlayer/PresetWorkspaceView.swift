@@ -67,22 +67,29 @@ private struct TempoDashboardCard: View {
     @State private var startTempo: Double? = nil
 
     var body: some View {
-        DashboardCardView(label: "速度", value: "\(Int(round(tempo)))", unit: "BPM")
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        if self.startTempo == nil {
-                            self.startTempo = self.tempo
-                        }
-                        let dragAmount = value.translation.width
-                        let newTempo = self.startTempo! + Double(dragAmount / 4.0)
-                        self.tempo = max(40, min(240, newTempo))
+        ZStack(alignment: .bottomTrailing) {
+            DashboardCardView(label: "速度", value: "\(Int(round(tempo)))", unit: "BPM")
+            
+            Image(systemName: "arrow.left.and.right")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(5)
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    if self.startTempo == nil {
+                        self.startTempo = self.tempo
                     }
-                    .onEnded { _ in
-                        self.tempo = round(self.tempo)
-                        self.startTempo = nil
-                    }
-            )
+                    let dragAmount = value.translation.width
+                    let newTempo = self.startTempo! + Double(dragAmount / 4.0)
+                    self.tempo = max(40, min(240, newTempo))
+                }
+                .onEnded { _ in
+                    self.tempo = round(self.tempo)
+                    self.startTempo = nil
+                }
+        )
     }
 }
 
@@ -94,27 +101,34 @@ private struct DraggableValueCard<T: Equatable & CustomStringConvertible>: View 
     @State private var startIndex: Int? = nil
 
     var body: some View {
-        DashboardCardView(label: label, value: selection.description)
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        guard let currentIndex = options.firstIndex(of: selection) else { return }
-                        if self.startIndex == nil {
-                            self.startIndex = currentIndex
-                        }
-                        
-                        let dragAmount = value.translation.width
-                        let indexOffset = Int(round(dragAmount / 30.0)) // Drag sensitivity
-                        
-                        let newIndex = self.startIndex! + indexOffset
-                        let clampedIndex = max(0, min(options.count - 1, newIndex))
-                        
-                        self.selection = options[clampedIndex]
+        ZStack(alignment: .bottomTrailing) {
+            DashboardCardView(label: label, value: selection.description)
+            
+            Image(systemName: "arrow.left.and.right")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(5)
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    guard let currentIndex = options.firstIndex(of: selection) else { return }
+                    if self.startIndex == nil {
+                        self.startIndex = currentIndex
                     }
-                    .onEnded { _ in
-                        self.startIndex = nil
-                    }
-            )
+                    
+                    let dragAmount = value.translation.width
+                    let indexOffset = Int(round(dragAmount / 30.0)) // Drag sensitivity
+                    
+                    let newIndex = self.startIndex! + indexOffset
+                    let clampedIndex = max(0, min(options.count - 1, newIndex))
+                    
+                    self.selection = options[clampedIndex]
+                }
+                .onEnded { _ in
+                    self.startIndex = nil
+                }
+        )
     }
 }
 
