@@ -6,6 +6,7 @@ import SwiftUI
 struct CustomPlayingPatternLibraryView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var customPlayingPatternManager: CustomPlayingPatternManager
+    @EnvironmentObject var chordPlayer: ChordPlayer
     
     @State private var searchText: String = ""
     @State private var showingCreateSheet = false
@@ -73,77 +74,93 @@ struct CustomPlayingPatternLibraryView: View {
     
     private var patternList: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 20)], spacing: 20) {
                 ForEach(timeSignatures, id: \.self) { timeSignature in
-                    Section(header: Text(timeSignature).font(.headline).padding(.horizontal)) {
-                        LazyVStack(spacing: 12) {
-                            if let patterns = customPlayingPatternManager.customPlayingPatterns[timeSignature] {
-                                ForEach(patterns.filter { searchText.isEmpty ? true : $0.name.localizedCaseInsensitiveContains(searchText) }) { pattern in
-                                    patternCard(pattern: pattern, timeSignature: timeSignature)
-                                }
+                    if let patterns = customPlayingPatternManager.customPlayingPatterns[timeSignature] {
+                        let filteredPatterns = patterns.filter { searchText.isEmpty ? true : $0.name.localizedCaseInsensitiveContains(searchText) }
+                        
+                        if !filteredPatterns.isEmpty {
+                            Text(timeSignature)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .padding(.top)
+                                .gridCellUnsizedAxes(.horizontal)
+
+                            ForEach(filteredPatterns) { pattern in
+                                patternCard(pattern: pattern, timeSignature: timeSignature)
                             }
                         }
                     }
                 }
             }
-            .padding(.vertical, 20)
+            .padding(20)
         }
     }
     
     private func patternCard(pattern: GuitarPattern, timeSignature: String) -> some View {
         let isHovered = hoveredPatternID == pattern.id
         
-        return HStack { // Added return
-            Image(systemName: "guitars") // Icon for playing patterns
-                .font(.largeTitle)
-                .foregroundColor(.accentColor)
-                .padding(.trailing, 8)
+        return VStack(spacing: 12) {
+            Text(pattern.name)
+                .font(.headline)
+                .fontWeight(.bold)
+                .lineLimit(1)
+
+            PlayingPatternView(
+                pattern: pattern,
+                timeSignature: timeSignature,
+                color: .primary
+            )
+            .opacity(0.8)
+            .frame(height: 50)
+            .padding(.horizontal)
             
-            VStack(alignment: .leading) {
-                Text(pattern.name)
-                    .font(.headline)
-                    .fontWeight(.bold)
-                Text("ID: \(pattern.id)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-            
-            HStack {
-                Button(action: { /* Play Action */ }) {
+            HStack(spacing: 20) {
+                Button(action: { playPreview(pattern: pattern) }) {
                     Image(systemName: "play.circle.fill")
+                        .font(.title2)
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.accentColor)
                 .help("试听")
                 
                 Button(action: { editPattern(pattern: pattern, timeSignature: timeSignature) }) {
-                    Image(systemName: "pencil")
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.title2)
                 }
                 .buttonStyle(.plain)
                 .help("编辑")
                 
                 Button(action: { deletePattern(id: pattern.id, timeSignature: timeSignature) }) {
-                    Image(systemName: "trash")
+                    Image(systemName: "trash.circle.fill")
+                        .font(.title2)
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.red)
                 .help("删除")
             }
-            .font(.body)
         }
-        .padding()
+        .padding(15)
         .background(Color(NSColor.windowBackgroundColor).opacity(isHovered ? 0.9 : 1.0))
-        .cornerRadius(12)
-        .shadow(radius: isHovered ? 6 : 1)
+        .cornerRadius(16)
+        .shadow(radius: isHovered ? 5 : 2)
         .scaleEffect(isHovered ? 1.02 : 1.0)
         .onHover { hovering in
             withAnimation(.spring()) {
                 hoveredPatternID = hovering ? pattern.id : nil
+                if !hovering {
+                    if !hovering {
+                    // Stop playback when mouse leaves
+                    chordPlayer.panic()
+                }
+                }
             }
         }
-        .padding(.horizontal)
+    }
+    
+    private func playPreview(pattern: GuitarPattern) {
+        // Use a default C chord for previewing the pattern
+        chordPlayer.playChord(chordName: "C_Major", pattern: pattern, tempo: 120, key: "C", capo: 0, velocity: 100, duration: 4.0)
     }
     
     private func editPattern(pattern: GuitarPattern, timeSignature: String) {
