@@ -317,13 +317,11 @@ private struct DrumPatternsView: View {
             if appData.performanceConfig.selectedDrumPatterns.isEmpty {
                 HStack {
                     Spacer()
-                    VStack(spacing: 8) {
-                        Text("当前没有鼓点模式")
+                    VStack(spacing: 6) {
+                        Text("当前没有鼓点模式。")
                             .font(.subheadline).foregroundColor(.secondary)
-                        Button("从库中添加鼓点模式") {
-                            showAddDrumPatternSheet = true
-                        }
-                        .tint(.accentColor)
+                        Text("点击右上角“+”添加鼓点模式，或使用快捷键 ⌘1/⌘2... 进行切换")
+                            .font(.caption).foregroundColor(.secondary)
                     }
                     Spacer()
                 }
@@ -467,13 +465,11 @@ private struct PlayingPatternsView: View {
             if appData.performanceConfig.selectedPlayingPatterns.isEmpty {
                 HStack {
                     Spacer()
-                    VStack(spacing: 8) {
-                        Text("当前没有和弦指法")
+                    VStack(spacing: 6) {
+                        Text("当前没有和弦指法。")
                             .font(.subheadline).foregroundColor(.secondary)
-                        Button("从库中添加和弦指法") {
-                            showAddPlayingPatternSheet = true
-                        }
-                        .tint(.accentColor)
+                        Text("点击右上角“+”添加和弦指法，或使用数字键 1/2... 快速选择")
+                            .font(.caption).foregroundColor(.secondary)
                     }
                     Spacer()
                 }
@@ -615,12 +611,10 @@ private struct ChordProgressionView: View {
                 HStack {
                     Spacer()
                     VStack(spacing: 8) {
-                        Text("当前没有和弦进行")
+                        Text("当前没有和弦进行。")
                             .font(.subheadline).foregroundColor(.secondary)
-                        Button("从和弦库中添加") {
-                            showAddChordSheet = true
-                        }
-                        .tint(.accentColor)
+                        Text("点击右上角“+”添加和弦，或在和弦库中选择并添加到进行中。")
+                            .font(.caption).foregroundColor(.secondary)
                     }
                     Spacer()
                 }
