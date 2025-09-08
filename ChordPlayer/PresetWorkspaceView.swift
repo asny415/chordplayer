@@ -279,30 +279,16 @@ private struct DrumPatternCardView: View {
 private struct DrumPatternsView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var drumPlayer: DrumPlayer
-    @EnvironmentObject var customDrumPatternManager: CustomDrumPatternManager // Add this
+    @EnvironmentObject var customDrumPatternManager: CustomDrumPatternManager
 
     @State private var showAddDrumPatternSheet: Bool = false
-    @State private var showDrumPatternLibrary: Bool = false // Add this
 
     @State private var isHoveringAddDrumButton: Bool = false
-    @State private var isHoveringManageDrumButton: Bool = false // Add this
 
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
                 Spacer()
-
-                // Manage Custom Patterns Button
-                Button(action: { showDrumPatternLibrary = true }) {
-                    Image(systemName: "list.bullet")
-                        .font(.title3)
-                        .foregroundColor(isHoveringManageDrumButton ? .accentColor : Color.primary.opacity(0.55))
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.12)) { isHoveringManageDrumButton = hovering }
-                }
-                .help("管理自定义鼓点")
 
                 // Add Pattern to Workspace Button
                 Button(action: { showAddDrumPatternSheet = true }) {
@@ -371,10 +357,6 @@ private struct DrumPatternsView: View {
                 .environmentObject(drumPlayer)
                 .environmentObject(customDrumPatternManager)
         }
-        .sheet(isPresented: $showDrumPatternLibrary) { // Add this block
-            CustomDrumPatternLibraryView()
-                .environmentObject(customDrumPatternManager)
-        }
     }
 
     private func findPatternDetails(for patternId: String) -> (pattern: DrumPattern, category: String)? {
@@ -434,30 +416,16 @@ private struct PlayingPatternCardView: View {
 
 private struct PlayingPatternsView: View {
     @EnvironmentObject var appData: AppData
-    @EnvironmentObject var customPlayingPatternManager: CustomPlayingPatternManager // Add this
+    @EnvironmentObject var customPlayingPatternManager: CustomPlayingPatternManager
 
     @State private var showAddPlayingPatternSheet: Bool = false
-    @State private var showPlayingPatternLibrary: Bool = false // Add this
 
     @State private var isHoveringAddPlayingButton: Bool = false
-    @State private var isHoveringManagePlayingButton: Bool = false // Add this
 
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
                 Spacer()
-
-                // Manage Custom Patterns Button
-                Button(action: { showPlayingPatternLibrary = true }) {
-                    Image(systemName: "list.bullet")
-                        .font(.title3)
-                        .foregroundColor(isHoveringManagePlayingButton ? .accentColor : Color.primary.opacity(0.55))
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.12)) { isHoveringManagePlayingButton = hovering }
-                }
-                .help("管理自定义演奏模式")
 
                 // Add Pattern to Workspace Button
                 Button(action: { showAddPlayingPatternSheet = true }) {
@@ -522,10 +490,6 @@ private struct PlayingPatternsView: View {
         }
         .sheet(isPresented: $showAddPlayingPatternSheet) {
             AddPlayingPatternSheetView()
-        }
-        .sheet(isPresented: $showPlayingPatternLibrary) { // Add this block
-            CustomPlayingPatternLibraryView()
-                .environmentObject(customPlayingPatternManager)
         }
     }
     

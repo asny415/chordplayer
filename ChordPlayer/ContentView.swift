@@ -11,7 +11,8 @@ struct ContentView: View {
 
     @Binding var showCustomChordCreatorFromMenu: Bool
     @Binding var showCustomChordManagerFromMenu: Bool
-    // 添加面板改为在各自视图内部显示，因此移除这两个绑定
+    @Binding var showCustomDrumPatternManagerFromMenu: Bool
+    @Binding var showCustomPlayingPatternManagerFromMenu: Bool
 
     var body: some View {
         NavigationSplitView {
@@ -23,7 +24,7 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .frame(minWidth: 900, minHeight: 600)
         .onAppear(perform: setupInitialState)
-    .sheet(isPresented: $showCustomChordCreatorFromMenu) {
+        .sheet(isPresented: $showCustomChordCreatorFromMenu) {
             CustomChordCreatorView()
                 .environmentObject(appData)
                 .environmentObject(chordPlayer)
@@ -31,7 +32,13 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showCustomChordManagerFromMenu) {
             CustomChordLibraryView()
-    }
+        }
+        .sheet(isPresented: $showCustomDrumPatternManagerFromMenu) {
+            CustomDrumPatternLibraryView()
+        }
+        .sheet(isPresented: $showCustomPlayingPatternManagerFromMenu) {
+            CustomPlayingPatternLibraryView()
+        }
     }
 
     private func setupInitialState() {
