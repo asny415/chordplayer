@@ -368,6 +368,8 @@ private struct DrumPatternsView: View {
         }
         .sheet(isPresented: $showAddDrumPatternSheet) {
             AddDrumPatternSheetView()
+                .environmentObject(drumPlayer)
+                .environmentObject(customDrumPatternManager)
         }
         .sheet(isPresented: $showDrumPatternLibrary) { // Add this block
             CustomDrumPatternLibraryView()

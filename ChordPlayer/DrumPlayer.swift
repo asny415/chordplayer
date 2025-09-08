@@ -6,6 +6,8 @@ class DrumPlayer: ObservableObject {
     private var metronome: Metronome
     private var appData: AppData
 
+    @Published private(set) var currentStep: Int? = nil
+
     private var currentPatternTimer: Timer?
     private var currentPatternEvents: [DrumPatternEvent]?
     private var currentPatternIndex: Int = 0
@@ -33,6 +35,62 @@ class DrumPlayer: ObservableObject {
         self.metronome = metronome
         self.appData = appData
         self.loopCount = 0
+    }
+
+    // Plays a single MIDI note immediately.
+    public func playNote(midiNumber: Int) {
+        midiManager.sendNoteOn(note: UInt8(midiNumber), velocity: 120, channel: 9)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.midiManager.sendNoteOff(note: UInt8(midiNumber), velocity: 0, channel: 9)
+        }
+    }
+
+    // Plays a specific drum pattern, typically for preview purposes.
+    public func play(drumPattern: DrumPattern, timeSignature: String, bpm: Double) {
+        stop() // Stop any existing playback first.
+
+        let wholeNoteMs = (60.0 / bpm) * 4.0 * 1000.0
+        var newLoopDurationMs: Double = wholeNoteMs
+        let parts = timeSignature.split(separator: "/").map { String($0) }
+        if parts.count == 2, let beats = Double(parts[0]), let beatType = Double(parts[1]), beatType != 0 {
+            newLoopDurationMs = (beats / beatType) * wholeNoteMs
+        }
+
+        var rhythmicTime: Double = 0
+        var physicalTime: Double = 0
+        var newPatternSchedule: [(timestampMs: Double, notes: [Int])] = []
+
+        for event in drumPattern.pattern {
+            var delayMs: Double = 0
+            if let parsedFraction = MusicTheory.parseDelay(delayString: event.delay) {
+                delayMs = parsedFraction * wholeNoteMs
+                rhythmicTime += delayMs
+                physicalTime = rhythmicTime
+            } else if let ms = Double(event.delay) {
+                delayMs = ms
+                physicalTime += delayMs
+            } else {
+                continue
+            }
+            newPatternSchedule.append((timestampMs: physicalTime, notes: event.notes))
+        }
+
+        self.currentPatternEvents = drumPattern.pattern
+        self.loopDurationMs = newLoopDurationMs
+        self.isPlaying = true
+        self.startTimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
+        self.currentPatternIndex = 0
+        self.loopCount = 0
+        self.currentPatternSchedule = newPatternSchedule
+
+        print("[DrumPlayer] started preview pattern=\(drumPattern.displayName) tempo=\(bpm) timeSignature=\(timeSignature) loopDuration=\(newLoopDurationMs)ms")
+
+        if let first = self.currentPatternSchedule?.first {
+            let firstEventAbsoluteUptimeMs = startTimeMs + first.timestampMs
+            let nowUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
+            let firstDelayMs = max(0, firstEventAbsoluteUptimeMs - nowUptimeMs)
+            scheduleNextTick(afterDelayMs: firstDelayMs)
+        }
     }
 
     func playPattern(tempo: Double = 120.0, velocity: UInt8 = 100, durationMs: Int = 200) {
@@ -148,7 +206,7 @@ class DrumPlayer: ObservableObject {
         scheduleNextTick(afterDelayMs: delayMs)
     }
 
-    func stop() {
+    public func stop() {
         self.isPlaying = false
         print("[DrumPlayer] stopped")
         scheduledWorkItem?.cancel()
