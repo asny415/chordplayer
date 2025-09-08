@@ -54,7 +54,8 @@ class CustomPlayingPatternManager: ObservableObject {
     func saveCustomPatterns() {
         do {
             let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            // Avoid escaping forward slashes (so delays like "1/4" are written as-is)
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             let data = try encoder.encode(customPlayingPatterns)
             try data.write(to: customPatternsFile)
             print("[CustomPlayingPatternManager] ✅ Saved custom playing patterns")

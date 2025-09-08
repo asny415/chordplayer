@@ -4,65 +4,96 @@ import SwiftUI
 struct PlayingPatternEditorView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var customPlayingPatternManager: CustomPlayingPatternManager
+    @EnvironmentObject var chordPlayer: ChordPlayer
+    @EnvironmentObject var midiManager: MidiManager
 
     // Form state
     @State private var id: String = ""
-    @State private var name: String = ""
-    @State private var timeSignature: String = "4/4"
-    @State private var subdivision: Int = 8 // 8th notes
+    @State private var name: String = "新演奏模式"
+    @State private var timeSignature: String = "4/4" // 4/4,3/4,6/8
+    @State private var subdivision: Int = 8 // 8 or 16
 
-    // Simplified representation of the timeline actions
-    @State private var actions: [EditorAction?] = Array(repeating: nil, count: 8)
+    // Fixed 6 strings, grid: rows = 6 strings, cols = computed
+    private let stringCount = 6
+    @State private var grid: [[Bool]] = Array(repeating: Array(repeating: false, count: 8), count: 6)
+    // Optional markers for ROOT or FIXED string (nil / "ROOT" / "FIXED:1")
+    @State private var markers: [[String?]] = Array(repeating: Array(repeating: nil, count: 8), count: 6)
+
+    // Strum mode vs Arpeggio (分解)
+    @State private var modeIsStrum: Bool = false
+    // For strum mode, store direction per column: nil/"up"/"down"
+    @State private var strumDirections: [String?] = Array(repeating: nil, count: 8)
 
     let editingPatternData: PlayingPatternEditorData?
     private var isEditing: Bool { editingPatternData != nil }
-
-    // Represents an action in the editor timeline
-    enum EditorAction: Hashable {
-        case strumDown
-        case strumUp
-        case pluck(notes: [NoteValue])
-        case mute
-    }
 
     init(editingPatternData: PlayingPatternEditorData? = nil) {
         self.editingPatternData = editingPatternData
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+    VStack(spacing: 0) {
             Text(isEditing ? "编辑演奏模式" : "创建新演奏模式")
-                .font(.largeTitle).fontWeight(.bold).padding()
+                .font(.title).fontWeight(.semibold).padding()
 
-            ScrollView {
-                VStack(spacing: 20) {
-                    Form {
-                        TextField("唯一ID (e.g., my_awesome_pattern)", text: $id)
-                            .disabled(isEditing)
-                        TextField("显示名称 (e.g., 我的分解节奏)", text: $name)
-                        
-                        Picker("拍子", selection: $timeSignature) {
-                            Text("4/4").tag("4/4")
-                            Text("3/4").tag("3/4")
-                            Text("6/8").tag("6/8")
+            ScrollView([.vertical]) {
+                VStack(spacing: 12) {
+                    // --- Top form ---
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Text("名称:")
+                                TextField("显示名称", text: $name)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(maxWidth: 320)
+                            }
                         }
-                        
-                        Picker("精度", selection: $subdivision) {
-                            Text("8分音符").tag(8)
-                            Text("16分音符").tag(16)
+
+                        Spacer()
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Picker("拍子", selection: $timeSignature) {
+                                Text("4/4").tag("4/4")
+                                Text("3/4").tag("3/4")
+                                Text("6/8").tag("6/8")
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 200)
+
+                            Picker("细分", selection: $subdivision) {
+                                Text("8分音符").tag(8)
+                                Text("16分音符").tag(16)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 200)
                         }
-                    }.padding(.bottom)
+                    }
+                    .padding(.horizontal)
+
+                    // --- Mode toggle ---
+                    HStack {
+                        Toggle(isOn: $modeIsStrum) {
+                            Text(modeIsStrum ? "扫弦模式" : "分解和弦模式")
+                        }
+                        .toggleStyle(.button)
+                        Spacer()
+                        Button("预览整和弦 (C)") { previewChordC() }
+                    }
+                    .padding(.horizontal)
 
                     Divider()
-                    
-                    // Placeholder for the timeline editor
-                    Text("时序编辑器 (待实现)")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                        .frame(height: 200)
 
-                }.padding()
+                    // --- Grid editor (header + grid scroll together for alignment) ---
+                    VStack(spacing: 8) {
+                        combinedGridArea()
+                        Text("提示：点击格子预览单音；右键(或长按)设置 ROOT 或 固定弦")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 4)
             }
+            .padding(.vertical)
+                }
+        }
 
             Divider()
             HStack {
@@ -70,43 +101,393 @@ struct PlayingPatternEditorView: View {
                 Spacer()
                 Button("保存", action: save)
                     .buttonStyle(.borderedProminent)
-            }.padding()
+            }
+            .padding()
         }
-        .frame(minWidth: 600, idealWidth: 700, minHeight: 550)
+            .frame(minWidth: 700, minHeight: 560)
         .onAppear(perform: setupInitialState)
-        .onChange(of: timeSignature) { _ in updateTimelineSize() }
-        .onChange(of: subdivision) { _ in updateTimelineSize() }
+        .onChange(of: timeSignature) { _ in updateGridSize() }
+        .onChange(of: subdivision) { _ in updateGridSize() }
+    }
+
+    // MARK: - Views
+    private func timelineHeaderView() -> some View {
+        let cols = grid.first?.count ?? 8
+    let labelWidth: CGFloat = 44
+        let spacing: CGFloat = 6
+        let cellWidth: CGFloat = subdivision == 8 ? 44 : 36
+
+        return ScrollView(.horizontal, showsIndicators: true) {
+            HStack(spacing: spacing) {
+                // leading label spacer to align with string labels in grid
+                Spacer().frame(width: labelWidth)
+                ForEach(0..<cols, id: \.self) { col in
+                    VStack(spacing: 4) {
+                        if modeIsStrum {
+                            Picker("", selection: Binding(get: {
+                                return strumDirections.indices.contains(col) ? (strumDirections[col] ?? "down") : "down"
+                            }, set: { newVal in
+                                if strumDirections.indices.contains(col) {
+                                    strumDirections[col] = newVal
+                                }
+                            })) {
+                                Text("↓").tag("down")
+                                Text("↑").tag("up")
+                            }
+                            .frame(width: cellWidth)
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                        } else {
+                            Text("\(col)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .frame(width: cellWidth)
+                        }
+                    }
+                }
+                Spacer().frame(width: 8)
+            }
+            .padding(.vertical, 6)
+            .padding(.leading, 8)
+        }
+    }
+
+    private func gridView() -> some View {
+        let cols = grid.first?.count ?? 8
+    let labelWidth: CGFloat = 44
+        let spacing: CGFloat = 6
+        let cellWidth: CGFloat = subdivision == 8 ? 44 : 36
+        return ScrollView([.horizontal, .vertical]) {
+            VStack(spacing: spacing) {
+                ForEach(0..<stringCount, id: \.self) { stringIndex in
+                    HStack(spacing: spacing) {
+                        // String label
+                        Text("弦 \(stringIndex + 1)")
+                            .frame(width: labelWidth, alignment: .trailing)
+                            .font(.subheadline)
+
+                        ForEach(0..<cols, id: \.self) { col in
+                            ZStack {
+                                Rectangle()
+                                    .fill(grid[stringIndex][col] ? Color.accentColor.opacity(0.9) : Color.gray.opacity(0.12))
+                                    .frame(width: cellWidth, height: 36)
+                                    .cornerRadius(6)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        toggleCell(string: stringIndex, col: col)
+                                    }
+                                    .contextMenu(menuItems: {
+                                        Button("设置为 ROOT") { markers[stringIndex][col] = "ROOT" }
+                                        Button("设置为 固定弦") { markers[stringIndex][col] = "FIXED:\(stringIndex+1)" }
+                                        Button("清除标记") { markers[stringIndex][col] = nil }
+                                    })
+
+                                if let m = markers[stringIndex][col] {
+                                    Text(m.hasPrefix("FIXED") ? String(m.split(separator: ":")[1]) : "ROOT")
+                                        .font(.caption2).bold().foregroundColor(.white)
+                                        .padding(4).background(Color.black.opacity(0.5)).cornerRadius(4)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.leading, 8)
+        }
+    }
+
+    // Combined header + grid in a single horizontal scroll view to ensure perfect column alignment
+    private func combinedGridArea() -> some View {
+        let cols = grid.first?.count ?? 8
+    let labelWidth: CGFloat = 44
+        let spacing: CGFloat = 6
+        let cellWidth: CGFloat = subdivision == 8 ? 44 : 36
+
+        // Use vertical-only scroll with GeometryReader to compute cellWidth so it fits horizontally
+    return ScrollView(.vertical) {
+            GeometryReader { geo in
+                let totalWidth = geo.size.width
+                // account for paddings and trailing spacer
+                let endPadding: CGFloat = 16
+                let totalSpacing = CGFloat(max(0, cols - 1)) * spacing + endPadding
+                let availableForCells = max(40, totalWidth - labelWidth - totalSpacing - 16) // 16 side padding
+                // For 8th notes prefer up to 44, for 16th allow smaller but not less than 20
+                let rawCell = availableForCells / CGFloat(max(1, cols))
+                let minCell: CGFloat = subdivision == 8 ? 28 : 20
+                let maxCell: CGFloat = subdivision == 8 ? 44 : 36
+                let computedCellWidth = min(maxCell, max(minCell, floor(rawCell)))
+
+                // compute content width and center it
+                let contentWidth = labelWidth + CGFloat(cols) * computedCellWidth + CGFloat(max(0, cols - 1)) * spacing + 16
+
+                // Center the inner content by using flexible spacers and an exact content width.
+                HStack(spacing: 0) {
+                    Spacer()
+                    VStack(spacing: 6) {
+                        // Header row
+                        HStack(spacing: spacing) {
+                            Spacer().frame(width: labelWidth)
+                            ForEach(0..<cols, id: \.self) { col in
+                                if modeIsStrum {
+                                    Picker("", selection: Binding(get: {
+                                        return strumDirections.indices.contains(col) ? (strumDirections[col] ?? "down") : "down"
+                                    }, set: { newVal in
+                                        if strumDirections.indices.contains(col) { strumDirections[col] = newVal }
+                                    })) {
+                                        Text("↓").tag("down")
+                                        Text("↑").tag("up")
+                                    }
+                                    .frame(width: computedCellWidth)
+                                    .labelsHidden()
+                                    .pickerStyle(.segmented)
+                                } else {
+                                    Text("\(col)")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .frame(width: computedCellWidth)
+                                }
+                            }
+                            Spacer().frame(width: 8)
+                        }
+
+                        // Grid rows
+                        ForEach(0..<stringCount, id: \.self) { stringIndex in
+                            HStack(spacing: spacing) {
+                                Text("弦 \(stringIndex + 1)")
+                                    .frame(width: labelWidth, alignment: .trailing)
+                                    .font(.subheadline)
+
+                                ForEach(0..<cols, id: \.self) { col in
+                                    ZStack {
+                                        Rectangle()
+                                            .fill(grid[stringIndex][col] ? Color.accentColor.opacity(0.9) : Color.gray.opacity(0.12))
+                                            .frame(width: computedCellWidth, height: 36)
+                                            .cornerRadius(6)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture { toggleCell(string: stringIndex, col: col) }
+                                            .contextMenu(menuItems: {
+                                                Button("设置为 ROOT") { markers[stringIndex][col] = "ROOT" }
+                                                Button("设置为 固定弦") { markers[stringIndex][col] = "FIXED:\(stringIndex+1)" }
+                                                Button("清除标记") { markers[stringIndex][col] = nil }
+                                            })
+
+                                        if let m = markers[stringIndex][col] {
+                                            Text(m.hasPrefix("FIXED") ? String(m.split(separator: ":")[1]) : "ROOT")
+                                                .font(.caption2).bold().foregroundColor(.white)
+                                                .padding(4).background(Color.black.opacity(0.5)).cornerRadius(4)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .frame(width: contentWidth)
+                    Spacer()
+                }
+                .frame(width: totalWidth)
+            }
+            .frame(minHeight: CGFloat(stringCount) * 44 + 40) // ensure geometry has height
+    }
+    }
+
+    // MARK: - Actions
+    private func toggleCell(string: Int, col: Int) {
+        // toggle and play single note preview
+        grid[string][col].toggle()
+            if grid[string][col] {
+            // Play the note for preview using midiManager
+            let fret = 0 // represent as open string for preview; user can interpret as just note-on
+            // UI string index 0 == 弦1 (high E). standardGuitarTuning[0] is low E (弦6), so reverse index to get correct pitch.
+            let midiStringIndex = max(0, min(stringCount - 1, (stringCount - 1) - string))
+            let midiNote = MusicTheory.standardGuitarTuning[midiStringIndex] + fret
+            midiManager.sendNoteOn(note: UInt8(midiNote), velocity: 100)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                midiManager.sendNoteOff(note: UInt8(midiNote), velocity: 100)
+            }
+        }
+    }
+
+    private func previewChordC() {
+        // C major fingering (E A D G B E) -> [x,3,2,0,1,0]
+        let fingering: [Any] = ["x", 3, 2, 0, 1, 0]
+        let notes = MusicTheory.chordToMidiNotes(chordDefinition: fingering, tuning: MusicTheory.standardGuitarTuning)
+        // play all notes together
+        for note in notes where note >= 0 {
+            midiManager.sendNoteOn(note: UInt8(note), velocity: 110)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            for note in notes where note >= 0 {
+                midiManager.sendNoteOff(note: UInt8(note), velocity: 0)
+            }
+        }
     }
 
     private func setupInitialState() {
+        // initialize based on editing data if provided
+        updateGridSize()
         if let data = editingPatternData {
             self.id = data.id
             self.name = data.pattern.name
             self.timeSignature = data.timeSignature
-            // Simplified logic
-            if let firstEvent = data.pattern.pattern.first, firstEvent.delay.contains("16") {
-                self.subdivision = 16
-            } else {
-                self.subdivision = 8
+            // Parse existing pattern into grid/markers/strumDirections
+            let cols = grid.first?.count ?? 0
+            // Clear
+            for r in 0..<stringCount {
+                for c in 0..<cols { grid[r][c] = false; markers[r][c] = nil }
             }
-            // TODO: Convert pattern events to editor actions
-            updateTimelineSize()
+
+            for event in data.pattern.pattern {
+                // parse delay into a column index
+                if let delayFraction = MusicTheory.parsePatternDelay(event.delay) {
+                    let col = Int(round(delayFraction * Double(subdivision)))
+                    let safeCol = max(0, min((grid.first?.count ?? 1) - 1, col))
+
+                    // determine if this is a strum event
+                    let isStrum = (event.delta ?? 0) > 0 && event.notes.count > 1
+                    if isStrum {
+                        // map notes to ints when possible
+                        let intNotes = event.notes.compactMap { note -> Int? in
+                            switch note {
+                            case .int(let v): return v
+                            case .string(let s):
+                                // Attempt to parse ROOT-<n>
+                                if s == "ROOT" { return nil }
+                                if s.hasPrefix("ROOT-"), let last = Int(s.split(separator: "-").last ?? "") { return last }
+                                return nil
+                            }
+                        }
+                        if !intNotes.isEmpty {
+                            // set grid for those strings; intNotes are 1..6
+                            for n in intNotes {
+                                if (1...6).contains(n) {
+                                    grid[n-1][safeCol] = true
+                                }
+                            }
+                            // detect direction
+                            if let first = intNotes.first, let last = intNotes.last {
+                                strumDirections[safeCol] = (first > last) ? "down" : "up"
+                            }
+                        }
+                    } else {
+                        // single or multiple notes treated as individual hits
+                        for note in event.notes {
+                            switch note {
+                            case .int(let v):
+                                if (1...6).contains(v) { grid[v-1][safeCol] = true }
+                            case .string(let s):
+                                if s == "ROOT" {
+                                    // place a ROOT marker on a reasonable default string (string 5 -> index 4) if available
+                                    let idx = min(4, stringCount-1)
+                                    markers[idx][safeCol] = "ROOT"
+                                    grid[idx][safeCol] = true
+                                } else if s.hasPrefix("ROOT-"), let last = Int(s.split(separator: "-").last ?? "" ) {
+                                    // ROOT-n -> place marker on string index (5 - n)
+                                    let stringNum = 5 - last
+                                    if (1...6).contains(stringNum) {
+                                        let idx = stringNum - 1
+                                        markers[idx][safeCol] = "ROOT"
+                                        grid[idx][safeCol] = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // default id as UUID string (not shown to user)
+            self.id = UUID().uuidString
         }
     }
 
-    private func updateTimelineSize() {
+    private func updateGridSize() {
         let beats = Int(timeSignature.split(separator: "/").first.map(String.init) ?? "4") ?? 4
-        let columns = beats * (subdivision == 8 ? 2 : 4)
-        actions = Array(repeating: nil, count: columns)
+        let cols = beats * (subdivision == 8 ? 2 : 4)
+        // resize grid while preserving existing data where possible
+        for r in 0..<stringCount {
+            if grid[r].count != cols {
+                let old = grid[r]
+                grid[r] = Array(repeating: false, count: cols)
+                for i in 0..<min(old.count, cols) { grid[r][i] = old[i] }
+            }
+        }
+        // markers
+        for r in 0..<stringCount {
+            if markers[r].count != cols {
+                let old = markers[r]
+                markers[r] = Array(repeating: nil, count: cols)
+                for i in 0..<min(old.count, cols) { markers[r][i] = old[i] }
+            }
+        }
+        if strumDirections.count != cols {
+            let old = strumDirections
+            strumDirections = Array(repeating: nil, count: cols)
+            for i in 0..<min(old.count, cols) { strumDirections[i] = old[i] }
+        }
     }
 
     private func save() {
-        // TODO: Implement the conversion from `actions` to `[PatternEvent]`
-        // This is a complex task and will be a placeholder for now.
-        let patternEvents: [PatternEvent] = [] 
+        // Convert grid into PatternEvent array compatible with existing PatternEvent (delay, notes)
+        // We'll treat each column as a possible event; notes are specified as StringOrInt (.int for fret or .string("x") for mute not used)
+        var events: [PatternEvent] = []
+        let cols = grid.first?.count ?? 0
 
-        let newPattern = GuitarPattern(id: id, name: name, pattern: patternEvents)
+        var lastEventCol = 0
+        for col in 0..<cols {
+            // collect notes for this column
+            var notesForCol: [NoteValue] = []
+            // If mode is strum, we will collect strings and order by direction
+            if modeIsStrum {
+                // determine strum order
+                let dir = strumDirections.indices.contains(col) ? strumDirections[col] ?? "down" : "down"
+                var stringNums: [Int] = []
+                for s in 0..<stringCount { if grid[s][col] { stringNums.append(s+1) } }
+                if !stringNums.isEmpty {
+                    if dir == "down" { stringNums.sort(by: >) } else { stringNums.sort(by: <) }
+                    for n in stringNums { notesForCol.append(.int(n)) }
+                }
+            } else {
+                for string in 0..<stringCount {
+                    if grid[string][col] {
+                        if let m = markers[string][col], m.hasPrefix("ROOT") {
+                            // If marker says ROOT or ROOT-N, try to preserve
+                            if m == "ROOT" {
+                                notesForCol.append(.string("ROOT"))
+                            } else if m.hasPrefix("FIXED") {
+                                // FIXED:NUM -> store as that string number
+                                if let num = Int(m.split(separator: ":")[1]) { notesForCol.append(.int(num)) }
+                                else { notesForCol.append(.int(string+1)) }
+                            } else {
+                                notesForCol.append(.string("ROOT"))
+                            }
+                        } else {
+                            // store as fixed string number 1..6
+                            notesForCol.append(.int(string+1))
+                        }
+                    }
+                }
+            }
+
+            if !notesForCol.isEmpty {
+                let stepDifference = col - lastEventCol
+                let delayString = "\(stepDifference)/\(subdivision)"
+                let deltaValue: Double? = (modeIsStrum && !notesForCol.isEmpty) ? 15 : nil
+                events.append(PatternEvent(delay: delayString, notes: notesForCol, delta: deltaValue))
+                lastEventCol = col
+            }
+        }
+
+        let newPattern = GuitarPattern(id: id, name: name, pattern: events)
         customPlayingPatternManager.addOrUpdatePattern(pattern: newPattern, timeSignature: timeSignature)
         dismiss()
+    }
+}
+
+// Safe array subscript helper
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        return indices.contains(index) ? self[index] : nil
     }
 }
