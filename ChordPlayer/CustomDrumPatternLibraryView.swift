@@ -79,54 +79,50 @@ struct CustomDrumPatternLibraryView: View {
     
     private var patternList: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 20)], spacing: 20) {
                 ForEach(timeSignatures, id: \.self) { timeSignature in
-                    Section(header: Text(timeSignature).font(.headline).padding(.horizontal)) {
-                        LazyVStack(spacing: 12) {
-                            if let patterns = customDrumPatternManager.customDrumPatterns[timeSignature] {
-                                ForEach(patterns.keys.sorted().filter { searchText.isEmpty ? true : patterns[$0]!.displayName.localizedCaseInsensitiveContains(searchText) }, id: \.self) { patternID in
-                                    if let pattern = patterns[patternID] {
-                                        patternCard(id: patternID, pattern: pattern, timeSignature: timeSignature)
-                                    }
+                    if let patterns = customDrumPatternManager.customDrumPatterns[timeSignature] {
+                        let filteredPatterns = patterns.keys.sorted().filter { searchText.isEmpty ? true : patterns[$0]!.displayName.localizedCaseInsensitiveContains(searchText) }
+                        
+                        if !filteredPatterns.isEmpty {
+                            Text(timeSignature)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .padding(.top)
+                                .gridCellUnsizedAxes(.horizontal)
+
+                            ForEach(filteredPatterns, id: \.self) { patternID in
+                                if let pattern = patterns[patternID] {
+                                    patternCard(id: patternID, pattern: pattern, timeSignature: timeSignature)
                                 }
                             }
                         }
                     }
                 }
             }
-            .padding(.vertical, 20)
+            .padding(20)
         }
     }
     
     private func patternCard(id: String, pattern: DrumPattern, timeSignature: String) -> some View {
         let isHovered = hoveredPatternID == id
         
-        return HStack(spacing: 15) {
-            // 1. Replace Icon with DrumPatternGridView
+        return VStack(spacing: 12) {
+            Text(pattern.displayName)
+                .font(.headline)
+                .fontWeight(.bold)
+                .lineLimit(1)
+
             DrumPatternGridView(
                 pattern: pattern,
                 timeSignature: timeSignature,
                 activeColor: .primary,
                 inactiveColor: .secondary.opacity(0.4)
             )
-            .frame(width: 120, height: 60)
-            .background(Color.black.opacity(0.1))
-            .cornerRadius(8)
+            .frame(height: 60)
+            .padding(.horizontal)
             
-            VStack(alignment: .leading, spacing: 4) {
-                Text(pattern.displayName)
-                    .font(.headline)
-                    .fontWeight(.bold)
-                Text("ID: \(id)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
-            
-            Spacer()
-            
-            // Action Buttons
-            HStack(spacing: 12) {
+            HStack(spacing: 20) {
                 Button(action: { playPreview(pattern: pattern, timeSignature: timeSignature) }) {
                     Image(systemName: drumPlayer.isPlaying && hoveredPatternID == id ? "stop.circle.fill" : "play.circle.fill")
                         .font(.title2)
@@ -151,17 +147,19 @@ struct CustomDrumPatternLibraryView: View {
                 .help("删除")
             }
         }
-        .padding()
+        .padding(15)
         .background(Color(NSColor.windowBackgroundColor).opacity(isHovered ? 0.9 : 1.0))
-        .cornerRadius(12)
-        .shadow(radius: isHovered ? 4 : 1)
-        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .cornerRadius(16)
+        .shadow(radius: isHovered ? 5 : 2)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .onHover { hovering in
             withAnimation(.spring()) {
                 hoveredPatternID = hovering ? id : nil
+                if !hovering && drumPlayer.isPlaying {
+                    drumPlayer.stop()
+                }
             }
         }
-        .padding(.horizontal)
     }
     
     private func playPreview(pattern: DrumPattern, timeSignature: String) {

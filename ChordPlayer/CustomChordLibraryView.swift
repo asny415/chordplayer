@@ -95,60 +95,62 @@ struct CustomChordLibraryView: View {
         let fingering = customChordManager.customChords[chordName] ?? []
         let isHovered = hoveredChord == chordName
         
-        return VStack(spacing: 8) { // Reduced spacing
-            // Chord Name
-            Text(chordName)
-                .font(.headline) // Reduced font size
-                .fontWeight(.heavy)
-                .foregroundColor(.primary)
+        return VStack(spacing: 12) {
+            Text(chordName.replacingOccurrences(of: "_", with: " "))
+                .font(.headline)
+                .fontWeight(.bold)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            
-            // Use the existing, correct ChordDiagramView
+
             ChordDiagramView(frets: fingering, color: .primary)
-                .frame(height: 80) // Reduced height
+                .frame(height: 80)
             
-            // Action Buttons (Icon-only with tooltips)
-            HStack {
+            HStack(spacing: 20) {
                 Button(action: { playChord(chordName) }) {
                     Image(systemName: "play.circle.fill")
+                        .font(.title2)
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.accentColor)
                 .help("试听")
                 
-                Spacer()
-                
                 Button(action: { editChord(chordName) }) {
-                    Image(systemName: "pencil")
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.title2)
                 }
                 .buttonStyle(.plain)
                 .help("编辑")
                 
                 Button(action: { deleteChord(chordName) }) {
-                    Image(systemName: "trash")
+                    Image(systemName: "trash.circle.fill")
+                        .font(.title2)
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.red)
                 .help("删除")
             }
-            .font(.body) // Reduced icon size
         }
-        .padding(12) // Reduced padding
+        .padding(15)
         .background(Color(NSColor.windowBackgroundColor).opacity(isHovered ? 0.9 : 1.0))
         .cornerRadius(16)
-        .shadow(radius: isHovered ? 8 : 2)
-        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .shadow(radius: isHovered ? 5 : 2)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .onHover { hovering in
             withAnimation(.spring()) {
                 hoveredChord = hovering ? chordName : nil
+                if !hovering {
+                    chordPlayer.panic()
+                }
             }
         }
     }
     
     private func playChord(_ chordName: String) {
+        // If a default pattern is available, use it for a more musical preview
         if let pattern = appData.patternLibrary?[appData.performanceConfig.timeSignature]?.first {
-            chordPlayer.playChord(chordName: chordName, pattern: pattern, tempo: appData.performanceConfig.tempo, key: appData.performanceConfig.key, capo: 0, velocity: 100, duration: 1.0)
+            chordPlayer.playChord(chordName: chordName, pattern: pattern, tempo: 120, key: appData.performanceConfig.key, capo: 0, velocity: 100, duration: 1.5)
+        } else if let chordDefinition = customChordManager.customChords[chordName] {
+            // Otherwise, play the block chord directly
+            chordPlayer.playChordDirectly(chordDefinition: chordDefinition, key: appData.performanceConfig.key, capo: 0, velocity: 100, duration: 1.5)
         }
     }
     
