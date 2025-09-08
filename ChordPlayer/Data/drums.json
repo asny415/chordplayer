@@ -1,9 +1,5 @@
 {
   "4/4": {
-    "BASIC_4_4_EMPTY": {
-      "displayName": "轻微节奏",
-      "pattern": [{ "delay": "0/1", "notes": [42] }]
-    },
     "ROCK_4_4_BASIC": {
       "displayName": "咚打咚咚打 (推进摇滚)",
       "pattern": [
@@ -45,10 +41,6 @@
     }
   },
   "3/4": {
-    "BASIC_3_4_EMPTY": {
-      "displayName": "轻微节奏",
-      "pattern": [{ "delay": "0/1", "notes": [42] }]
-    },
     "WALTZ_3_4_BASIC": {
       "displayName": "咚打哒 (基础华尔兹)",
       "pattern": [
@@ -78,10 +70,6 @@
     }
   },
   "6/8": {
-    "BASIC_6_8_EMPTY": {
-      "displayName": "轻微节奏",
-      "pattern": [{ "delay": "0/1", "notes": [42] }]
-    },
     "SHUFFLE_6_8_BASIC": {
       "displayName": "咚打咚 (基础Shuffle)",
       "pattern": [
