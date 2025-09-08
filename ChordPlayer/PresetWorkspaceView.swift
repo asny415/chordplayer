@@ -604,7 +604,6 @@ private struct ChordProgressionView: View {
     @State private var capturingChord: String? = nil
     @State private var captureMonitor: Any? = nil
     @State private var isHoveringGroup: Bool = false
-    @State private var playIconVisibleForChord: String? = nil
     @State private var badgeHoveredForChord: String? = nil
 
     var body: some View {
@@ -637,26 +636,11 @@ private struct ChordProgressionView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                     ForEach(appData.performanceConfig.chords, id: \.self) { chord in
                         ZStack(alignment: .topTrailing) {
-                            ZStack {
-                                ChordCardView(chord: chord, isFlashing: flashingChord == chord)
-                                    .animation(.easeInOut(duration: 0.15), value: flashingChord)
-
-                                if playIconVisibleForChord == chord && badgeHoveredForChord != chord {
-                                    Color.black.opacity(0.4).cornerRadius(12)
-                                    Image(systemName: "play.fill")
-                                        .foregroundColor(.white)
-                                        .font(.largeTitle)
-                                        .transition(.opacity.animation(.easeInOut))
+                            ChordCardView(chord: chord, isFlashing: flashingChord == chord)
+                                .animation(.easeInOut(duration: 0.15), value: flashingChord)
+                                .onTapGesture {
+                                    keyboardHandler.playChordByName(chord)
                                 }
-                            }
-                            .onHover { hovering in
-                                withAnimation {
-                                    playIconVisibleForChord = hovering ? chord : nil
-                                }
-                            }
-                            .onTapGesture {
-                                keyboardHandler.playChordByName(chord)
-                            }
 
                             // Shortcut badge (custom or default). Always show a Text badge.
                             let (baseBadgeText, baseBadgeColor): (String, Color) = {
