@@ -296,25 +296,22 @@ private struct DrumPatternsView: View {
     @EnvironmentObject var customDrumPatternManager: CustomDrumPatternManager
 
     @State private var showAddDrumPatternSheet: Bool = false
-
-    @State private var isHoveringAddDrumButton: Bool = false
+    @State private var isHoveringGroup: Bool = false
 
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
-                Text("鼓点模式").font(.headline)
+                Text("鼓点模式 (Cmd + 1, 2...)").font(.headline)
                 Spacer()
 
                 // Add Pattern to Workspace Button
                 Button(action: { showAddDrumPatternSheet = true }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
-                        .foregroundColor(isHoveringAddDrumButton ? .accentColor : Color.primary.opacity(0.55))
+                        .foregroundColor(.accentColor)
+                        .opacity(isHoveringGroup ? 1.0 : 0.4)
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.12)) { isHoveringAddDrumButton = hovering }
-                }
                 .help("从库添加鼓点到工作区")
             }
             if appData.performanceConfig.selectedDrumPatterns.isEmpty {
@@ -367,6 +364,11 @@ private struct DrumPatternsView: View {
                     }
                     .padding(1)
                 }
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHoveringGroup = hovering
             }
         }
         .sheet(isPresented: $showAddDrumPatternSheet) {
@@ -436,25 +438,22 @@ private struct PlayingPatternsView: View {
     @EnvironmentObject var customPlayingPatternManager: CustomPlayingPatternManager
 
     @State private var showAddPlayingPatternSheet: Bool = false
-
-    @State private var isHoveringAddPlayingButton: Bool = false
+    @State private var isHoveringGroup: Bool = false
 
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
-                Text("和弦指法").font(.headline)
+                Text("和弦指法 (1, 2...)").font(.headline)
                 Spacer()
 
                 // Add Pattern to Workspace Button
                 Button(action: { showAddPlayingPatternSheet = true }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
-                        .foregroundColor(isHoveringAddPlayingButton ? .accentColor : Color.primary.opacity(0.55))
+                        .foregroundColor(.accentColor)
+                        .opacity(isHoveringGroup ? 1.0 : 0.4)
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.12)) { isHoveringAddPlayingButton = hovering }
-                }
                 .help("从库添加演奏模式到工作区")
             }
             if appData.performanceConfig.selectedPlayingPatterns.isEmpty {
@@ -506,6 +505,11 @@ private struct PlayingPatternsView: View {
                     }
                     .padding(1)
                 }
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHoveringGroup = hovering
             }
         }
         .sheet(isPresented: $showAddPlayingPatternSheet) {
@@ -584,7 +588,7 @@ private struct ChordProgressionView: View {
     @State private var showAddChordSheet: Bool = false
     @State private var capturingChord: String? = nil
     @State private var captureMonitor: Any? = nil
-    @State private var isHoveringAddButton: Bool = false
+    @State private var isHoveringGroup: Bool = false
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -594,16 +598,10 @@ private struct ChordProgressionView: View {
                 Button(action: { showAddChordSheet = true }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
-                        // Subdued by default, highlight when hovering
-                        .foregroundColor(isHoveringAddButton ? .accentColor : Color.primary.opacity(0.55))
-                        .animation(.easeInOut(duration: 0.12), value: isHoveringAddButton)
+                        .foregroundColor(.accentColor)
+                        .opacity(isHoveringGroup ? 1.0 : 0.4)
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.12)) {
-                        isHoveringAddButton = hovering
-                    }
-                }
             }
             
             if appData.performanceConfig.chords.isEmpty {
@@ -675,6 +673,11 @@ private struct ChordProgressionView: View {
                         }
                     }
                 }
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHoveringGroup = hovering
             }
         }
         .overlay(
