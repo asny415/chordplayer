@@ -12,6 +12,7 @@ struct AddChordPlayingPatternAssociationSheet: View {
     @State private var captureMonitor: Any? = nil
     @State private var showConflictAlert: Bool = false
     @State private var conflictMessage: String = ""
+    @State private var infoMessage: String? = nil
     
     private var availablePlayingPatterns: [GuitarPattern] {
         let timeSignature = appData.performanceConfig.timeSignature
@@ -67,9 +68,22 @@ struct AddChordPlayingPatternAssociationSheet: View {
                                             .foregroundColor(.primary)
                                         
                                         if let shortcut = shortcutForPattern(pattern.id) {
-                                            Text("快捷键: \(shortcut.displayText)")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
+                                            HStack(spacing: 6) {
+                                                Text(shortcut.displayText)
+                                                    .font(.caption2).bold()
+                                                    .padding(.horizontal, 6).padding(.vertical, 3)
+                                                    .background(Color.gray.opacity(0.15))
+                                                    .cornerRadius(6)
+                                                Button(role: .destructive) {
+                                                    removeAssociation(for: shortcut)
+                                                } label: {
+                                                    Image(systemName: "xmark.circle.fill")
+                                                        .font(.caption)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .help("移除该指法的快捷键")
+                                            }
+                                            .foregroundColor(.secondary)
                                         }
                                     }
                                     .padding(12)
@@ -106,7 +120,19 @@ struct AddChordPlayingPatternAssociationSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(selectedPlayingPatternId == nil)
+                
+                if let info = infoMessage {
+                    HStack(spacing: 8) {
+                        Image(systemName: "info.circle")
+                        Text(info)
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
             }
+            
+            // 简化：不再单独列出“当前绑定”，在卡片上直接展示与管理
+            EmptyView()
             
             Spacer()
             
@@ -130,6 +156,8 @@ struct AddChordPlayingPatternAssociationSheet: View {
         }
         return chordConfig.patternAssociations.first(where: { $0.value == patternId })?.key
     }
+    
+    // 辅助：已移除 currentAssociations 和 patternById，改为在卡片上内联展示和管理
     
     private func startCapturingShortcut() {
         guard !capturingShortcut else { return }
@@ -155,7 +183,8 @@ struct AddChordPlayingPatternAssociationSheet: View {
                     self.showConflictAlert = true
                 } else {
                     self.saveAssociation(with: shortcut)
-                    self.dismiss()
+                    // Keep sheet open so user can continue adding more
+                    self.infoMessage = "已绑定 \(shortcut.displayText)。可继续选择其它指法设置绑定，或关闭窗口。"
                 }
             }
             
@@ -168,8 +197,22 @@ struct AddChordPlayingPatternAssociationSheet: View {
         guard let patternId = selectedPlayingPatternId else { return }
         
         if let index = appData.performanceConfig.chords.firstIndex(where: { $0.name == chordName }) {
+            // Enforce uniqueness: the same pattern cannot be bound to multiple shortcuts.
+            // If any existing association points to this pattern, remove it first.
+            let existingKeysForPattern = appData.performanceConfig.chords[index].patternAssociations
+                .filter { $0.value == patternId }
+                .map { $0.key }
+            for key in existingKeysForPattern {
+                appData.performanceConfig.chords[index].patternAssociations.removeValue(forKey: key)
+            }
             appData.performanceConfig.chords[index].patternAssociations[shortcut] = patternId
-            print("✅ Associated shortcut '\(shortcut.stringValue)' with pattern '\(patternId)' for chord '\(chordName)'")
+            print("✅ Associated shortcut '\(shortcut.stringValue)' with pattern '\(patternId)' for chord '\(chordName)'. Replaced previous bindings: \(existingKeysForPattern.map { $0.stringValue }.joined(separator: ", "))")
+        }
+    }
+    
+    private func removeAssociation(for shortcut: Shortcut) {
+        if let index = appData.performanceConfig.chords.firstIndex(where: { $0.name == chordName }) {
+            appData.performanceConfig.chords[index].patternAssociations.removeValue(forKey: shortcut)
         }
     }
     
@@ -184,3 +227,4 @@ struct AddChordPlayingPatternAssociationSheet: View {
         keyboardHandler.resumeEventMonitoring()
     }
 }
+
