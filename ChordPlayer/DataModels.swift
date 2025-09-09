@@ -122,11 +122,69 @@ struct DrumPattern: Codable, Hashable {
 typealias DrumPatternLibrary = [String: [String: DrumPattern]]
 
 // For patterns.json
-typealias NoteValue = StringOrInt
+
+// Represents a note in a guitar playing pattern.
+// It can be a simple integer (physical string), a string (relative to root),
+// or a complex object specifying a precise fret on a string.
+enum GuitarNote: Codable, Hashable {
+    case chordString(Int)
+    case chordRoot(String)
+    case specificFret(string: Int, fret: Int)
+
+    private enum CodingKeys: String, CodingKey {
+        case type, string, fret
+    }
+
+    init(from decoder: Decoder) throws {
+        // First, try to decode as a simple value (Int or String)
+        if let singleValueContainer = try? decoder.singleValueContainer() {
+            if let intValue = try? singleValueContainer.decode(Int.self) {
+                self = .chordString(intValue)
+                return
+            }
+            if let stringValue = try? singleValueContainer.decode(String.self) {
+                self = .chordRoot(stringValue)
+                return
+            }
+        }
+
+        // If not a simple value, try to decode as a complex object
+        do {
+            let keyedContainer = try decoder.container(keyedBy: CodingKeys.self)
+            if let type = try keyedContainer.decodeIfPresent(String.self, forKey: .type), type == "specificFret" {
+                let string = try keyedContainer.decode(Int.self, forKey: .string)
+                let fret = try keyedContainer.decode(Int.self, forKey: .fret)
+                self = .specificFret(string: string, fret: fret)
+                return
+            }
+        } catch {
+            // Fallthrough to the error below if decoding as a keyed container fails
+        }
+        
+        throw DecodingError.typeMismatch(GuitarNote.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Note must be an Int, a String, or a specificFret object."))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        switch self {
+        case .chordString(let value):
+            var container = encoder.singleValueContainer()
+            try container.encode(value)
+        case .chordRoot(let value):
+            var container = encoder.singleValueContainer()
+            try container.encode(value)
+        case .specificFret(let string, let fret):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode("specificFret", forKey: .type)
+            try container.encode(string, forKey: .string)
+            try container.encode(fret, forKey: .fret)
+        }
+    }
+}
+
 
 struct PatternEvent: Codable, Hashable {
     let delay: String
-    let notes: [NoteValue]
+    let notes: [GuitarNote]
     let delta: Double?
 }
 

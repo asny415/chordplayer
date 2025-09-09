@@ -38,9 +38,9 @@ struct PlayingPatternView: View {
 
             let stringNotes = event.notes.compactMap { note -> Int? in
                 switch note {
-                case .int(let stringNum):
+                case .chordString(let stringNum):
                     if (1...6).contains(stringNum) { return stringNum } // 1-6
-                case .string(let s):
+                case .chordRoot(let s):
                     if s == "ROOT" {
                         return 5
                     } else if s.hasPrefix("ROOT-"), let nStr = s.split(separator: "-").last, let n = Int(nStr) {
@@ -49,6 +49,8 @@ struct PlayingPatternView: View {
                             return stringNum
                         }
                     }
+                case .specificFret(let string, _):
+                    if (1...6).contains(string) { return string }
                 }
                 return nil
             }

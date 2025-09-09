@@ -430,11 +430,13 @@ struct PlayingPatternEditorView: View {
                         // map notes to ints when possible
                         let intNotes = event.notes.compactMap { note -> Int? in
                             switch note {
-                            case .int(let v): return v
-                            case .string(let s):
+                            case .chordString(let v): return v
+                            case .chordRoot(let s):
                                 // Attempt to parse ROOT-<n>
                                 if s == "ROOT" { return nil }
                                 if s.hasPrefix("ROOT-"), let last = Int(s.split(separator: "-").last ?? "") { return last }
+                                return nil
+                            case .specificFret: // Not supported in grid view for now
                                 return nil
                             }
                         }
@@ -454,9 +456,9 @@ struct PlayingPatternEditorView: View {
                         // single or multiple notes treated as individual hits
                         for note in event.notes {
                             switch note {
-                            case .int(let v):
+                            case .chordString(let v):
                                 if (1...6).contains(v) { grid[v-1][safeCol] = true }
-                            case .string(let s):
+                            case .chordRoot(let s):
                                 if s == "ROOT" {
                                     // place a ROOT marker on a reasonable default string (string 5 -> index 4) if available
                                     let idx = min(4, stringCount-1)
@@ -470,6 +472,12 @@ struct PlayingPatternEditorView: View {
                                         markers[idx][safeCol] = "ROOT"
                                         grid[idx][safeCol] = true
                                     }
+                                }
+                            case .specificFret(let string, let fret):
+                                if (1...6).contains(string) {
+                                    grid[string-1][safeCol] = true
+                                    // Optionally, you could create a new marker type to display the fret number
+                                    // markers[string-1][safeCol] = "FRET:\(fret)"
                                 }
                             }
                         }
@@ -515,7 +523,7 @@ struct PlayingPatternEditorView: View {
 
         for col in 0..<cols {
             // collect notes for this column
-            var notesForCol: [NoteValue] = []
+            var notesForCol: [GuitarNote] = []
             // If mode is strum, we will collect strings and order by direction
             if modeIsStrum {
                 // If direction is nil, per spec we treat this as "no entry" and skip this column
@@ -525,24 +533,24 @@ struct PlayingPatternEditorView: View {
                 // fixed strum order when a direction is set
                 let fixedOrder: [Int] = (dir == "up") ? [6,5,4,3,2,1] : [1,2,3,4,5,6]
                 // include all strings in fixed order regardless of clicked cells
-                for n in fixedOrder { notesForCol.append(.int(n)) }
+                for n in fixedOrder { notesForCol.append(.chordString(n)) }
             } else {
                 for string in 0..<stringCount {
                     if grid[string][col] {
                         if let m = markers[string][col], m.hasPrefix("ROOT") {
                             // If marker says ROOT or ROOT-N, try to preserve
                             if m == "ROOT" {
-                                notesForCol.append(.string("ROOT"))
+                                notesForCol.append(.chordRoot("ROOT"))
                             } else if m.hasPrefix("FIXED") {
                                 // FIXED:NUM -> store as that string number
-                                if let num = Int(m.split(separator: ":")[1]) { notesForCol.append(.int(num)) }
-                                else { notesForCol.append(.int(string+1)) }
+                                if let num = Int(m.split(separator: ":")[1]) { notesForCol.append(.chordString(num)) }
+                                else { notesForCol.append(.chordString(string+1)) }
                             } else {
-                                notesForCol.append(.string("ROOT"))
+                                notesForCol.append(.chordRoot("ROOT"))
                             }
                         } else {
                             // store as fixed string number 1..6
-                            notesForCol.append(.int(string+1))
+                            notesForCol.append(.chordString(string+1))
                         }
                     }
                 }
@@ -552,7 +560,7 @@ struct PlayingPatternEditorView: View {
                 let delayString = "\(col)/\(subdivision)"
                 var deltaValue: Double? = nil
                 if modeIsStrum {
-                    if let dir = (strumDirections.indices.contains(col) ? strumDirections[col] : nil) {
+                    if let _ = (strumDirections.indices.contains(col) ? strumDirections[col] : nil) {
                         // only treat as a strum (delta) when a direction is explicitly set
                         deltaValue = 15
                     } else {

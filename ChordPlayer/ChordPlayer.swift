@@ -99,17 +99,8 @@ class ChordPlayer: ObservableObject {
             let eventBaseTimeMs = schedulingStartUptimeMs + (delayFraction * wholeNoteSeconds * 1000.0)
 
             var notesToSchedule: [(note: UInt8, stringIndex: Int)] = []
-            
-            let filteredPatternNotes = event.notes.filter {
-                switch $0 {
-                case .int(let stringNumber):
-                    let stringIndex = 6 - stringNumber
-                    return stringIndex >= 0 && stringIndex < midiNotes.count && midiNotes[stringIndex] != -1
-                case .string(let symbol):
-                    return symbol.starts(with: "ROOT")
-                }
-            }
 
+            // Find root note info for resolving .chordRoot notes
             var rootInfo: (stringIndex: Int, midiNote: Int)?
             for (index, note) in midiNotes.enumerated() {
                 if note != -1 {
@@ -118,21 +109,19 @@ class ChordPlayer: ObservableObject {
                 }
             }
 
-            guard let unwrappedRootInfo = rootInfo else {
-                print("[ChordPlayer] Could not determine root note for chord \(chordName).")
-                return
-            }
-
-            for noteValue in filteredPatternNotes {
+            for noteValue in event.notes {
                 var resolvedNote: (note: Int, stringIndex: Int)?
 
                 switch noteValue {
-                case .int(let stringNumber):
+                case .chordString(let stringNumber):
+                    // stringNumber is 1-6, convert to index 0-5
                     let stringIndex = 6 - stringNumber
                     if stringIndex >= 0 && stringIndex < midiNotes.count && midiNotes[stringIndex] != -1 {
                         resolvedNote = (note: midiNotes[stringIndex], stringIndex: stringIndex)
                     }
-                case .string(let symbol):
+
+                case .chordRoot(let symbol):
+                    guard let unwrappedRootInfo = rootInfo else { continue }
                     if symbol.starts(with: "ROOT") {
                         let numPart = symbol.replacingOccurrences(of: "ROOT", with: "").replacingOccurrences(of: "-", with: "")
                         var offset = 0
@@ -143,6 +132,16 @@ class ChordPlayer: ObservableObject {
                         if targetStringIndex >= 0 && targetStringIndex < midiNotes.count, midiNotes[targetStringIndex] != -1 {
                             resolvedNote = (note: midiNotes[targetStringIndex], stringIndex: targetStringIndex)
                         }
+                    }
+                
+                case .specificFret(let string, let fret):
+                    // string is 1-6, convert to index 0-5
+                    let stringIndex = 6 - string
+                    if stringIndex >= 0 && stringIndex < MusicTheory.standardGuitarTuning.count {
+                        let baseNote = MusicTheory.standardGuitarTuning[stringIndex]
+                        // Apply same transpose and capo as the rest of the chord for consistency
+                        let finalNote = baseNote + fret + transposeOffset + capo
+                        resolvedNote = (note: finalNote, stringIndex: stringIndex)
                     }
                 }
                 
