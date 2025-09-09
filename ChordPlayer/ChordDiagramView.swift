@@ -49,11 +49,8 @@ struct ChordDiagramView: View {
 
                 // Mute and Open String Indicators
                 drawIndicators(width: baseWidth, stringSpacing: stringSpacing, fretSpacing: fretSpacing)
-                
-                // Barre Chords
-                drawBarres(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
 
-                // Fingering Dots (drawn on top of barres)
+                // Fingering Dots
                 drawDots(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
 
                 // Base Fret Indicator
@@ -135,28 +132,6 @@ struct ChordDiagramView: View {
                         .fill(color)
                         .frame(width: stringSpacing * 0.65, height: stringSpacing * 0.65)
                         .position(x: x, y: y)
-                }
-            }
-        }
-    }
-    
-    private func drawBarres(stringSpacing: CGFloat, fretSpacing: CGFloat) -> some View {
-        ZStack {
-            let barreFrets = Dictionary(grouping: (0..<6).compactMap { i in
-                relativeFrets[i] != nil ? (i, relativeFrets[i]!) : nil
-            }, by: { $0.1 })
-
-            ForEach(barreFrets.keys.sorted(), id: \.self) { relativeFret in
-                let strings = barreFrets[relativeFret]!.map { $0.0 }
-                if let firstString = strings.min(), let lastString = strings.max(), lastString - firstString >= 2 {
-                    let startX = (fretSpacing / 2) + CGFloat(firstString) * stringSpacing
-                    let endX = (fretSpacing / 2) + CGFloat(lastString) * stringSpacing
-                    let y = fretSpacing * 1.2 + CGFloat(relativeFret) * fretSpacing - (fretSpacing / 2)
-
-                    Capsule()
-                        .fill(color)
-                        .frame(width: endX - startX + (stringSpacing * 0.65), height: stringSpacing * 0.65)
-                        .position(x: (startX + endX) / 2, y: y)
                 }
             }
         }
