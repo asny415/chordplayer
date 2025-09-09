@@ -145,12 +145,44 @@ struct ChordPerformanceConfig: Codable, Identifiable, Equatable {
     var name: String
     var shortcut: String?
     // [ShortcutKey: PatternID]
-    var patternAssociations: [String: String]
+    var patternAssociations: [Shortcut: String]
 
-    init(name: String, shortcut: String? = nil, patternAssociations: [String: String] = [:]) {
+    init(name: String, shortcut: String? = nil, patternAssociations: [Shortcut: String] = [:]) {
         self.name = name
         self.shortcut = shortcut
         self.patternAssociations = patternAssociations
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, shortcut, patternAssociations
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        shortcut = try container.decodeIfPresent(String.self, forKey: .shortcut)
+        
+        let associations = try container.decode([String: String].self, forKey: .patternAssociations)
+        patternAssociations = [:]
+        for (key, value) in associations {
+            if let shortcut = Shortcut(stringValue: key) {
+                patternAssociations[shortcut] = value
+            }
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(shortcut, forKey: .shortcut)
+        
+        var associations: [String: String] = [:]
+        for (key, value) in patternAssociations {
+            associations[key.stringValue] = value
+        }
+        try container.encode(associations, forKey: .patternAssociations)
     }
 }
 
@@ -286,25 +318,58 @@ struct Preset: Codable, Equatable {
     let id: UUID
     var name: String
     var description: String?
-    // map chordID (e.g. "A_Major") -> Shortcut (user assigned)
-    var chordShortcuts: [String: Shortcut]
-    // 和弦与演奏指法的关联关系
-    var chordPlayingPatternAssociations: [ChordPlayingPatternAssociation]
+    
     var performanceConfig: PerformanceConfig
     var appConfig: AppConfig
     var createdAt: Date
     var updatedAt: Date
-    
+
     init(id: UUID = UUID(), name: String, description: String? = nil, performanceConfig: PerformanceConfig, appConfig: AppConfig) {
         self.id = id
         self.name = name
         self.description = description
-        self.chordShortcuts = [:]
-        self.chordPlayingPatternAssociations = []
         self.performanceConfig = performanceConfig
         self.appConfig = appConfig
         self.createdAt = Date()
         self.updatedAt = Date()
+    }
+
+
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, performanceConfig, appConfig, createdAt, updatedAt
+        case chordShortcuts // For migration
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        performanceConfig = try container.decode(PerformanceConfig.self, forKey: .performanceConfig)
+        appConfig = try container.decode(AppConfig.self, forKey: .appConfig)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+
+        // Migration logic
+        if let shortcutsToMigrate = try container.decodeIfPresent([String: Shortcut].self, forKey: .chordShortcuts) {
+            for (chordName, shortcut) in shortcutsToMigrate {
+                if let index = performanceConfig.chords.firstIndex(where: { $0.name == chordName }) {
+                    performanceConfig.chords[index].shortcut = shortcut.stringValue
+                }
+            }
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(description, forKey: .description)
+        try container.encode(performanceConfig, forKey: .performanceConfig)
+        try container.encode(appConfig, forKey: .appConfig)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
     }
     
     func toInfo() -> PresetInfo {
@@ -328,25 +393,10 @@ struct PlayingPatternEditorData: Identifiable {
 
 // MARK: - Chord Playing Pattern Association Models
 
-/// 和弦与演奏指法的关联关系
-struct ChordPlayingPatternAssociation: Codable, Identifiable, Equatable {
-    let id: UUID
-    let chordName: String
-    let playingPatternId: String
-    let shortcut: Shortcut
-    
-    init(chordName: String, playingPatternId: String, shortcut: Shortcut) {
-        self.id = UUID()
-        self.chordName = chordName
-        self.playingPatternId = playingPatternId
-        self.shortcut = shortcut
-    }
-}
-
 /// 快捷键冲突类型
 enum ShortcutConflict: Equatable {
     case defaultChordShortcut
-    case otherAssociation(ChordPlayingPatternAssociation)
+    case otherAssociation(chordName: String)
     case numericKey
     case systemShortcut
     
@@ -354,8 +404,8 @@ enum ShortcutConflict: Equatable {
         switch self {
         case .defaultChordShortcut:
             return "与和弦默认快捷键冲突"
-        case .otherAssociation(let association):
-            return "与和弦 \(association.chordName) 的演奏指法关联冲突"
+        case .otherAssociation(let chordName):
+            return "与和弦 \(chordName) 的演奏指法关联冲突"
         case .numericKey:
             return "与演奏指法切换数字键冲突"
         case .systemShortcut:

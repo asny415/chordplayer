@@ -657,7 +657,7 @@ private struct ChordProgressionView: View {
                             // Shortcut badge (custom or default). Always show a Text badge.
                             let (baseBadgeText, baseBadgeColor): (String, Color) = {
                                 // 1) user-assigned shortcut
-                                if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chordConfig.name] {
+                                if let shortcutValue = chordConfig.shortcut, let s = Shortcut(stringValue: shortcutValue) {
                                     return (s.displayText, Color.accentColor)
                                 }
 

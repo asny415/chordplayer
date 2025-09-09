@@ -175,102 +175,42 @@ class PresetManager: ObservableObject {
     func setShortcut(_ shortcut: Shortcut?, forChord chord: String) {
         guard var preset = currentPreset else { return }
         
-        if let s = shortcut {
-            preset.chordShortcuts[chord] = s
-        } else {
-            preset.chordShortcuts.removeValue(forKey: chord)
+        if let index = preset.performanceConfig.chords.firstIndex(where: { $0.name == chord }) {
+            preset.performanceConfig.chords[index].shortcut = shortcut?.stringValue
+            preset.updatedAt = Date()
+            currentPreset = preset
+            
+            if let index = presets.firstIndex(where: { $0.id == preset.id }) {
+                presets[index].updatedAt = preset.updatedAt
+            }
+            
+            scheduleAutoSave()
         }
-        preset.updatedAt = Date()
-        currentPreset = preset
-        
-        if let index = presets.firstIndex(where: { $0.id == preset.id }) {
-            presets[index].updatedAt = preset.updatedAt
-        }
-        
-        scheduleAutoSave()
     }
-    
-    // MARK: - Chord Playing Pattern Association Management
-    
-    /// 检测快捷键冲突
-    func detectShortcutConflicts(_ shortcut: Shortcut, for chordName: String) -> [ShortcutConflict] {
-        guard let preset = currentPreset else { return [] }
+
+    /// Detects all potential conflicts for a given shortcut in the current context.
+    func detectConflicts(for shortcut: Shortcut, of chordName: String, in config: PerformanceConfig) -> [ShortcutConflict] {
         var conflicts: [ShortcutConflict] = []
-        
-        // 检查与默认和弦快捷键的冲突
-        if shortcut.conflictsWithDefaultChordShortcut(for: chordName) {
+
+        // 1. Conflict with another chord's main shortcut
+        if config.chords.contains(where: { $0.name != chordName && $0.shortcut == shortcut.stringValue }) {
             conflicts.append(.defaultChordShortcut)
         }
-        
-        // 检查与其他关联的冲突
-        for association in preset.chordPlayingPatternAssociations {
-            if association.chordName != chordName && shortcut.conflictsWith(association.shortcut) {
-                conflicts.append(.otherAssociation(association))
+
+        // 2. Conflict with another chord's pattern association
+        for otherChord in config.chords {
+            if otherChord.name != chordName, otherChord.patternAssociations.keys.contains(shortcut) {
+                conflicts.append(.otherAssociation(chordName: otherChord.name))
             }
         }
-        
-        // 检查与数字键的冲突（用于演奏指法切换）
-        if shortcut.isNumericKey() {
+
+        // 3. Conflict with numeric keys for pattern switching
+        if let number = Int(shortcut.key), number > 0, number < 10,
+           !shortcut.modifiersShift && !shortcut.modifiersCommand && !shortcut.modifiersControl && !shortcut.modifiersOption {
             conflicts.append(.numericKey)
         }
-        
+
         return conflicts
-    }
-    
-    /// 添加和弦-演奏指法关联
-    func addChordPlayingPatternAssociation(chordName: String, playingPatternId: String, shortcut: Shortcut) -> Bool {
-        guard var preset = currentPreset else { return false }
-        
-        // 检查冲突
-        let conflicts = detectShortcutConflicts(shortcut, for: chordName)
-        if !conflicts.isEmpty {
-            return false
-        }
-        
-        // 创建新关联
-        let association = ChordPlayingPatternAssociation(
-            chordName: chordName,
-            playingPatternId: playingPatternId,
-            shortcut: shortcut
-        )
-        
-        preset.chordPlayingPatternAssociations.append(association)
-        preset.updatedAt = Date()
-        currentPreset = preset
-        
-        if let index = presets.firstIndex(where: { $0.id == preset.id }) {
-            presets[index].updatedAt = preset.updatedAt
-        }
-        
-        scheduleAutoSave()
-        return true
-    }
-    
-    /// 删除和弦-演奏指法关联
-    func removeChordPlayingPatternAssociation(_ association: ChordPlayingPatternAssociation) {
-        guard var preset = currentPreset else { return }
-        
-        preset.chordPlayingPatternAssociations.removeAll { $0.id == association.id }
-        preset.updatedAt = Date()
-        currentPreset = preset
-        
-        if let index = presets.firstIndex(where: { $0.id == preset.id }) {
-            presets[index].updatedAt = preset.updatedAt
-        }
-        
-        scheduleAutoSave()
-    }
-    
-    /// 获取指定和弦的所有演奏指法关联
-    func getAssociationsForChord(_ chordName: String) -> [ChordPlayingPatternAssociation] {
-        guard let preset = currentPreset else { return [] }
-        return preset.chordPlayingPatternAssociations.filter { $0.chordName == chordName }
-    }
-    
-    /// 根据快捷键查找关联
-    func findAssociationByShortcut(_ shortcut: Shortcut) -> ChordPlayingPatternAssociation? {
-        guard let preset = currentPreset else { return nil }
-        return preset.chordPlayingPatternAssociations.first { $0.shortcut.conflictsWith(shortcut) }
     }
     
     // MARK: - File storage helpers

@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 
 /// Represents a keyboard shortcut (single key + modifiers) for chords.
-struct Shortcut: Codable, Equatable {
+struct Shortcut: Codable, Equatable, Hashable {
     var key: String // single character, stored as uppercase for consistency
     var modifiersShift: Bool
     var modifiersCommand: Bool
@@ -16,6 +16,27 @@ struct Shortcut: Codable, Equatable {
         self.modifiersCommand = modifiersCommand
         self.modifiersControl = modifiersControl
         self.modifiersOption = modifiersOption
+    }
+    
+    var stringValue: String {
+        var s = ""
+        if modifiersCommand { s += "cmd+" }
+        if modifiersControl { s += "ctrl+" }
+        if modifiersOption { s += "opt+" }
+        if modifiersShift { s += "shift+" }
+        s += key.lowercased()
+        return s
+    }
+
+    init?(stringValue: String) {
+        let parts = stringValue.lowercased().split(separator: "+")
+        guard let lastPart = parts.last else { return nil }
+        self.key = String(lastPart).uppercased()
+        let modifiers = Set(parts.dropLast())
+        self.modifiersCommand = modifiers.contains("cmd")
+        self.modifiersControl = modifiers.contains("ctrl")
+        self.modifiersOption = modifiers.contains("opt")
+        self.modifiersShift = modifiers.contains("shift")
     }
 
     var displayText: String {
@@ -43,37 +64,7 @@ struct Shortcut: Codable, Equatable {
     }
     
     /// 检查是否与默认和弦快捷键冲突
-    func conflictsWithDefaultChordShortcut(for chordName: String) -> Bool {
-        // 检查Major和弦：小写字母
-        if chordName.hasSuffix("_Major") {
-            let letter = String(chordName.prefix(1))
-            return key == letter.uppercased() && !modifiersShift && !modifiersCommand && !modifiersControl && !modifiersOption
-        }
-        
-        // 检查Minor和弦：Shift+大写字母
-        if chordName.hasSuffix("_Minor") {
-            let letter = String(chordName.prefix(1))
-            return key == letter.uppercased() && modifiersShift && !modifiersCommand && !modifiersControl && !modifiersOption
-        }
-        
-        // 检查其他和弦类型的默认快捷键
-        if chordName.hasSuffix("7") {
-            let letter = String(chordName.prefix(1))
-            return key == letter.uppercased() && modifiersControl && !modifiersShift && !modifiersCommand && !modifiersOption
-        }
-        
-        if chordName.hasSuffix("_Major7") {
-            let letter = String(chordName.prefix(1))
-            return key == letter.uppercased() && modifiersCommand && !modifiersShift && !modifiersControl && !modifiersOption
-        }
-        
-        if chordName.hasSuffix("_Minor7") {
-            let letter = String(chordName.prefix(1))
-            return key == letter.uppercased() && modifiersOption && !modifiersShift && !modifiersCommand && !modifiersControl
-        }
-        
-        return false
-    }
+    
 
     static func from(event: NSEvent) -> Shortcut? {
         guard let chars = event.charactersIgnoringModifiers, !chars.isEmpty else { return nil }
