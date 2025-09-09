@@ -99,8 +99,15 @@ class DrumPlayer: ObservableObject {
             print("[DrumPlayer] No active drum pattern selected in appData.")
             return
         }
-        guard let drumPattern = appData.drumPatternLibrary?[timeSignature]?[patternName] else {
-            print("[DrumPlayer] Pattern definition for \(patternName) in time signature \(timeSignature) not found.")
+        var drumPattern: DrumPattern?
+        if let pattern = appData.drumPatternLibrary?[timeSignature]?[patternName] {
+            drumPattern = pattern
+        } else if let pattern = CustomDrumPatternManager.shared.customDrumPatterns[timeSignature]?[patternName] {
+            drumPattern = pattern
+        }
+
+        guard let drumPattern = drumPattern else {
+            print("[DrumPlayer] Pattern definition for \(patternName) in time signature \(timeSignature) not found in preset or custom libraries.")
             return
         }
 
