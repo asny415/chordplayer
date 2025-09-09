@@ -2,7 +2,12 @@ import SwiftUI
 
 struct AddPlayingPatternSheetView: View {
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var customPlayingPatternManager: CustomPlayingPatternManager
+    @EnvironmentObject var chordPlayer: ChordPlayer
+    @EnvironmentObject var midiManager: MidiManager
     @Environment(\.dismiss) var dismiss
+
+    @State private var showingCreateSheet = false
 
     @State private var selectedPatternIds: Set<String> = []
     @State private var availablePatterns: [(id: String, pattern: GuitarPattern)] = []
@@ -51,6 +56,12 @@ struct AddPlayingPatternSheetView: View {
                 }
             }
             .onAppear(perform: loadAvailablePatterns)
+            .sheet(isPresented: $showingCreateSheet, onDismiss: loadAvailablePatterns) {
+                PlayingPatternEditorView()
+                    .environmentObject(customPlayingPatternManager)
+                    .environmentObject(chordPlayer)
+                    .environmentObject(midiManager)
+            }
             
             Divider()
             
@@ -58,6 +69,9 @@ struct AddPlayingPatternSheetView: View {
                 Button("取消") {
                     dismiss()
                 }
+                Button("创建新模式") {
+                    showingCreateSheet = true
+                }.buttonStyle(.bordered)
                 Spacer()
                 Button("添加 (\(selectedPatternIds.count))") {
                     addSelectedPatterns()

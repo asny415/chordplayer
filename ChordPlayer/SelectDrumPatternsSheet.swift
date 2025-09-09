@@ -3,11 +3,13 @@ import SwiftUI
 struct SelectDrumPatternsSheet: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var customDrumPatternManager: CustomDrumPatternManager
+    @EnvironmentObject var drumPlayer: DrumPlayer
     @Environment(\.dismiss) var dismiss
     
     var onDone: ([String]) -> Void
     
     @State private var selectedPatternIDs: Set<String>
+    @State private var showingCreateSheet = false
     
     init(initialSelection: [String], onDone: @escaping ([String]) -> Void) {
         self._selectedPatternIDs = State(initialValue: Set(initialSelection))
@@ -63,6 +65,9 @@ struct SelectDrumPatternsSheet: View {
                 Button("取消") {
                     dismiss()
                 }
+                Button("创建新鼓点") {
+                    showingCreateSheet = true
+                }.buttonStyle(.bordered)
                 Spacer()
                 Button("完成") {
                     onDone(Array(selectedPatternIDs))
@@ -72,6 +77,11 @@ struct SelectDrumPatternsSheet: View {
             .padding()
         }
         .frame(minWidth: 500, minHeight: 400)
+        .sheet(isPresented: $showingCreateSheet) {
+            AddDrumPatternSheetView()
+                .environmentObject(customDrumPatternManager)
+                .environmentObject(drumPlayer)
+        }
     }
     
     @ViewBuilder

@@ -13,6 +13,7 @@ struct ChordLibraryView: View {
     @State private var sessionAddedChords: Set<String> // Chords added during this session of the dialog
 
     @State private var chordSearchText: String = ""
+    @State private var showingCustomChordCreator = false
 
     init(onAddChord: @escaping (String) -> Void, existingChordNames: Set<String>) {
         self.onAddChord = onAddChord
@@ -44,6 +45,9 @@ struct ChordLibraryView: View {
         }
         .frame(minWidth: 600, idealWidth: 700, minHeight: 500, idealHeight: 800)
         .background(Color(NSColor.windowBackgroundColor))
+        .sheet(isPresented: $showingCustomChordCreator) {
+            CustomChordCreatorView()
+        }
     }
 
     private var headerView: some View {
@@ -53,6 +57,9 @@ struct ChordLibraryView: View {
             Spacer()
             
             HStack(spacing: 12) {
+                Button("创建自定义和弦") {
+                    showingCustomChordCreator = true
+                }.buttonStyle(.bordered)
                 Button("完成") { 
                     dismiss() 
                 }
