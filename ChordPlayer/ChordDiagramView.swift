@@ -100,8 +100,10 @@ struct ChordDiagramView: View {
         HStack(spacing: 0) {
             ForEach(0..<6, id: \.self) { i in
                 let fret = frets.indices.contains(i) ? frets[i] : .string("x")
-                Text(indicator(for: fret))
-                    .font(.system(size: stringSpacing * 0.5))
+                let indicatorText = indicator(for: fret)
+                
+                Text(indicatorText)
+                    .font(.system(size: stringSpacing * (indicatorText == "×" ? 0.65 : 0.5)))
                     .foregroundColor(color)
                     .frame(width: stringSpacing, height: fretSpacing)
             }
