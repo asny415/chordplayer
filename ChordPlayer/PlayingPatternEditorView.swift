@@ -390,6 +390,23 @@ struct PlayingPatternEditorView: View {
             self.id = data.id
             self.name = data.pattern.name
             self.timeSignature = data.timeSignature
+
+            // Inspect the first event to determine the subdivision
+            if let firstEvent = data.pattern.pattern.first {
+                let delay = firstEvent.delay
+                let components = delay.split(separator: "/")
+                if components.count == 2, let denominator = Int(components[1]) {
+                    if denominator == 16 {
+                        self.subdivision = 16
+                    } else {
+                        self.subdivision = 8 // Default to 8 for safety
+                    }
+                }
+            }
+            
+            // After potentially changing subdivision, we must resize the grid
+            updateGridSize()
+
             // If any event has a non-zero delta, treat the whole pattern as strum mode
             if data.pattern.pattern.contains(where: { ($0.delta ?? 0) != 0 }) {
                 self.modeIsStrum = true
