@@ -311,23 +311,35 @@ struct PlayingPatternEditorView: View {
     }
 
     private func previewChordC() {
-        let fingering: [StringOrInt] = [.string("x"), .int(3), .int(2), .int(0), .int(1), .int(0)]
-        let chordNotes = MusicTheory.chordToMidiNotes(chordDefinition: fingering, tuning: MusicTheory.standardGuitarTuning)
+        let cMajorFingering: [StringOrInt] = [.string("x"), .int(3), .int(2), .int(0), .int(1), .int(0)]
+        let cMajorNotes = MusicTheory.chordToMidiNotes(chordDefinition: cMajorFingering, tuning: MusicTheory.standardGuitarTuning)
+        
         let stepDuration: Double = (subdivision == 8) ? 0.35 : 0.18
         let strumNoteSpacing: Double = 0.06
         let noteSustain: Double = 0.45
         let cols = grid.first?.count ?? 0
 
+        func getMidiNoteFor(stringIndex: Int, colIndex: Int) -> Int? {
+            let midiIndex = (stringCount - 1) - stringIndex
+            if let marker = markers[stringIndex][colIndex], marker.hasPrefix("FRET:"), let fret = Int(marker.split(separator: ":").last ?? "") {
+                return MusicTheory.standardGuitarTuning[midiIndex] + fret
+            } else {
+                if let note = cMajorNotes[safe: midiIndex], note >= 0 {
+                    return note
+                }
+            }
+            return nil
+        }
+
         for col in 0..<cols {
             var scheduledNotes: [(note: Int, order: Int)] = []
             if modeIsStrum {
                 if let dir = (strumDirections.indices.contains(col) ? strumDirections[col] : nil) {
-                    let fixedOrder: [Int] = (dir == "down") ? [6,5,4,3,2,1] : [1,2,3,4,5,6]
+                    let fixedOrder: [Int] = (dir == "down") ? [1,2,3,4,5,6] : [6,5,4,3,2,1]
                     var idx = 0
                     for n in fixedOrder {
                         let uiIndex = n - 1
-                        let midiIndex = (stringCount - 1) - uiIndex
-                        if let note = chordNotes[safe: midiIndex], note >= 0 {
+                        if let note = getMidiNoteFor(stringIndex: uiIndex, colIndex: col) {
                             scheduledNotes.append((note: note, order: idx))
                             idx += 1
                         }
@@ -335,8 +347,7 @@ struct PlayingPatternEditorView: View {
                 } else {
                     for s in 0..<stringCount {
                         if grid[s][col] {
-                            let midiIndex = (stringCount - 1) - s
-                            if let note = chordNotes[safe: midiIndex], note >= 0 {
+                            if let note = getMidiNoteFor(stringIndex: s, colIndex: col) {
                                 scheduledNotes.append((note: note, order: 0))
                             }
                         }
@@ -345,8 +356,7 @@ struct PlayingPatternEditorView: View {
             } else {
                 for s in 0..<stringCount {
                     if grid[s][col] {
-                        let midiIndex = (stringCount - 1) - s
-                        if let note = chordNotes[safe: midiIndex], note >= 0 {
+                        if let note = getMidiNoteFor(stringIndex: s, colIndex: col) {
                             scheduledNotes.append((note: note, order: 0))
                         }
                     }
@@ -358,6 +368,7 @@ struct PlayingPatternEditorView: View {
                 let offset = modeIsStrum ? Double(order) * strumNoteSpacing : 0.0
                 let onTime = baseTime + offset
                 let offTime = onTime + noteSustain
+
                 DispatchQueue.main.asyncAfter(deadline: .now() + onTime) {
                     midiManager.sendNoteOn(note: UInt8(note), velocity: 110)
                 }
