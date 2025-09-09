@@ -85,14 +85,22 @@ struct AddPlayingPatternSheetView: View {
     }
     
     private func loadAvailablePatterns() {
-        guard let patternLibrary = appData.patternLibrary else { return }
-        
         let currentTimeSignature = appData.performanceConfig.timeSignature
-        let patternsForCurrentTS = patternLibrary[currentTimeSignature] ?? []
+        
+        // Get system patterns
+        let systemPatterns = appData.patternLibrary?[currentTimeSignature] ?? []
+        
+        // Get custom patterns
+        let customPatterns = customPlayingPatternManager.customPlayingPatterns[currentTimeSignature] ?? []
+        
+        // Combine and remove duplicates (prefer custom if IDs conflict)
+        let allPatterns = (customPatterns + systemPatterns).reduce(into: [String: GuitarPattern]()) { result, pattern in
+            result[pattern.id] = result[pattern.id] ?? pattern
+        }.values.sorted(by: { $0.name < $1.name })
         
         let currentSelectedIds = Set(appData.performanceConfig.selectedPlayingPatterns)
         
-        self.availablePatterns = patternsForCurrentTS
+        self.availablePatterns = allPatterns
             .filter { !currentSelectedIds.contains($0.id) }
             .map { (id: $0.id, pattern: $0) }
     }

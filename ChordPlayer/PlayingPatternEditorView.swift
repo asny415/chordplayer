@@ -493,11 +493,9 @@ struct PlayingPatternEditorView: View {
 
     private func save() {
         // Convert grid into PatternEvent array compatible with existing PatternEvent (delay, notes)
-        // We'll treat each column as a possible event; notes are specified as StringOrInt (.int for fret or .string("x") for mute not used)
         var events: [PatternEvent] = []
         let cols = grid.first?.count ?? 0
 
-        var lastEventCol = 0
         for col in 0..<cols {
             // collect notes for this column
             var notesForCol: [NoteValue] = []
@@ -508,9 +506,9 @@ struct PlayingPatternEditorView: View {
                     continue
                 }
                 // fixed strum order when a direction is set
-                    let fixedOrder: [Int] = (dir == "down") ? [6,5,4,3,2,1] : [1,2,3,4,5,6]
-                    // include all strings in fixed order regardless of clicked cells
-                    for n in fixedOrder { notesForCol.append(.int(n)) }
+                let fixedOrder: [Int] = (dir == "up") ? [6,5,4,3,2,1] : [1,2,3,4,5,6]
+                // include all strings in fixed order regardless of clicked cells
+                for n in fixedOrder { notesForCol.append(.int(n)) }
             } else {
                 for string in 0..<stringCount {
                     if grid[string][col] {
@@ -534,8 +532,7 @@ struct PlayingPatternEditorView: View {
             }
 
             if !notesForCol.isEmpty {
-                let stepDifference = col - lastEventCol
-                let delayString = "\(stepDifference)/\(subdivision)"
+                let delayString = "\(col)/\(subdivision)"
                 var deltaValue: Double? = nil
                 if modeIsStrum {
                     if let dir = (strumDirections.indices.contains(col) ? strumDirections[col] : nil) {
@@ -546,7 +543,6 @@ struct PlayingPatternEditorView: View {
                     }
                 }
                 events.append(PatternEvent(delay: delayString, notes: notesForCol, delta: deltaValue))
-                lastEventCol = col
             }
         }
 

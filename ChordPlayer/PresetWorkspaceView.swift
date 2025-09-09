@@ -543,12 +543,22 @@ private struct PlayingPatternsView: View {
     }
     
     private func findPlayingPatternDetails(for patternId: String) -> (pattern: GuitarPattern, category: String)? {
-        guard let library = appData.patternLibrary else { return nil }
-        for (category, patterns) in library {
+        // Search in custom patterns first
+        for (_, patterns) in customPlayingPatternManager.customPlayingPatterns {
             if let pattern = patterns.first(where: { $0.id == patternId }) {
-                return (pattern, category)
+                return (pattern, "自定义")
             }
         }
+        
+        // Then search in system patterns
+        if let library = appData.patternLibrary {
+            for (category, patterns) in library {
+                if let pattern = patterns.first(where: { $0.id == patternId }) {
+                    return (pattern, category)
+                }
+            }
+        }
+        
         return nil
     }
 }
