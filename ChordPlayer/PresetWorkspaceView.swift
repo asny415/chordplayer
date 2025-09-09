@@ -646,23 +646,23 @@ private struct ChordProgressionView: View {
                 .frame(height: 120)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
-                    ForEach(appData.performanceConfig.chords, id: \.self) { chord in
+                    ForEach(appData.performanceConfig.chords, id: \.id) { chordConfig in
                         ZStack(alignment: .topTrailing) {
-                            ChordCardView(chord: chord, isFlashing: flashingChord == chord)
+                            ChordCardView(chord: chordConfig.name, isFlashing: flashingChord == chordConfig.name)
                                 .animation(.easeInOut(duration: 0.15), value: flashingChord)
                                 .onTapGesture {
-                                    keyboardHandler.playChordByName(chord)
+                                    keyboardHandler.playChordByName(chordConfig.name)
                                 }
 
                             // Shortcut badge (custom or default). Always show a Text badge.
                             let (baseBadgeText, baseBadgeColor): (String, Color) = {
                                 // 1) user-assigned shortcut
-                                if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chord] {
+                                if let preset = PresetManager.shared.currentPreset, let s = preset.chordShortcuts[chordConfig.name] {
                                     return (s.displayText, Color.accentColor)
                                 }
 
                                 // 2) fallback to sensible default mapping for simple single-letter notes
-                                let components = chord.split(separator: "_")
+                                let components = chordConfig.name.split(separator: "_")
                                 if components.count >= 2 {
                                     let quality = String(components.last!)
                                     let noteParts = components.dropLast()
@@ -683,14 +683,14 @@ private struct ChordProgressionView: View {
                                 return ("+", Color.gray.opacity(0.6))
                             }()
                             
-                            let isBadgeHovered = badgeHoveredForChord == chord
+                            let isBadgeHovered = badgeHoveredForChord == chordConfig.name
                             let badgeText = baseBadgeText
                             let badgeColor = isBadgeHovered ? baseBadgeColor.opacity(0.7) : baseBadgeColor
 
 
                             // Badge button: tapping this starts capturing a new shortcut for this chord.
                             Button(action: {
-                                captureShortcutForChord(chord: chord)
+                                captureShortcutForChord(chord: chordConfig.name)
                             }) {
                                 Text(badgeText)
                                     .font(.caption2).bold()
@@ -701,7 +701,7 @@ private struct ChordProgressionView: View {
                             .buttonStyle(.plain)
                             .onHover { hovering in
                                 withAnimation {
-                                    badgeHoveredForChord = hovering ? chord : nil
+                                    badgeHoveredForChord = hovering ? chordConfig.name : nil
                                 }
                             }
                             .help("编辑快捷键")
@@ -709,7 +709,7 @@ private struct ChordProgressionView: View {
                         }
                         .contextMenu {
                             Button {
-                                selectedChordForAssociation = chord
+                                selectedChordForAssociation = chordConfig.name
                                 showAddAssociationSheet = true
                             } label: {
                                 Label("添加演奏指法关联", systemImage: "link")
@@ -718,7 +718,7 @@ private struct ChordProgressionView: View {
                             Divider()
                             
                             Button(role: .destructive) {
-                                appData.removeChord(chordName: chord)
+                                appData.removeChord(chordName: chordConfig.name)
                             } label: {
                                 Label("移除和弦", systemImage: "trash")
                             }
@@ -762,8 +762,8 @@ private struct ChordProgressionView: View {
         }
         .sheet(isPresented: $showAddChordSheet) {
             ChordLibraryView(onAddChord: { chordName in
-                appData.performanceConfig.chords.append(chordName)
-            }, existingChordNames: Set(appData.performanceConfig.chords))
+                appData.performanceConfig.chords.append(ChordPerformanceConfig(name: chordName))
+            }, existingChordNames: Set(appData.performanceConfig.chords.map { $0.name }))
         }
         .sheet(isPresented: $showAddAssociationSheet) {
             if let chordName = selectedChordForAssociation {

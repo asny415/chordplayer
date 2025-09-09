@@ -140,6 +140,21 @@ typealias PatternLibrary = [String: [GuitarPattern]]
 
 // MARK: - Configuration Models
 
+struct ChordPerformanceConfig: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name: String
+    var shortcut: String?
+    // [ShortcutKey: PatternID]
+    var patternAssociations: [String: String]
+
+    init(name: String, shortcut: String? = nil, patternAssociations: [String: String] = [:]) {
+        self.name = name
+        self.shortcut = shortcut
+        self.patternAssociations = patternAssociations
+    }
+}
+
+
 enum QuantizationMode: String, Codable, CaseIterable {
     case none = "NONE"
     case measure = "MEASURE"
@@ -160,14 +175,14 @@ struct PerformanceConfig: Codable, Equatable {
     var key: String
     var quantize: String?
     
-    var chords: [String]
+    var chords: [ChordPerformanceConfig]
     var selectedDrumPatterns: [String]
     var selectedPlayingPatterns: [String]
     
     var activeDrumPatternId: String?
     var activePlayingPatternId: String?
 
-    init(tempo: Double, timeSignature: String, key: String, quantize: String? = nil, chords: [String] = [], selectedDrumPatterns: [String] = [], selectedPlayingPatterns: [String] = [], activeDrumPatternId: String? = nil, activePlayingPatternId: String? = nil) {
+    init(tempo: Double, timeSignature: String, key: String, quantize: String? = nil, chords: [ChordPerformanceConfig] = [], selectedDrumPatterns: [String] = [], selectedPlayingPatterns: [String] = [], activeDrumPatternId: String? = nil, activePlayingPatternId: String? = nil) {
         self.tempo = tempo
         self.timeSignature = timeSignature
         self.key = key
@@ -194,15 +209,24 @@ struct PerformanceConfig: Codable, Equatable {
         key = try container.decode(String.self, forKey: .key)
         quantize = try container.decodeIfPresent(String.self, forKey: .quantize)
 
-        chords = try container.decodeIfPresent([String].self, forKey: .chords) ?? []
+        // Migration logic for chords
+        if let stringChords = try? container.decodeIfPresent([String].self, forKey: .chords) {
+            self.chords = stringChords.map { ChordPerformanceConfig(name: $0) }
+        } else if let configChords = try? container.decodeIfPresent([ChordPerformanceConfig].self, forKey: .chords) {
+            self.chords = configChords
+        } else {
+            self.chords = []
+        }
+
         selectedDrumPatterns = try container.decodeIfPresent([String].self, forKey: .selectedDrumPatterns) ?? []
         selectedPlayingPatterns = try container.decodeIfPresent([String].self, forKey: .selectedPlayingPatterns) ?? []
         activeDrumPatternId = try container.decodeIfPresent(String.self, forKey: .activeDrumPatternId)
         activePlayingPatternId = try container.decodeIfPresent(String.self, forKey: .activePlayingPatternId)
 
+        // Migration for old preset format
         if let groups = try container.decodeIfPresent([OldPatternGroup].self, forKey: .patternGroups) {
             if self.chords.isEmpty {
-                self.chords = groups.flatMap { $0.chordsOrder }
+                self.chords = groups.flatMap { $0.chordsOrder }.map { ChordPerformanceConfig(name: $0) }
             }
             if self.activePlayingPatternId == nil, let firstGroupPattern = groups.first?.pattern {
                 self.activePlayingPatternId = firstGroupPattern

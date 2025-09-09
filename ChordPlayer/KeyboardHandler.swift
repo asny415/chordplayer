@@ -161,7 +161,7 @@ class KeyboardHandler: ObservableObject {
         // Space / simple letter actions
         if event.keyCode == 49 { // Space bar
             if let firstChord = appData.performanceConfig.chords.first {
-                playChord(chordName: firstChord)
+                playChord(chordName: firstChord.name)
             }
             return true
         }
@@ -193,7 +193,6 @@ class KeyboardHandler: ObservableObject {
         return false
     }
 
-    // Resolve a shortcut to a chord name.
     private func resolveChordForShortcut(_ shortcut: Shortcut) -> String? {
         // 1. Check current preset custom mappings
         if let preset = PresetManager.shared.currentPreset {
@@ -203,19 +202,19 @@ class KeyboardHandler: ObservableObject {
         }
 
         // 2. Fallback to default rule: Letter_Major -> lowercase letter (no shift) ; Letter_Minor -> Shift+Letter
-        guard let chords = appData.performanceConfig.chords as [String]? else { return nil }
-        for chord in chords {
-            let parts = chord.split(separator: "_")
+        for chordConfig in appData.performanceConfig.chords {
+            let chordName = chordConfig.name
+            let parts = chordName.split(separator: "_")
             if parts.count >= 2 {
                 let letter = String(parts[0])
                 let quality = String(parts[1])
                 if letter.count == 1 {
                     let upper = letter.uppercased()
                     if quality == "Major" && shortcut.modifiersShift == false && shortcut.key == upper {
-                        return chord
+                        return chordName
                     }
                     if quality == "Minor" && shortcut.modifiersShift == true && shortcut.key == upper {
-                        return chord
+                        return chordName
                     }
                 }
             }
