@@ -615,6 +615,8 @@ private struct ChordProgressionView: View {
     @State private var captureMonitor: Any? = nil
     @State private var isHoveringGroup: Bool = false
     @State private var badgeHoveredForChord: String? = nil
+    @State private var showAddAssociationSheet: Bool = false
+    @State private var selectedChordForAssociation: String? = nil
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -706,6 +708,15 @@ private struct ChordProgressionView: View {
                             .offset(x: -8, y: 8)
                         }
                         .contextMenu {
+                            Button {
+                                selectedChordForAssociation = chord
+                                showAddAssociationSheet = true
+                            } label: {
+                                Label("添加演奏指法关联", systemImage: "link")
+                            }
+                            
+                            Divider()
+                            
                             Button(role: .destructive) {
                                 appData.removeChord(chordName: chord)
                             } label: {
@@ -753,6 +764,11 @@ private struct ChordProgressionView: View {
             ChordLibraryView(onAddChord: { chordName in
                 appData.performanceConfig.chords.append(chordName)
             }, existingChordNames: Set(appData.performanceConfig.chords))
+        }
+        .sheet(isPresented: $showAddAssociationSheet) {
+            if let chordName = selectedChordForAssociation {
+                AddChordPlayingPatternAssociationSheet(chordName: chordName)
+            }
         }
     }
 

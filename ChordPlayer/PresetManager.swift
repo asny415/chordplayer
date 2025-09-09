@@ -190,6 +190,89 @@ class PresetManager: ObservableObject {
         scheduleAutoSave()
     }
     
+    // MARK: - Chord Playing Pattern Association Management
+    
+    /// 检测快捷键冲突
+    func detectShortcutConflicts(_ shortcut: Shortcut, for chordName: String) -> [ShortcutConflict] {
+        guard let preset = currentPreset else { return [] }
+        var conflicts: [ShortcutConflict] = []
+        
+        // 检查与默认和弦快捷键的冲突
+        if shortcut.conflictsWithDefaultChordShortcut(for: chordName) {
+            conflicts.append(.defaultChordShortcut)
+        }
+        
+        // 检查与其他关联的冲突
+        for association in preset.chordPlayingPatternAssociations {
+            if association.chordName != chordName && shortcut.conflictsWith(association.shortcut) {
+                conflicts.append(.otherAssociation(association))
+            }
+        }
+        
+        // 检查与数字键的冲突（用于演奏指法切换）
+        if shortcut.isNumericKey() {
+            conflicts.append(.numericKey)
+        }
+        
+        return conflicts
+    }
+    
+    /// 添加和弦-演奏指法关联
+    func addChordPlayingPatternAssociation(chordName: String, playingPatternId: String, shortcut: Shortcut) -> Bool {
+        guard var preset = currentPreset else { return false }
+        
+        // 检查冲突
+        let conflicts = detectShortcutConflicts(shortcut, for: chordName)
+        if !conflicts.isEmpty {
+            return false
+        }
+        
+        // 创建新关联
+        let association = ChordPlayingPatternAssociation(
+            chordName: chordName,
+            playingPatternId: playingPatternId,
+            shortcut: shortcut
+        )
+        
+        preset.chordPlayingPatternAssociations.append(association)
+        preset.updatedAt = Date()
+        currentPreset = preset
+        
+        if let index = presets.firstIndex(where: { $0.id == preset.id }) {
+            presets[index].updatedAt = preset.updatedAt
+        }
+        
+        scheduleAutoSave()
+        return true
+    }
+    
+    /// 删除和弦-演奏指法关联
+    func removeChordPlayingPatternAssociation(_ association: ChordPlayingPatternAssociation) {
+        guard var preset = currentPreset else { return }
+        
+        preset.chordPlayingPatternAssociations.removeAll { $0.id == association.id }
+        preset.updatedAt = Date()
+        currentPreset = preset
+        
+        if let index = presets.firstIndex(where: { $0.id == preset.id }) {
+            presets[index].updatedAt = preset.updatedAt
+        }
+        
+        scheduleAutoSave()
+    }
+    
+    /// 获取指定和弦的所有演奏指法关联
+    func getAssociationsForChord(_ chordName: String) -> [ChordPlayingPatternAssociation] {
+        guard let preset = currentPreset else { return [] }
+        return preset.chordPlayingPatternAssociations.filter { $0.chordName == chordName }
+    }
+    
+    /// 根据快捷键查找关联
+    func findAssociationByShortcut(_ shortcut: Shortcut) -> ChordPlayingPatternAssociation? {
+        guard let preset = currentPreset else { return nil }
+        return preset.chordPlayingPatternAssociations.first { $0.shortcut.conflictsWith(shortcut) }
+    }
+    
     // MARK: - File storage helpers
     
     private func presetFileURL(for id: UUID) -> URL {

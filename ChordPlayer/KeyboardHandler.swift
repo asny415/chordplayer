@@ -175,8 +175,15 @@ class KeyboardHandler: ObservableObject {
             return true
         }
 
-        // If none of the above, try chord shortcuts
+        // If none of the above, try chord shortcuts and chord playing pattern associations
         if let shortcut = Shortcut.from(event: event) {
+            // 首先检查是否有演奏指法关联
+            if let association = PresetManager.shared.findAssociationByShortcut(shortcut) {
+                playChordWithAssociation(chordName: association.chordName, association: association)
+                return true
+            }
+            
+            // 然后检查普通和弦快捷键
             if let chord = resolveChordForShortcut(shortcut) {
                 playChord(chordName: chord)
                 return true
@@ -244,7 +251,17 @@ class KeyboardHandler: ObservableObject {
     private func playChord(chordName: String) {
         guard let playingPatternId = appData.performanceConfig.activePlayingPatternId else { return }
         let timeSignature = appData.performanceConfig.timeSignature
-        guard let pattern = appData.patternLibrary?[timeSignature]?.first(where: { $0.id == playingPatternId }) else {
+        
+        // 查找演奏指法（包括自定义的）
+        var pattern: GuitarPattern?
+        if let library = appData.patternLibrary?[timeSignature] {
+            pattern = library.first(where: { $0.id == playingPatternId })
+        }
+        if pattern == nil, let customLibrary = CustomPlayingPatternManager.shared.customPlayingPatterns[timeSignature] {
+            pattern = customLibrary.first(where: { $0.id == playingPatternId })
+        }
+        
+        guard let foundPattern = pattern else {
             print("Error: Could not resolve playing pattern.")
             return
         }
@@ -254,7 +271,46 @@ class KeyboardHandler: ObservableObject {
 
         chordPlayer.playChord(
             chordName: chordName, 
-            pattern: pattern, 
+            pattern: foundPattern, 
+            tempo: config.tempo, 
+            key: config.key, 
+            velocity: UInt8(appConfig.velocity), 
+            duration: TimeInterval(appConfig.duration) / 1000.0,
+            quantizationMode: QuantizationMode(rawValue: config.quantize ?? "NONE") ?? .none,
+            drumClockInfo: drumPlayer.clockInfo
+        )
+        
+        DispatchQueue.main.async {
+            self.lastPlayedChord = chordName
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self.lastPlayedChord = nil
+            }
+        }
+    }
+    
+    private func playChordWithAssociation(chordName: String, association: ChordPlayingPatternAssociation) {
+        let timeSignature = appData.performanceConfig.timeSignature
+        
+        // 查找关联的演奏指法（包括自定义的）
+        var pattern: GuitarPattern?
+        if let library = appData.patternLibrary?[timeSignature] {
+            pattern = library.first(where: { $0.id == association.playingPatternId })
+        }
+        if pattern == nil, let customLibrary = CustomPlayingPatternManager.shared.customPlayingPatterns[timeSignature] {
+            pattern = customLibrary.first(where: { $0.id == association.playingPatternId })
+        }
+        
+        guard let foundPattern = pattern else {
+            print("Error: Could not resolve associated playing pattern.")
+            return
+        }
+
+        let config = appData.performanceConfig
+        let appConfig = appData.CONFIG
+
+        chordPlayer.playChord(
+            chordName: chordName, 
+            pattern: foundPattern, 
             tempo: config.tempo, 
             key: config.key, 
             velocity: UInt8(appConfig.velocity), 

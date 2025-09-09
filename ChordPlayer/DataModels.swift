@@ -264,6 +264,8 @@ struct Preset: Codable, Equatable {
     var description: String?
     // map chordID (e.g. "A_Major") -> Shortcut (user assigned)
     var chordShortcuts: [String: Shortcut]
+    // 和弦与演奏指法的关联关系
+    var chordPlayingPatternAssociations: [ChordPlayingPatternAssociation]
     var performanceConfig: PerformanceConfig
     var appConfig: AppConfig
     var createdAt: Date
@@ -274,6 +276,7 @@ struct Preset: Codable, Equatable {
         self.name = name
         self.description = description
         self.chordShortcuts = [:]
+        self.chordPlayingPatternAssociations = []
         self.performanceConfig = performanceConfig
         self.appConfig = appConfig
         self.createdAt = Date()
@@ -297,4 +300,42 @@ struct PlayingPatternEditorData: Identifiable {
     let id: String
     let timeSignature: String
     let pattern: GuitarPattern
+}
+
+// MARK: - Chord Playing Pattern Association Models
+
+/// 和弦与演奏指法的关联关系
+struct ChordPlayingPatternAssociation: Codable, Identifiable, Equatable {
+    let id: UUID
+    let chordName: String
+    let playingPatternId: String
+    let shortcut: Shortcut
+    
+    init(chordName: String, playingPatternId: String, shortcut: Shortcut) {
+        self.id = UUID()
+        self.chordName = chordName
+        self.playingPatternId = playingPatternId
+        self.shortcut = shortcut
+    }
+}
+
+/// 快捷键冲突类型
+enum ShortcutConflict: Equatable {
+    case defaultChordShortcut
+    case otherAssociation(ChordPlayingPatternAssociation)
+    case numericKey
+    case systemShortcut
+    
+    var description: String {
+        switch self {
+        case .defaultChordShortcut:
+            return "与和弦默认快捷键冲突"
+        case .otherAssociation(let association):
+            return "与和弦 \(association.chordName) 的演奏指法关联冲突"
+        case .numericKey:
+            return "与演奏指法切换数字键冲突"
+        case .systemShortcut:
+            return "与系统快捷键冲突"
+        }
+    }
 }
