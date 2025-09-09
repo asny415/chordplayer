@@ -30,7 +30,7 @@ struct AddChordPlayingPatternAssociationSheet: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("添加演奏指法关联")
+            Text("管理演奏指法关联")
                 .font(.title2)
                 .fontWeight(.bold)
             
@@ -65,6 +65,12 @@ struct AddChordPlayingPatternAssociationSheet: View {
                                             .font(.subheadline.weight(.medium))
                                             .lineLimit(1)
                                             .foregroundColor(.primary)
+                                        
+                                        if let shortcut = shortcutForPattern(pattern.id) {
+                                            Text("快捷键: \(shortcut.displayText)")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
                                     .padding(12)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -116,6 +122,13 @@ struct AddChordPlayingPatternAssociationSheet: View {
             Text(conflictMessage)
         }
         .onDisappear(perform: cleanupCaptureMonitor)
+    }
+    
+    private func shortcutForPattern(_ patternId: String) -> Shortcut? {
+        guard let chordConfig = appData.performanceConfig.chords.first(where: { $0.name == chordName }) else {
+            return nil
+        }
+        return chordConfig.patternAssociations.first(where: { $0.value == patternId })?.key
     }
     
     private func startCapturingShortcut() {

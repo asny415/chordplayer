@@ -712,7 +712,7 @@ private struct ChordProgressionView: View {
                                 selectedChordForAssociation = chordConfig.name
                                 showAddAssociationSheet = true
                             } label: {
-                                Label("添加演奏指法关联", systemImage: "link")
+                                Label("管理演奏指法关联", systemImage: "link")
                             }
                             
                             Divider()
