@@ -64,8 +64,7 @@ class KeyboardHandler: ObservableObject {
             // that belongs to the key window's view hierarchy, let the event
             // pass through so the control can receive typing.
             if let responder = NSApp.keyWindow?.firstResponder,
-               let view = responder as? NSView,
-               view.isDescendant(of: NSApp.keyWindow?.contentView ?? NSView()) {
+               let view = responder as? NSView {
 
                 // Common Cocoa text input classes
                 if responder is NSTextView || responder is NSTextField {
@@ -160,9 +159,11 @@ class KeyboardHandler: ObservableObject {
         if let shortcut = Shortcut.from(event: event) {
             // Priority 1: Check for specific pattern associations
             for chordConfig in appData.performanceConfig.chords {
-                if let patternId = chordConfig.patternAssociations[shortcut] {
-                    playChord(chordName: chordConfig.name, withPatternId: patternId)
-                    return true
+                if let association = chordConfig.patternAssociations[shortcut] {
+                    if shouldPlayForCurrentMeasure(indices: association.measureIndices) {
+                        playChord(chordName: chordConfig.name, withPatternId: association.patternId)
+                    }
+                    return true // Event is handled whether played or not
                 }
             }
             
@@ -174,6 +175,32 @@ class KeyboardHandler: ObservableObject {
         }
 
         return false
+    }
+
+    private func shouldPlayForCurrentMeasure(indices: [Double]?) -> Bool {
+        guard let indices = indices, !indices.isEmpty else {
+            return true // No restrictions, always play
+        }
+
+        guard drumPlayer.isPlaying, drumPlayer.loopDurationMs > 0 else {
+            return true // If drum isn't playing, no context to restrict, so play
+        }
+
+        let nowUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
+        let elapsedTimeMs = nowUptimeMs - drumPlayer.startTimeMs
+        let totalMeasuresElapsed = elapsedTimeMs / drumPlayer.loopDurationMs
+        
+        let currentMeasure = floor(totalMeasuresElapsed)
+        let measureFraction = totalMeasuresElapsed.truncatingRemainder(dividingBy: 1.0)
+        
+        let checkIndex: Double
+        if measureFraction < 0.5 {
+            checkIndex = currentMeasure + 1.0
+        } else {
+            checkIndex = currentMeasure + 1.5
+        }
+        
+        return indices.contains(checkIndex)
     }
 
     private func resolveChordForShortcut(_ shortcut: Shortcut) -> String? {

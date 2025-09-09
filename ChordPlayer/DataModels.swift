@@ -198,14 +198,18 @@ typealias PatternLibrary = [String: [GuitarPattern]]
 
 // MARK: - Configuration Models
 
+struct PatternAssociation: Codable, Hashable {
+    var patternId: String
+    var measureIndices: [Double]?
+}
+
 struct ChordPerformanceConfig: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
     var shortcut: String?
-    // [ShortcutKey: PatternID]
-    var patternAssociations: [Shortcut: String]
+    var patternAssociations: [Shortcut: PatternAssociation]
 
-    init(name: String, shortcut: String? = nil, patternAssociations: [Shortcut: String] = [:]) {
+    init(name: String, shortcut: String? = nil, patternAssociations: [Shortcut: PatternAssociation] = [:]) {
         self.name = name
         self.shortcut = shortcut
         self.patternAssociations = patternAssociations
@@ -221,12 +225,25 @@ struct ChordPerformanceConfig: Codable, Identifiable, Equatable {
         name = try container.decode(String.self, forKey: .name)
         shortcut = try container.decodeIfPresent(String.self, forKey: .shortcut)
         
-        let associations = try container.decode([String: String].self, forKey: .patternAssociations)
-        patternAssociations = [:]
-        for (key, value) in associations {
-            if let shortcut = Shortcut(stringValue: key) {
-                patternAssociations[shortcut] = value
+        // Try decoding the new format first
+        if let associations = try? container.decodeIfPresent([String: PatternAssociation].self, forKey: .patternAssociations) {
+            patternAssociations = [:]
+            for (key, value) in associations {
+                if let shortcut = Shortcut(stringValue: key) {
+                    patternAssociations[shortcut] = value
+                }
             }
+        }
+        // Fallback to decoding the old format for backward compatibility
+        else if let oldAssociations = try? container.decodeIfPresent([String: String].self, forKey: .patternAssociations) {
+            patternAssociations = [:]
+            for (key, value) in oldAssociations {
+                if let shortcut = Shortcut(stringValue: key) {
+                    patternAssociations[shortcut] = PatternAssociation(patternId: value, measureIndices: nil)
+                }
+            }
+        } else {
+            patternAssociations = [:]
         }
     }
     
@@ -236,7 +253,7 @@ struct ChordPerformanceConfig: Codable, Identifiable, Equatable {
         try container.encode(name, forKey: .name)
         try container.encodeIfPresent(shortcut, forKey: .shortcut)
         
-        var associations: [String: String] = [:]
+        var associations: [String: PatternAssociation] = [:]
         for (key, value) in patternAssociations {
             associations[key.stringValue] = value
         }
