@@ -707,6 +707,34 @@ private struct ChordProgressionView: View {
                             .help("编辑快捷键")
                             .offset(x: -8, y: 8)
                         }
+                        // Bottom-right badges for associated playing pattern shortcuts
+                        .overlay(alignment: .bottomTrailing) {
+                            let shortcuts = sortedPatternShortcuts(for: chordConfig)
+                            if !shortcuts.isEmpty {
+                                HStack(spacing: 6) {
+                                    let maxShow = 3
+                                    let shown = Array(shortcuts.prefix(maxShow))
+                                    let rest = shortcuts.count > maxShow ? Array(shortcuts.dropFirst(maxShow)) : []
+                                    ForEach(shown, id: \.stringValue) { sc in
+                                        Text(sc.displayText)
+                                            .font(.caption2).bold()
+                                            .foregroundColor(.primary)
+                                            .padding(.horizontal, 6).padding(.vertical, 3)
+                                            .background(Color.gray.opacity(0.15), in: Capsule())
+                                    }
+                                    if !rest.isEmpty {
+                                        Text("+\(rest.count)")
+                                            .font(.caption2).bold()
+                                            .foregroundColor(.primary)
+                                            .padding(.horizontal, 6).padding(.vertical, 3)
+                                            .background(Color.gray.opacity(0.12), in: Capsule())
+                                            .help(rest.map { $0.displayText }.joined(separator: ", "))
+                                    }
+                                }
+                                .padding(6)
+                                .allowsHitTesting(false) // avoid intercepting the tap on the chord card
+                            }
+                        }
                         .contextMenu {
                             Button {
                                 selectedChordForAssociation = chordConfig.name
@@ -770,6 +798,29 @@ private struct ChordProgressionView: View {
                 AddChordPlayingPatternAssociationSheet(chordName: chordName)
             }
         }
+    }
+
+    // MARK: - Helpers for sorting pattern association shortcuts
+    private func sortedPatternShortcuts(for chordConfig: ChordPerformanceConfig) -> [Shortcut] {
+        let shortcuts = chordConfig.patternAssociations.keys.map { $0 }
+        return shortcuts.sorted(by: shortcutSortLessThan(_:_:))
+    }
+    
+    private func shortcutSortLessThan(_ a: Shortcut, _ b: Shortcut) -> Bool {
+        // Weight modifiers: cmd > ctrl > opt > shift
+        func weight(_ s: Shortcut) -> Int {
+            var w = 0
+            if s.modifiersCommand { w += 8 }
+            if s.modifiersControl { w += 4 }
+            if s.modifiersOption { w += 2 }
+            if s.modifiersShift { w += 1 }
+            return w
+        }
+        let wa = weight(a)
+        let wb = weight(b)
+        if wa != wb { return wa > wb }
+        // Then by key lexicographically
+        return a.key < b.key
     }
 
     private func captureShortcutForChord(chord: String) {
