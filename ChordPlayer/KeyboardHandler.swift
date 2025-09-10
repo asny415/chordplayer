@@ -156,6 +156,11 @@ class KeyboardHandler: ObservableObject {
             return true
         }
 
+        if characters == "m" {
+            appData.playingMode = appData.playingMode.next()
+            return true
+        }
+
         if let shortcut = Shortcut.from(event: event) {
             // Priority 1: Check for specific pattern associations
             for chordConfig in appData.performanceConfig.chords {

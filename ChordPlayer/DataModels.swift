@@ -452,7 +452,33 @@ struct Preset: Codable, Equatable {
     }
 }
 
+
+// MARK: - Playing Mode
+
+enum PlayingMode: String, CaseIterable {
+    case manual = "手动"
+    case assisted = "辅助"
+    case automatic = "自动"
+
+    var shortDisplay: String {
+        switch self {
+        case .manual: return "M"
+        case .assisted: return "S"
+        case .automatic: return "A"
+        }
+    }
+
+    func next() -> PlayingMode {
+        let all = PlayingMode.allCases
+        if let idx = all.firstIndex(of: self) {
+            return all[(idx + 1) % all.count]
+        }
+        return .manual
+    }
+}
+
 // MARK: - Editor Data Models
+
 
 struct DrumPatternEditorData: Identifiable {
     let id: String

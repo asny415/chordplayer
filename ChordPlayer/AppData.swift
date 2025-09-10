@@ -9,6 +9,8 @@ class AppData: ObservableObject {
     
     @Published var customChordManager = CustomChordManager.shared
     
+    @Published var playingMode: PlayingMode = .manual
+    
     @Published var performanceConfig: PerformanceConfig {
         didSet {
             presetManager.updateCurrentPreset(performanceConfig: performanceConfig, appConfig: CONFIG)

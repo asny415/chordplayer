@@ -223,15 +223,51 @@ private struct GlobalSettingsView: View {
     }
 }
 
+private struct PlayingModeBadgeView: View {
+    let playingMode: String
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(playingMode.enumerated()), id: \.offset) { index, char in
+                Text(String(char))
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle().fill(Color.secondary.opacity(0.15))
+                    )
+                
+                if index < playingMode.count - 1 {
+                    Text("|")
+                        .font(.system(size: 14, weight: .light))
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+            }
+        }
+    }
+}
+
 private struct DrumMachineStatusCard: View {
     @EnvironmentObject var drumPlayer: DrumPlayer
-    @EnvironmentObject var appData: AppData // Needed for tempo for playPattern
+    @EnvironmentObject var appData: AppData
 
     var body: some View {
-        DashboardCardView(
-            label: "鼓机", // "Drum Machine"
-            value: drumPlayer.isPlaying ? "运行中" : "停止" // "Running" : "Stopped"
-        )
+        VStack(spacing: 4) {
+            Text("演奏".uppercased())
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            HStack(alignment: .center, spacing: 10) {
+                PlayingModeBadgeView(playingMode: appData.playingMode.shortDisplay)
+                
+                Text(drumPlayer.isPlaying ? "运行中" : "停止")
+                    .font(.system(.title, design: .rounded).weight(.bold))
+            }
+            .foregroundColor(drumPlayer.isPlaying ? .green : .primary)
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 60)
+        .padding(8)
+        .background(Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture {
             if drumPlayer.isPlaying {
                 drumPlayer.stop()
