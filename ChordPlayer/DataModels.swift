@@ -477,6 +477,12 @@ enum PlayingMode: String, CaseIterable {
     }
 }
 
+struct AutoPlayEvent: Codable, Hashable {
+    let chordName: String
+    let patternId: String
+    let triggerBeat: Int
+}
+
 // MARK: - Editor Data Models
 
 

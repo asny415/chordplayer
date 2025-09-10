@@ -30,6 +30,30 @@ class KeyboardHandler: ObservableObject {
                 self?.updateWithNewConfig(newConfig)
             }
             .store(in: &cancellables)
+
+        appData.$currentBeat
+            .combineLatest(appData.$currentMeasure)
+            .debounce(for: .milliseconds(10), scheduler: RunLoop.main)
+            .sink { [weak self] beat, measure in
+                guard let self = self, self.appData.playingMode == .automatic, measure > 0, beat > 0, !self.appData.autoPlaySchedule.isEmpty else { return }
+
+                var beatsPerMeasure = 4
+                let timeSigParts = self.appData.performanceConfig.timeSignature.split(separator: "/")
+                if timeSigParts.count == 2, let beats = Int(timeSigParts[0]) {
+                    beatsPerMeasure = beats
+                }
+
+                let currentTotalBeats = (measure - 1) * beatsPerMeasure + (beat - 1)
+                let triggerBeat = currentTotalBeats + 1
+
+                for event in self.appData.autoPlaySchedule {
+                    if event.triggerBeat == triggerBeat {
+                        print("[KeyboardHandler] Auto-playing chord \(event.chordName) at beat \(triggerBeat)")
+                        self.playChord(chordName: event.chordName, withPatternId: event.patternId)
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // Allow UI to temporarily pause/resume the shared event monitor so UI-level

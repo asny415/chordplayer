@@ -12,6 +12,8 @@ class AppData: ObservableObject {
     @Published var currentlyPlayingChordName: String? = nil
     @Published var currentlyPlayingPatternName: String? = nil
     
+    @Published var autoPlaySchedule: [AutoPlayEvent] = []
+    
     @Published var customChordManager = CustomChordManager.shared
     
     @Published var playingMode: PlayingMode = .manual

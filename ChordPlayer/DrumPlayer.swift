@@ -158,33 +158,7 @@ class DrumPlayer: ObservableObject {
             self.loopCount = 0
             self.currentPatternSchedule = newPatternSchedule
 
-            if appData.playingMode != .manual {
-                var summary: [String: String] = [:]
-                let chords = appData.performanceConfig.chords
-
-                var beatsPerMeasure = 4
-                let timeSigParts = timeSignature.split(separator: "/")
-                if timeSigParts.count == 2, let beats = Int(timeSigParts[0]) {
-                    beatsPerMeasure = beats
-                }
-
-                for chordConfig in chords {
-                    for (_, association) in chordConfig.patternAssociations {
-                        if let measureIndices = association.measureIndices, !measureIndices.isEmpty {
-                            let beats = measureIndices.map { ($0 - 1) * Double(beatsPerMeasure) }
-                            let beatsString = beats.map { String(format: "%.2f", $0) }.joined(separator: ", ")
-                            summary[chordConfig.name] = "starts at beats [\(beatsString)]"
-                        }
-                    }
-                }
-
-                if !summary.isEmpty {
-                    print("[DrumPlayer] Pre-defined chord-pattern beats for non-manual playing mode (Time Signature: \(timeSignature)):")
-                    for (chordName, info) in summary.sorted(by: { $0.key < $1.key }) {
-                        print("- Chord '\(chordName)': \(info)")
-                    }
-                }
-            }
+            buildAutoPlaySchedule()
 
             // Reset and start beat counter
             self.beatTimer?.invalidate()
@@ -291,6 +265,7 @@ class DrumPlayer: ObservableObject {
             self.appData.currentBeat = 0
             self.appData.currentlyPlayingChordName = nil
             self.appData.currentlyPlayingPatternName = nil
+            self.appData.autoPlaySchedule = []
         }
 
         currentPatternTimer?.invalidate()
@@ -302,5 +277,41 @@ class DrumPlayer: ObservableObject {
         self.loopDurationMs = 0
         midiManager.sendPanic()
         midiManager.cancelAllPendingScheduledEvents()
+    }
+    
+    private func buildAutoPlaySchedule() {
+        guard appData.playingMode == .automatic else {
+            if !appData.autoPlaySchedule.isEmpty {
+                DispatchQueue.main.async {
+                    self.appData.autoPlaySchedule = []
+                }
+            }
+            return
+        }
+
+        var schedule: [AutoPlayEvent] = []
+        let timeSignature = appData.performanceConfig.timeSignature
+        var beatsPerMeasure = 4
+        let timeSigParts = timeSignature.split(separator: "/")
+        if timeSigParts.count == 2, let beats = Int(timeSigParts[0]) {
+            beatsPerMeasure = beats
+        }
+
+        for chordConfig in appData.performanceConfig.chords {
+            for (_, association) in chordConfig.patternAssociations {
+                if let measureIndices = association.measureIndices, !measureIndices.isEmpty {
+                    for measureIndex in measureIndices {
+                        let targetBeat = (measureIndex - 1) * Double(beatsPerMeasure)
+                        let action = AutoPlayEvent(chordName: chordConfig.name, patternId: association.patternId, triggerBeat: Int(round(targetBeat)))
+                        schedule.append(action)
+                    }
+                }
+            }
+        }
+        
+        DispatchQueue.main.async {
+            self.appData.autoPlaySchedule = schedule
+            print("[DrumPlayer] Auto-play schedule built: \(schedule.count) events")
+        }
     }
 }
