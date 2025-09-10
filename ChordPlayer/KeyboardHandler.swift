@@ -48,7 +48,7 @@ class KeyboardHandler: ObservableObject {
                     currentTotalBeats = beat
                 } else { // Normal playback
                     // Formula for 1-based measure and beat
-                    currentTotalBeats = (measure - 1) * beatsPerMeasure + (beat - 1)
+                    currentTotalBeats = (measure - 1) * beatsPerMeasure + beat
                 }
                 
                 let triggerBeat = currentTotalBeats + 1 // Auto-play on the next beat
