@@ -158,6 +158,34 @@ class DrumPlayer: ObservableObject {
             self.loopCount = 0
             self.currentPatternSchedule = newPatternSchedule
 
+            if appData.playingMode != .manual {
+                var summary: [String: String] = [:]
+                let chords = appData.performanceConfig.chords
+
+                var beatsPerMeasure = 4
+                let timeSigParts = timeSignature.split(separator: "/")
+                if timeSigParts.count == 2, let beats = Int(timeSigParts[0]) {
+                    beatsPerMeasure = beats
+                }
+
+                for chordConfig in chords {
+                    for (_, association) in chordConfig.patternAssociations {
+                        if let measureIndices = association.measureIndices, !measureIndices.isEmpty {
+                            let beats = measureIndices.map { ($0 - 1) * Double(beatsPerMeasure) }
+                            let beatsString = beats.map { String(format: "%.2f", $0) }.joined(separator: ", ")
+                            summary[chordConfig.name] = "starts at beats [\(beatsString)]"
+                        }
+                    }
+                }
+
+                if !summary.isEmpty {
+                    print("[DrumPlayer] Pre-defined chord-pattern beats for non-manual playing mode (Time Signature: \(timeSignature)):")
+                    for (chordName, info) in summary.sorted(by: { $0.key < $1.key }) {
+                        print("- Chord '\(chordName)': \(info)")
+                    }
+                }
+            }
+
             // Reset and start beat counter
             self.beatTimer?.invalidate()
             let timeSigParts = timeSignature.split(separator: "/")
