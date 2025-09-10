@@ -187,4 +187,6 @@ class AppData: ObservableObject {
     func removeChord(chordName: String) {
         performanceConfig.chords.removeAll { $0.name == chordName }
     }
+
+    
 }

@@ -481,6 +481,7 @@ struct AutoPlayEvent: Codable, Hashable {
     let chordName: String
     let patternId: String
     let triggerBeat: Int
+    var durationBeats: Int? // This will be calculated
     let shortcut: String?
 }
 

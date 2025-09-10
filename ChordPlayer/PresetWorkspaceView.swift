@@ -3,6 +3,7 @@ import AppKit
 
 struct PresetWorkspaceView: View {
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var keyboardHandler: KeyboardHandler
 
     var body: some View {
         ScrollView {
@@ -25,6 +26,7 @@ struct PresetWorkspaceView: View {
 
                 GroupBox {
                     PerformanceInfoView()
+                        .environmentObject(keyboardHandler)
                 }
             }
             .padding()

@@ -3,6 +3,12 @@ import SwiftUI
 import AppKit
 import Combine
 
+struct PlayingInfo {
+    let chordName: String
+    let shortcut: String
+    var duration: Int?
+}
+
 class KeyboardHandler: ObservableObject {
     private var midiManager: MidiManager
     private var chordPlayer: ChordPlayer
@@ -10,6 +16,10 @@ class KeyboardHandler: ObservableObject {
     private var appData: AppData
 
     @Published var lastPlayedChord: String? = nil
+    @Published var currentPlayingInfo: PlayingInfo? = nil
+    @Published var nextPlayingInfo: PlayingInfo? = nil
+    @Published var beatsToNextChord: Int? = nil
+    @Published var currentChordProgress: Double = 0.0
 
     private var eventMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
@@ -33,7 +43,14 @@ class KeyboardHandler: ObservableObject {
             .combineLatest(appData.$currentMeasure)
             .debounce(for: .milliseconds(10), scheduler: RunLoop.main)
             .sink { [weak self] beat, measure in
-                guard let self = self, self.appData.playingMode == .automatic, !self.appData.autoPlaySchedule.isEmpty else { return }
+                guard let self = self else { return }
+
+                if self.appData.playingMode != .automatic || self.appData.autoPlaySchedule.isEmpty {
+                    self.currentPlayingInfo = nil
+                    self.nextPlayingInfo = nil
+                    self.beatsToNextChord = nil
+                    return
+                }
 
                 var beatsPerMeasure = 4
                 let timeSigParts = self.appData.performanceConfig.timeSignature.split(separator: "/")
@@ -45,16 +62,15 @@ class KeyboardHandler: ObservableObject {
                 if measure == 0 { // Count-in phase
                     currentTotalBeats = beat
                 } else { // Normal playback
-                    // Formula for 1-based measure and beat
                     currentTotalBeats = (measure - 1) * beatsPerMeasure + beat
                 }
-                
-                let triggerBeat = currentTotalBeats + 1 // Auto-play on the next beat
 
+                self.updatePlayingInfo(currentTotalBeats: currentTotalBeats)
+
+                let triggerBeat = currentTotalBeats + 1
                 for event in self.appData.autoPlaySchedule {
                     if event.triggerBeat == triggerBeat {
-                        print("[KeyboardHandler] Auto-playing chord \(event.chordName) for beat \(triggerBeat) on beats \(currentTotalBeats)")
-                        self.playChord(chordName: event.chordName, withPatternId: event.patternId)
+                        self.playChord(chordName: event.chordName, withPatternId: event.patternId, fromAutoPlay: true)
                     }
                 }
             }
@@ -262,7 +278,7 @@ class KeyboardHandler: ObservableObject {
         return false
     }
 
-    private func playChord(chordName: String, withPatternId patternIdOverride: String? = nil) {
+    private func playChord(chordName: String, withPatternId patternIdOverride: String? = nil, fromAutoPlay: Bool = false) {
         let patternIdToPlay = patternIdOverride ?? appData.performanceConfig.activePlayingPatternId
         
         guard let playingPatternId = patternIdToPlay else {
@@ -300,11 +316,103 @@ class KeyboardHandler: ObservableObject {
         )
         
         DispatchQueue.main.async {
+            if !fromAutoPlay {
+                self.currentPlayingInfo = PlayingInfo(chordName: chordName, shortcut: self.shortcutForChord(chordName) ?? "")
+                self.nextPlayingInfo = nil
+                self.beatsToNextChord = nil
+                self.currentChordProgress = 0.0
+            }
             self.lastPlayedChord = chordName
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 self.lastPlayedChord = nil
             }
         }
+    }
+
+    private func updatePlayingInfo(currentTotalBeats: Int) {
+        // The schedule from appData is now pre-sorted and has durations.
+        let schedule = appData.autoPlaySchedule
+        guard !schedule.isEmpty else { 
+            currentPlayingInfo = nil
+            nextPlayingInfo = nil
+            beatsToNextChord = nil
+            currentChordProgress = 0.0
+            return
+        }
+
+        var currentEvent: AutoPlayEvent?
+        var nextEvent: AutoPlayEvent?
+
+        // Find the index of the current event. `last(where:)` is efficient for this.
+        if let currentEventIndex = schedule.lastIndex(where: { $0.triggerBeat <= currentTotalBeats }) {
+            currentEvent = schedule[currentEventIndex]
+            // The next event is simply the one after it, if it exists.
+            if currentEventIndex + 1 < schedule.count {
+                nextEvent = schedule[currentEventIndex + 1]
+            }
+        }
+
+        // Update published properties for the current chord
+        if let event = currentEvent {
+            // The shortcut from the event is the source of truth. Convert its stringValue to displayText.
+            let shortcutText = Shortcut(stringValue: event.shortcut ?? "")?.displayText ?? ""
+            
+            // Only update if needed to avoid unnecessary view redraws
+            if currentPlayingInfo?.chordName != event.chordName || currentPlayingInfo?.shortcut != shortcutText {
+                 currentPlayingInfo = PlayingInfo(chordName: event.chordName, shortcut: shortcutText, duration: event.durationBeats)
+            }
+
+            // Update progress
+            if let duration = event.durationBeats, duration > 0 {
+                let beatsIntoChord = currentTotalBeats - event.triggerBeat
+                // Ensure beatsToNextChord doesn't go negative
+                beatsToNextChord = max(0, duration - beatsIntoChord - 1)
+                currentChordProgress = Double(beatsIntoChord) / Double(duration)
+            } else {
+                beatsToNextChord = 0
+                currentChordProgress = 1.0
+            }
+
+        } else {
+            currentPlayingInfo = nil
+            beatsToNextChord = nil
+            currentChordProgress = 0.0
+        }
+
+        // Update published properties for the next chord
+        if let event = nextEvent {
+            let shortcutText = Shortcut(stringValue: event.shortcut ?? "")?.displayText ?? ""
+            if nextPlayingInfo?.chordName != event.chordName || nextPlayingInfo?.shortcut != shortcutText {
+                nextPlayingInfo = PlayingInfo(chordName: event.chordName, shortcut: shortcutText, duration: event.durationBeats)
+            }
+        } else {
+            nextPlayingInfo = nil
+        }
+    }
+
+    private func shortcutForChord(_ chordName: String) -> String? {
+        if let chordConfig = appData.performanceConfig.chords.first(where: { $0.name == chordName }) {
+            if let shortcutValue = chordConfig.shortcut, let s = Shortcut(stringValue: shortcutValue) {
+                return s.displayText
+            }
+        }
+        
+        let components = chordName.split(separator: "_")
+        if components.count >= 2 {
+            let quality = String(components.last!)
+            let noteParts = components.dropLast()
+            let noteRaw = noteParts.joined(separator: "_")
+            let noteDisplay = noteRaw.replacingOccurrences(of: "_Sharp", with: "#")
+
+            if noteDisplay.count == 1 {
+                if quality == "Major" {
+                    return noteDisplay.uppercased()
+                } else if quality == "Minor" {
+                    return "⇧\(noteDisplay.uppercased())"
+                }
+            }
+        }
+        return nil
     }
 
     // Public wrapper so UI code can request a chord to be played.

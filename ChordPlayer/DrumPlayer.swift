@@ -317,9 +317,42 @@ class DrumPlayer: ObservableObject {
             }
         }
         
+        // Sort events by their trigger beat to calculate durations
+        var finalSchedule = schedule.sorted { $0.triggerBeat < $1.triggerBeat }
+
+        if !finalSchedule.isEmpty {
+            // Find the total length of the performance in beats
+            var maxMeasure: Double = 0
+            for chordConfig in appData.performanceConfig.chords {
+                for (_, association) in chordConfig.patternAssociations {
+                    if let measureIndices = association.measureIndices, let maxIndex = measureIndices.max() {
+                        maxMeasure = max(maxMeasure, maxIndex)
+                    }
+                }
+            }
+            // The total duration is the end of the highest measure number assigned.
+            // If the highest is 3.5, it means we have 4 measures total (1, 2, 3, 4).
+            let totalMeasures = ceil(maxMeasure)
+            let totalBeatsInLoop = Int(totalMeasures * Double(beatsPerMeasure))
+
+            // Calculate duration for each event
+            for i in 0..<finalSchedule.count {
+                let currentEvent = finalSchedule[i]
+                let nextTriggerBeat: Int
+                if i < finalSchedule.count - 1 {
+                    nextTriggerBeat = finalSchedule[i+1].triggerBeat
+                } else {
+                    // Last event's duration goes to the end of the loop
+                    nextTriggerBeat = totalBeatsInLoop
+                }
+                finalSchedule[i].durationBeats = nextTriggerBeat - currentEvent.triggerBeat
+            }
+        }
+
         DispatchQueue.main.async {
-            self.appData.autoPlaySchedule = schedule
-            print("[DrumPlayer] Auto-play schedule built: \(schedule.count) events")
+            self.appData.autoPlaySchedule = finalSchedule
+            let totalDuration = finalSchedule.reduce(0, { $0 + ($1.durationBeats ?? 0) })
+            print("[DrumPlayer] Auto-play schedule built: \(finalSchedule.count) events, total beats: \(totalDuration)")
         }
     }
     
