@@ -157,13 +157,13 @@ struct AddDrumPatternSheetView: View {
     
     private func playbackIndicator(stepWidth: CGFloat, spacing: CGFloat) -> some View {
         GeometryReader { geometry in
-            if let currentStep = drumPlayer.currentStep, drumPlayer.isPlaying {
+            if let currentStep = drumPlayer.currentPreviewStep, drumPlayer.isPlaying {
                 let position = (CGFloat(currentStep) * (stepWidth + spacing)) + (stepWidth / 2)
                 Rectangle()
                     .fill(Color.red.opacity(0.8))
                     .frame(width: 2)
                     .offset(x: position)
-                    .animation(.linear(duration: 0.05), value: drumPlayer.currentStep)
+                    .animation(.linear(duration: 0.05), value: drumPlayer.currentPreviewStep)
             }
         }
     }

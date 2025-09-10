@@ -35,7 +35,7 @@ class KeyboardHandler: ObservableObject {
             .combineLatest(appData.$currentMeasure)
             .debounce(for: .milliseconds(10), scheduler: RunLoop.main)
             .sink { [weak self] beat, measure in
-                guard let self = self, self.appData.playingMode == .automatic, measure > 0, beat > 0, !self.appData.autoPlaySchedule.isEmpty else { return }
+                guard let self = self, self.appData.playingMode == .automatic, !self.appData.autoPlaySchedule.isEmpty else { return }
 
                 var beatsPerMeasure = 4
                 let timeSigParts = self.appData.performanceConfig.timeSignature.split(separator: "/")
@@ -43,12 +43,19 @@ class KeyboardHandler: ObservableObject {
                     beatsPerMeasure = beats
                 }
 
-                let currentTotalBeats = (measure - 1) * beatsPerMeasure + (beat - 1)
-                let triggerBeat = currentTotalBeats + 1
+                let currentTotalBeats: Int
+                if measure == 0 { // Count-in phase
+                    currentTotalBeats = beat
+                } else { // Normal playback
+                    // Formula for 1-based measure and beat
+                    currentTotalBeats = (measure - 1) * beatsPerMeasure + (beat - 1)
+                }
+                
+                let triggerBeat = currentTotalBeats + 1 // Auto-play on the next beat
 
                 for event in self.appData.autoPlaySchedule {
                     if event.triggerBeat == triggerBeat {
-                        print("[KeyboardHandler] Auto-playing chord \(event.chordName) at beat \(triggerBeat)")
+                        print("[KeyboardHandler] Auto-playing chord \(event.chordName) for beat \(triggerBeat) on beats \(currentTotalBeats)")
                         self.playChord(chordName: event.chordName, withPatternId: event.patternId)
                     }
                 }
