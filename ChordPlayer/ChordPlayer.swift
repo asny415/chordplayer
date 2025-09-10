@@ -4,16 +4,14 @@ import Combine
 class ChordPlayer: ObservableObject {
     private let schedulingQueue = DispatchQueue(label: "com.guitastudio.guitarScheduler", qos: .userInitiated)
     private var midiManager: MidiManager
-    private var metronome: Metronome
     private var appData: AppData
 
     private var playingNotes: [UInt8: UUID] = [:] // Maps MIDI Note -> Scheduled Note-Off Task ID
     private var stringNotes: [Int: UInt8] = [:] // Maps String Index (0-5) -> MIDI Note
     private var scheduledUIUpdateWorkItem: DispatchWorkItem?
 
-    init(midiManager: MidiManager, metronome: Metronome, appData: AppData) {
+    init(midiManager: MidiManager, appData: AppData) {
         self.midiManager = midiManager
-        self.metronome = metronome // Metronome is injected but not used in this snippet, kept for context
         self.appData = appData
     }
 

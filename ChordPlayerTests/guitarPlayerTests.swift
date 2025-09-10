@@ -76,7 +76,6 @@ class DrumPlayerTests: XCTestCase {
 
     var drumPlayer: DrumPlayer!
     var mockMidiManager: MockMidiManager!
-    var mockMetronome: Metronome!
     var testAppData: TestAppData!
     private var cancellables: Set<AnyCancellable> = []
 
@@ -84,15 +83,13 @@ class DrumPlayerTests: XCTestCase {
         super.setUp()
         mockMidiManager = MockMidiManager()
         testAppData = TestAppData()
-                mockMetronome = Metronome(midiManager: mockMidiManager) // Metronome needs a midi manager
-        drumPlayer = DrumPlayer(midiManager: mockMidiManager, metronome: mockMetronome, appData: testAppData)
+        drumPlayer = DrumPlayer(midiManager: mockMidiManager, appData: testAppData)
     }
 
     override func tearDown() {
         drumPlayer.stop()
         drumPlayer = nil
         mockMidiManager = nil
-        mockMetronome = nil
         testAppData = nil
         cancellables.removeAll()
         super.tearDown()

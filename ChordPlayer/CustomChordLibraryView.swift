@@ -243,6 +243,6 @@ struct CustomChordLibraryView_Previews: PreviewProvider {
         CustomChordLibraryView()
             .environmentObject(AppData())
             .environmentObject(MidiManager())
-            .environmentObject(ChordPlayer(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), appData: AppData()))
+            .environmentObject(ChordPlayer(midiManager: MidiManager(), appData: AppData()))
     }
 }

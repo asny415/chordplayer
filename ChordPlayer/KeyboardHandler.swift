@@ -5,7 +5,6 @@ import Combine
 
 class KeyboardHandler: ObservableObject {
     private var midiManager: MidiManager
-    private var metronome: Metronome
     private var chordPlayer: ChordPlayer
     private var drumPlayer: DrumPlayer
     private var appData: AppData
@@ -15,9 +14,8 @@ class KeyboardHandler: ObservableObject {
     private var eventMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
 
-    init(midiManager: MidiManager, metronome: Metronome, chordPlayer: ChordPlayer, drumPlayer: DrumPlayer, appData: AppData) {
+    init(midiManager: MidiManager, chordPlayer: ChordPlayer, drumPlayer: DrumPlayer, appData: AppData) {
         self.midiManager = midiManager
-        self.metronome = metronome
         self.chordPlayer = chordPlayer
         self.drumPlayer = drumPlayer
         self.appData = appData
@@ -83,7 +81,6 @@ class KeyboardHandler: ObservableObject {
     }
 
     func updateWithNewConfig(_ config: PerformanceConfig) {
-        metronome.update(from: config)
     }
 
     private func setupEventMonitor() {
@@ -322,13 +319,4 @@ class KeyboardHandler: ObservableObject {
     }
 }
 
-extension Metronome {
-    func update(from config: PerformanceConfig) {
-        self.tempo = config.tempo
-        let parts = config.timeSignature.split(separator: "/").map(String.init)
-        if parts.count == 2, let num = Int(parts[0]), let den = Int(parts[1]) {
-            self.timeSignatureNumerator = num
-            self.timeSignatureDenominator = den
-        }
-    }
-}
+

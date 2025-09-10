@@ -186,7 +186,7 @@ struct CustomDrumPatternLibraryView: View {
 struct CustomDrumPatternLibraryView_Previews: PreviewProvider {
     static var previews: some View {
         let manager = CustomDrumPatternManager.shared
-        let drumPlayer = DrumPlayer(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), appData: AppData())
+        let drumPlayer = DrumPlayer(midiManager: MidiManager(), appData: AppData())
         
         manager.customDrumPatterns = [
             "4/4": [

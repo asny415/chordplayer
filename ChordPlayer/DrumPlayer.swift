@@ -8,7 +8,6 @@ class DrumPlayer: ObservableObject {
     }
 
     private var midiManager: MidiManager
-    private var metronome: Metronome
     private var appData: AppData
 
     @Published private(set) var isPlaying: Bool = false
@@ -46,9 +45,8 @@ class DrumPlayer: ObservableObject {
         }
     }
 
-    init(midiManager: MidiManager, metronome: Metronome, appData: AppData) {
+    init(midiManager: MidiManager, appData: AppData) {
         self.midiManager = midiManager
-        self.metronome = metronome
         self.appData = appData
     }
 

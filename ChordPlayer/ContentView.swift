@@ -5,7 +5,6 @@ import CoreMIDI
 struct ContentView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
-    @EnvironmentObject var metronome: Metronome
     @EnvironmentObject var chordPlayer: ChordPlayer
     @EnvironmentObject var midiManager: MidiManager
     @EnvironmentObject var drumPlayer: DrumPlayer
@@ -66,7 +65,6 @@ struct ContentView: View {
     private func setupInitialState() {
         DispatchQueue.main.async {
             keyboardHandler.updateWithNewConfig(appData.performanceConfig)
-            metronome.update(from: appData.performanceConfig)
         }
     }
 }

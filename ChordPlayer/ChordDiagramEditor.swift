@@ -117,6 +117,6 @@ struct ChordDiagramEditor_Previews: PreviewProvider {
     static var previews: some View {
         ChordDiagramEditor(onSave: { name, def in }, onCancel: {})
             .environmentObject(AppData())
-            .environmentObject(KeyboardHandler(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), chordPlayer: ChordPlayer(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), appData: AppData()), drumPlayer: DrumPlayer(midiManager: MidiManager(), metronome: Metronome(midiManager: MidiManager()), appData: AppData()), appData: AppData()))
+            .environmentObject(KeyboardHandler(midiManager: MidiManager(), chordPlayer: ChordPlayer(midiManager: MidiManager(), appData: AppData()), drumPlayer: DrumPlayer(midiManager: MidiManager(), appData: AppData()), appData: AppData()))
     }
 }
