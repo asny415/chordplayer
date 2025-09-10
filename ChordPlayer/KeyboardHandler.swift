@@ -330,9 +330,8 @@ class KeyboardHandler: ObservableObject {
     }
 
     private func updatePlayingInfo(currentTotalBeats: Int) {
-        // The schedule from appData is now pre-sorted and has durations.
         let schedule = appData.autoPlaySchedule
-        guard !schedule.isEmpty else { 
+        guard !schedule.isEmpty else {
             currentPlayingInfo = nil
             nextPlayingInfo = nil
             beatsToNextChord = nil
@@ -340,53 +339,83 @@ class KeyboardHandler: ObservableObject {
             return
         }
 
+        // --- Special case for count-in ---
+        if currentTotalBeats < 0 {
+            currentPlayingInfo = nil // Nothing is "currently" playing
+
+            let firstEvent = schedule.first!
+            let shortcutText = Shortcut(stringValue: firstEvent.shortcut ?? "")?.displayText ?? ""
+            
+            // The "next" thing to happen is the first chord
+            nextPlayingInfo = PlayingInfo(chordName: firstEvent.chordName, shortcut: shortcutText, duration: firstEvent.durationBeats)
+
+            // The countdown is to beat 0
+            beatsToNextChord = -currentTotalBeats - 1
+            
+            // Progress of the count-in
+            var beatsPerMeasure = 4
+            let timeSigParts = self.appData.performanceConfig.timeSignature.split(separator: "/")
+            if timeSigParts.count == 2, let beats = Int(timeSigParts[0]) {
+                beatsPerMeasure = beats
+            }
+            let totalCountInBeats = beatsPerMeasure
+            let elapsedCountInBeats = totalCountInBeats + currentTotalBeats
+            currentChordProgress = Double(elapsedCountInBeats) / Double(totalCountInBeats)
+            
+            return // End of count-in handling
+        }
+
+        // --- Normal Playback ---
         var currentEvent: AutoPlayEvent?
         var nextEvent: AutoPlayEvent?
 
-        // Find the index of the current event. `last(where:)` is efficient for this.
         if let currentEventIndex = schedule.lastIndex(where: { $0.triggerBeat <= currentTotalBeats }) {
             currentEvent = schedule[currentEventIndex]
-            // The next event is simply the one after it, if it exists.
             if currentEventIndex + 1 < schedule.count {
                 nextEvent = schedule[currentEventIndex + 1]
             }
         }
 
-        // Update published properties for the current chord
         if let event = currentEvent {
-            // The shortcut from the event is the source of truth. Convert its stringValue to displayText.
             let shortcutText = Shortcut(stringValue: event.shortcut ?? "")?.displayText ?? ""
-            
-            // Only update if needed to avoid unnecessary view redraws
             if currentPlayingInfo?.chordName != event.chordName || currentPlayingInfo?.shortcut != shortcutText {
                  currentPlayingInfo = PlayingInfo(chordName: event.chordName, shortcut: shortcutText, duration: event.durationBeats)
             }
-
-            // Update progress
-            if let duration = event.durationBeats, duration > 0 {
-                let beatsIntoChord = currentTotalBeats - event.triggerBeat
-                // Ensure beatsToNextChord doesn't go negative
-                beatsToNextChord = max(0, duration - beatsIntoChord - 1)
-                currentChordProgress = Double(beatsIntoChord) / Double(duration)
-            } else {
-                beatsToNextChord = 0
-                currentChordProgress = 1.0
-            }
-
         } else {
             currentPlayingInfo = nil
-            beatsToNextChord = nil
-            currentChordProgress = 0.0
         }
 
-        // Update published properties for the next chord
         if let event = nextEvent {
             let shortcutText = Shortcut(stringValue: event.shortcut ?? "")?.displayText ?? ""
             if nextPlayingInfo?.chordName != event.chordName || nextPlayingInfo?.shortcut != shortcutText {
                 nextPlayingInfo = PlayingInfo(chordName: event.chordName, shortcut: shortcutText, duration: event.durationBeats)
             }
+            
+            // Calculate progress towards the next event
+            let trigger = event.triggerBeat
+            let prevTrigger = currentEvent?.triggerBeat ?? 0
+            let totalDuration = trigger - prevTrigger
+            
+            if totalDuration > 0 {
+                let progress = currentTotalBeats - prevTrigger
+                currentChordProgress = Double(progress) / Double(totalDuration)
+                beatsToNextChord = totalDuration - progress - 1
+            } else {
+                currentChordProgress = 0
+                beatsToNextChord = 0
+            }
+            
         } else {
             nextPlayingInfo = nil
+            // Handle progress for the very last chord
+            if let lastEvent = currentEvent, let duration = lastEvent.durationBeats, duration > 0 {
+                let progress = currentTotalBeats - lastEvent.triggerBeat
+                currentChordProgress = Double(progress) / Double(duration)
+                beatsToNextChord = duration - progress - 1
+            } else {
+                currentChordProgress = 1.0
+                beatsToNextChord = 0
+            }
         }
     }
 
