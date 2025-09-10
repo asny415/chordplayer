@@ -16,6 +16,11 @@ class DrumPlayer: ObservableObject {
     private var currentDurationMs: Int = 200
     private var scheduledWorkItem: DispatchWorkItem?
 
+    private var beatTimer: Timer?
+    private var beatsPerMeasure: Int = 4
+    private var beatCounter: Int = 0
+    private var measureCounter: Int = 0
+
     @Published private(set) var isPlaying: Bool = false
     private(set) var startTimeMs: Double = 0
     private(set) var loopDurationMs: Double = 0
@@ -153,6 +158,38 @@ class DrumPlayer: ObservableObject {
             self.loopCount = 0
             self.currentPatternSchedule = newPatternSchedule
 
+            // Reset and start beat counter
+            self.beatTimer?.invalidate()
+            let timeSigParts = timeSignature.split(separator: "/")
+            if timeSigParts.count == 2, let beats = Int(timeSigParts[0]) {
+                self.beatsPerMeasure = beats
+            } else {
+                self.beatsPerMeasure = 4
+            }
+            self.measureCounter = 1
+            self.beatCounter = 1
+            let beatDuration = 60.0 / tempo
+            
+            DispatchQueue.main.async {
+                self.appData.currentMeasure = self.measureCounter
+                self.appData.currentBeat = self.beatCounter
+            }
+
+            self.beatTimer = Timer.scheduledTimer(withTimeInterval: beatDuration, repeats: true) { [weak self] _ in
+                guard let self = self, self.isPlaying else { return }
+
+                self.beatCounter += 1
+                if self.beatCounter > self.beatsPerMeasure {
+                    self.beatCounter = 1
+                    self.measureCounter += 1
+                }
+                
+                DispatchQueue.main.async {
+                    self.appData.currentMeasure = self.measureCounter
+                    self.appData.currentBeat = self.beatCounter
+                }
+            }
+
             print("[DrumPlayer] started pattern=\(patternName) tempo=\(tempo) timeSignature=\(timeSignature) loopDuration=\(newLoopDurationMs)ms")
 
             if let first = self.currentPatternSchedule?.first {
@@ -218,6 +255,15 @@ class DrumPlayer: ObservableObject {
         print("[DrumPlayer] stopped")
         scheduledWorkItem?.cancel()
         scheduledWorkItem = nil
+
+        beatTimer?.invalidate()
+        beatTimer = nil
+        DispatchQueue.main.async {
+            self.appData.currentMeasure = 0
+            self.appData.currentBeat = 0
+            self.appData.currentlyPlayingChordName = nil
+            self.appData.currentlyPlayingPatternName = nil
+        }
 
         currentPatternTimer?.invalidate()
         currentPatternTimer = nil

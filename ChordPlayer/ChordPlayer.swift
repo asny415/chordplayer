@@ -9,6 +9,7 @@ class ChordPlayer: ObservableObject {
 
     private var playingNotes: [UInt8: UUID] = [:] // Maps MIDI Note -> Scheduled Note-Off Task ID
     private var stringNotes: [Int: UInt8] = [:] // Maps String Index (0-5) -> MIDI Note
+    private var scheduledUIUpdateWorkItem: DispatchWorkItem?
 
     init(midiManager: MidiManager, metronome: Metronome, appData: AppData) {
         self.midiManager = midiManager
@@ -78,6 +79,16 @@ class ChordPlayer: ObservableObject {
         } else {
             schedulingStartUptimeMs = currentUptime
         }
+
+        // Schedule the UI update to be perfectly in sync with the audio
+        scheduledUIUpdateWorkItem?.cancel()
+        let delayMs = max(0, schedulingStartUptimeMs - currentUptime)
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.appData.currentlyPlayingChordName = chordName
+            self?.appData.currentlyPlayingPatternName = pattern.name
+        }
+        scheduledUIUpdateWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(round(delayMs))), execute: workItem)
 
         // Stop notes on strings that will be silent in the new chord.
         for (stringIndex, note) in stringNotes {

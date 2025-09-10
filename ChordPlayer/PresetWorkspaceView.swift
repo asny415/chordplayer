@@ -6,7 +6,7 @@ struct PresetWorkspaceView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 16) {                
                 GroupBox {
                     GlobalSettingsView()
                 }
@@ -21,6 +21,10 @@ struct PresetWorkspaceView: View {
 
                 GroupBox {
                     ChordProgressionView()
+                }
+
+                GroupBox {
+                    PerformanceInfoView()
                 }
             }
             .padding()

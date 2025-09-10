@@ -165,9 +165,7 @@ class KeyboardHandler: ObservableObject {
             // Priority 1: Check for specific pattern associations
             for chordConfig in appData.performanceConfig.chords {
                 if let association = chordConfig.patternAssociations[shortcut] {
-                    if shouldPlayForCurrentMeasure(indices: association.measureIndices) {
-                        playChord(chordName: chordConfig.name, withPatternId: association.patternId)
-                    }
+                    playChord(chordName: chordConfig.name, withPatternId: association.patternId)
                     return true // Event is handled whether played or not
                 }
             }
@@ -180,32 +178,6 @@ class KeyboardHandler: ObservableObject {
         }
 
         return false
-    }
-
-    private func shouldPlayForCurrentMeasure(indices: [Double]?) -> Bool {
-        guard let indices = indices, !indices.isEmpty else {
-            return true // No restrictions, always play
-        }
-
-        guard drumPlayer.isPlaying, drumPlayer.loopDurationMs > 0 else {
-            return true // If drum isn't playing, no context to restrict, so play
-        }
-
-        let nowUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
-        let elapsedTimeMs = nowUptimeMs - drumPlayer.startTimeMs
-        let totalMeasuresElapsed = elapsedTimeMs / drumPlayer.loopDurationMs
-        
-        let currentMeasure = floor(totalMeasuresElapsed)
-        let measureFraction = totalMeasuresElapsed.truncatingRemainder(dividingBy: 1.0)
-        
-        let checkIndex: Double
-        if measureFraction < 0.5 {
-            checkIndex = currentMeasure + 1.0
-        } else {
-            checkIndex = currentMeasure + 1.5
-        }
-        
-        return indices.contains(checkIndex)
     }
 
     private func resolveChordForShortcut(_ shortcut: Shortcut) -> String? {

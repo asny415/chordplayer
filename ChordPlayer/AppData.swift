@@ -7,6 +7,11 @@ class AppData: ObservableObject {
     @Published var drumPatternLibrary: DrumPatternLibrary?
     @Published var patternLibrary: PatternLibrary?
     
+    @Published var currentMeasure: Int = 0
+    @Published var currentBeat: Int = 0
+    @Published var currentlyPlayingChordName: String? = nil
+    @Published var currentlyPlayingPatternName: String? = nil
+    
     @Published var customChordManager = CustomChordManager.shared
     
     @Published var playingMode: PlayingMode = .manual
