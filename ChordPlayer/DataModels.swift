@@ -481,6 +481,7 @@ struct AutoPlayEvent: Codable, Hashable {
     let chordName: String
     let patternId: String
     let triggerBeat: Int
+    let shortcut: String?
 }
 
 // MARK: - Editor Data Models

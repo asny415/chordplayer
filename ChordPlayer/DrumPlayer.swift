@@ -308,11 +308,11 @@ class DrumPlayer: ObservableObject {
         }
 
         for chordConfig in appData.performanceConfig.chords {
-            for (_, association) in chordConfig.patternAssociations {
+            for (shortcut, association) in chordConfig.patternAssociations {
                 if let measureIndices = association.measureIndices, !measureIndices.isEmpty {
                     for measureIndex in measureIndices {
                         let targetBeat = (measureIndex - 1) * Double(beatsPerMeasure)
-                        let action = AutoPlayEvent(chordName: chordConfig.name, patternId: association.patternId, triggerBeat: Int(round(targetBeat)))
+                        let action = AutoPlayEvent(chordName: chordConfig.name, patternId: association.patternId, triggerBeat: Int(round(targetBeat)), shortcut: shortcut.stringValue)
                         schedule.append(action)
                     }
                 }
