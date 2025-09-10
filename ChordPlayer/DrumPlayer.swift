@@ -290,7 +290,7 @@ class DrumPlayer: ObservableObject {
     // MARK: - Helpers
     
     private func buildAutoPlaySchedule() {
-        guard appData.playingMode == .automatic else {
+        guard appData.playingMode == .automatic || appData.playingMode == .assisted else {
             if !appData.autoPlaySchedule.isEmpty {
                 DispatchQueue.main.async { self.appData.autoPlaySchedule = [] }
             }

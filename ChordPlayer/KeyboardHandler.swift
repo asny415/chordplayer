@@ -45,10 +45,11 @@ class KeyboardHandler: ObservableObject {
             .sink { [weak self] beat, measure in
                 guard let self = self else { return }
 
-                if self.appData.playingMode != .automatic || self.appData.autoPlaySchedule.isEmpty {
+                if !([.automatic, .assisted].contains(self.appData.playingMode)) || self.appData.autoPlaySchedule.isEmpty {
                     self.currentPlayingInfo = nil
                     self.nextPlayingInfo = nil
                     self.beatsToNextChord = nil
+                    self.currentChordProgress = 0.0 // Reset progress
                     return
                 }
 
@@ -70,7 +71,10 @@ class KeyboardHandler: ObservableObject {
                 let triggerBeat = currentTotalBeats + 1
                 for event in self.appData.autoPlaySchedule {
                     if event.triggerBeat == triggerBeat {
-                        self.playChord(chordName: event.chordName, withPatternId: event.patternId, fromAutoPlay: true)
+                        // In assisted mode, we follow the schedule but don't play the chord.
+                        if self.appData.playingMode != .assisted {
+                            self.playChord(chordName: event.chordName, withPatternId: event.patternId, fromAutoPlay: true)
+                        }
                     }
                 }
             }
