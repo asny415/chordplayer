@@ -50,3 +50,6 @@
 "chord_library_view_search_placeholder" = "搜索和弦...";
 "preset_manager_unnamed_preset_name" = "未命名";
 "preset_manager_unnamed_preset_description" = "自动保存的配置";
+"quantization_mode_none" = "无";
+"quantization_mode_half_measure" = "半节";
+"quantization_mode_measure" = "小节";

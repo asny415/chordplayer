@@ -269,9 +269,9 @@ enum QuantizationMode: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .none: return "None"
-        case .measure: return "Measure"
-        case .halfMeasure: return "Half Measure"
+        case .none: return String(localized: "quantization_mode_none")
+        case .measure: return String(localized: "quantization_mode_measure")
+        case .halfMeasure: return String(localized: "quantization_mode_half_measure")
         }
     }
 }

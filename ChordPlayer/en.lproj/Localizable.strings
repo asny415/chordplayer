@@ -54,3 +54,6 @@ Assigning it to \"%@\" will remove it from the other chords.";
 "chord_library_view_search_placeholder" = "Search chords...";
 "preset_manager_unnamed_preset_name" = "Unnamed";
 "preset_manager_unnamed_preset_description" = "Auto-saved configuration";
+"quantization_mode_none" = "None";
+"quantization_mode_half_measure" = "Half Measure";
+"quantization_mode_measure" = "Measure";
