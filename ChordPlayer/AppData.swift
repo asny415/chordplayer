@@ -10,6 +10,9 @@ class AppData: ObservableObject {
     @Published var currentMeasure: Int = 0
     @Published var currentBeat: Int = 0
     
+    // 跟踪当前active位置是否已经被正确按键触发（用于辅助演奏模式的高亮效果）
+    @Published var currentActivePositionTriggered: Bool = false
+    
     // 计算正确的初始预备拍状态
     var effectiveCurrentBeat: Int {
         // 如果没有开始演奏（measure=0, beat=0），应该显示预备拍状态

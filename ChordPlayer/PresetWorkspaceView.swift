@@ -767,8 +767,8 @@ private struct AssistPlayingView: View {
                     let content = getContentForBeat(beatForIndex)
                     let isCurrentBeat = index == 2 // 第3个位置是当前拍（提前一拍提醒）
                     
-                    // 在辅助演奏模式下，如果当前拍有内容且不是"·"，需要高亮提示
-                    let shouldHighlight = isCurrentBeat && content != "·" && appData.playingMode == .assisted
+                    // 在辅助演奏模式下，只有当用户按下正确按键时才高亮提示
+                    let shouldHighlight = isCurrentBeat && content != "·" && appData.playingMode == .assisted && appData.currentActivePositionTriggered
                     
                     BeatLabel(
                         beat: beatForIndex,

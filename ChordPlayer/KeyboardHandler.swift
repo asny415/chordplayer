@@ -68,6 +68,9 @@ class KeyboardHandler: ObservableObject {
 
                 self.updatePlayingInfo(currentTotalBeats: currentTotalBeats)
 
+                // 每次拍子变化时重置active位置的触发状态
+                self.appData.currentActivePositionTriggered = false
+
                 let triggerBeat = currentTotalBeats + 1
                 for event in self.appData.autoPlaySchedule {
                     if event.triggerBeat == triggerBeat {
@@ -214,6 +217,8 @@ class KeyboardHandler: ObservableObject {
             for chordConfig in appData.performanceConfig.chords {
                 if let association = chordConfig.patternAssociations[shortcut] {
                     playChord(chordName: chordConfig.name, withPatternId: association.patternId)
+                    // 在辅助演奏模式下，检查是否触发了当前active位置的正确按键
+                    checkAndTriggerActivePosition(for: chordConfig.name)
                     return true // Event is handled whether played or not
                 }
             }
@@ -221,6 +226,8 @@ class KeyboardHandler: ObservableObject {
             // Priority 2: Check for general chord shortcuts
             if let chordName = resolveChordForShortcut(shortcut) {
                 playChord(chordName: chordName)
+                // 在辅助演奏模式下，检查是否触发了当前active位置的正确按键
+                checkAndTriggerActivePosition(for: chordName)
                 return true
             }
         }
@@ -420,6 +427,34 @@ class KeyboardHandler: ObservableObject {
                 currentChordProgress = 1.0
                 beatsToNextChord = 0
             }
+        }
+    }
+
+    // 检查用户是否在辅助演奏模式下按下了当前active位置的正确按键
+    private func checkAndTriggerActivePosition(for chordName: String) {
+        guard appData.playingMode == .assisted else { return }
+        
+        // 计算当前总拍数，与AssistPlayingView中的逻辑一致
+        let beatsPerMeasure: Int = {
+            let timeSigParts = appData.performanceConfig.timeSignature.split(separator: "/")
+            return Int(timeSigParts.first.map(String.init) ?? "4") ?? 4
+        }()
+        
+        let currentTotalBeat: Int
+        if appData.currentMeasure == 0 {
+            currentTotalBeat = appData.effectiveCurrentBeat
+        } else {
+            currentTotalBeat = (appData.currentMeasure - 1) * beatsPerMeasure + appData.effectiveCurrentBeat
+        }
+        
+        // 计算active位置的拍子（index=2，即提前一拍）
+        let activeBeat = currentTotalBeat - 1 + 2
+        
+        // 检查autoPlaySchedule中在这个拍子是否有事件，且事件的和弦名称匹配
+        if let event = appData.autoPlaySchedule.first(where: { $0.triggerBeat == activeBeat }),
+           event.chordName == chordName {
+            // 用户按下了正确的按键！
+            appData.currentActivePositionTriggered = true
         }
     }
 
