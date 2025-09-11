@@ -759,26 +759,52 @@ private struct TimingDisplayView: View {
         return nil
     }
     
-    // 获取当前拍号范围内的歌词
+    // 获取当前应该显示的歌词（提前两拍显示）
     private func getCurrentLyric() -> Lyric? {
         let currentBeat = currentTotalBeat
-        return appData.performanceConfig.lyrics.first { lyric in
+        let previewBeat = currentBeat + 2 // 提前两拍
+        
+        // 查找在预览拍号范围内的歌词
+        let candidateLyrics = appData.performanceConfig.lyrics.filter { lyric in
             lyric.timeRanges.contains { range in
-                currentBeat >= range.startBeat && currentBeat <= range.endBeat
+                previewBeat >= range.startBeat && previewBeat <= range.endBeat
             }
+        }
+        
+        // 如果有多个候选歌词，选择开始拍号最晚的（优先级最高的）
+        return candidateLyrics.max { lyric1, lyric2 in
+            let maxStart1 = lyric1.timeRanges.compactMap { range in
+                previewBeat >= range.startBeat && previewBeat <= range.endBeat ? range.startBeat : nil
+            }.max() ?? Int.min
+            
+            let maxStart2 = lyric2.timeRanges.compactMap { range in
+                previewBeat >= range.startBeat && previewBeat <= range.endBeat ? range.startBeat : nil
+            }.max() ?? Int.min
+            
+            return maxStart1 < maxStart2
         }
     }
     
     // 获取下一句歌词（预览）
     private func getNextLyric() -> Lyric? {
         let currentBeat = currentTotalBeat
+        let previewBeat = currentBeat + 2
+        
+        // 查找在预览拍号之后开始的歌词
         let upcomingLyrics = appData.performanceConfig.lyrics.filter { lyric in
             lyric.timeRanges.contains { range in
-                range.startBeat > currentBeat
+                range.startBeat > previewBeat
             }
         }.sorted { lyric1, lyric2 in
-            let earliestStart1 = lyric1.earliestStartBeat ?? Int.max
-            let earliestStart2 = lyric2.earliestStartBeat ?? Int.max
+            // 获取每个歌词最早的开始拍号
+            let earliestStart1 = lyric1.timeRanges.compactMap { range in
+                range.startBeat > previewBeat ? range.startBeat : nil
+            }.min() ?? Int.max
+            
+            let earliestStart2 = lyric2.timeRanges.compactMap { range in
+                range.startBeat > previewBeat ? range.startBeat : nil
+            }.min() ?? Int.max
+            
             return earliestStart1 < earliestStart2
         }
         
