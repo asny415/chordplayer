@@ -155,8 +155,6 @@ class DrumPlayer: ObservableObject {
         self.nextPattern = drumPattern
         self.lastScheduledMeasure = -1
 
-        buildAutoPlaySchedule()
-
         // 4. Start the two independent loops
         startUIUpdater()
         scheduleMeasureAndReschedule(after: 0)
@@ -241,6 +239,25 @@ class DrumPlayer: ObservableObject {
                 }
             }
             
+            // --- Check if auto-play is complete ---
+            if (self.appData.playingMode == .automatic || self.appData.playingMode == .assisted) && !self.appData.autoPlaySchedule.isEmpty {
+                let totalBeatsInSchedule = self.appData.autoPlaySchedule.reduce(0) { result, event in
+                    return max(result, event.triggerBeat + (event.durationBeats ?? 0))
+                }
+                
+                // Calculate which measure contains the last event
+                let lastMeasureWithContent = Int(ceil(Double(totalBeatsInSchedule) / Double(self.beatsPerMeasure)))
+                
+                // Stop after the last measure is completely finished
+                if currentMeasure > lastMeasureWithContent {
+                    print("[DrumPlayer] Auto-play complete (last measure finished), stopping...")
+                    DispatchQueue.main.async {
+                        self.stop()
+                    }
+                    return
+                }
+            }
+            
             // --- Reschedule for the next measure ---
             let nextMeasureIndex = currentMeasure + 1
             let nextMeasureStartUptimeMs = self.startTimeMs + (Double(nextMeasureIndex) * self.measureDurationMs)
@@ -288,73 +305,6 @@ class DrumPlayer: ObservableObject {
     }
     
     // MARK: - Helpers
-    
-    private func buildAutoPlaySchedule() {
-        guard appData.playingMode == .automatic || appData.playingMode == .assisted else {
-            if !appData.autoPlaySchedule.isEmpty {
-                DispatchQueue.main.async { self.appData.autoPlaySchedule = [] }
-            }
-            return
-        }
-
-        var schedule: [AutoPlayEvent] = []
-        let timeSignature = appData.performanceConfig.timeSignature
-        var beatsPerMeasure = 4
-        let timeSigParts = timeSignature.split(separator: "/")
-        if timeSigParts.count == 2, let beats = Int(timeSigParts[0]) {
-            beatsPerMeasure = beats
-        }
-
-        for chordConfig in appData.performanceConfig.chords {
-            for (shortcut, association) in chordConfig.patternAssociations {
-                if let measureIndices = association.measureIndices, !measureIndices.isEmpty {
-                    for measureIndex in measureIndices {
-                        let targetBeat = (measureIndex - 1) * Double(beatsPerMeasure)
-                        let action = AutoPlayEvent(chordName: chordConfig.name, patternId: association.patternId, triggerBeat: Int(round(targetBeat)), shortcut: shortcut.stringValue)
-                        schedule.append(action)
-                    }
-                }
-            }
-        }
-        
-        // Sort events by their trigger beat to calculate durations
-        var finalSchedule = schedule.sorted { $0.triggerBeat < $1.triggerBeat }
-
-        if !finalSchedule.isEmpty {
-            // Find the total length of the performance in beats
-            var maxMeasure: Double = 0
-            for chordConfig in appData.performanceConfig.chords {
-                for (_, association) in chordConfig.patternAssociations {
-                    if let measureIndices = association.measureIndices, let maxIndex = measureIndices.max() {
-                        maxMeasure = max(maxMeasure, maxIndex)
-                    }
-                }
-            }
-            // The total duration is the end of the highest measure number assigned.
-            // If the highest is 3.5, it means we have 4 measures total (1, 2, 3, 4).
-            let totalMeasures = ceil(maxMeasure)
-            let totalBeatsInLoop = Int(totalMeasures * Double(beatsPerMeasure))
-
-            // Calculate duration for each event
-            for i in 0..<finalSchedule.count {
-                let currentEvent = finalSchedule[i]
-                let nextTriggerBeat: Int
-                if i < finalSchedule.count - 1 {
-                    nextTriggerBeat = finalSchedule[i+1].triggerBeat
-                } else {
-                    // Last event's duration goes to the end of the loop
-                    nextTriggerBeat = totalBeatsInLoop
-                }
-                finalSchedule[i].durationBeats = nextTriggerBeat - currentEvent.triggerBeat
-            }
-        }
-
-        DispatchQueue.main.async {
-            self.appData.autoPlaySchedule = finalSchedule
-            let totalDuration = finalSchedule.reduce(0, { $0 + ($1.durationBeats ?? 0) })
-            print("[DrumPlayer] Auto-play schedule built: \(finalSchedule.count) events, total beats: \(totalDuration)")
-        }
-    }
     
     private func findDrumPattern(named name: String, timeSignature: String) -> DrumPattern? {
         if let pattern = appData.drumPatternLibrary?[timeSignature]?[name] {
