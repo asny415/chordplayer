@@ -7,69 +7,85 @@ struct PerformanceInfoView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("演奏信息").font(.headline)
-                Spacer()
-                Text("\(appData.currentMeasure)小节, \(appData.currentBeat)拍")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-
-            if let info = keyboardHandler.currentPlayingInfo {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("当前和弦")
-                        .font(.caption)
+            // Top section with current playing info
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("演奏信息").font(.headline)
+                    Spacer()
+                    Text("\(appData.currentMeasure)小节, \(appData.currentBeat)拍")
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(info.chordName.replacingOccurrences(of: "_", with: " "))
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundColor(.accentColor)
-                    }
                 }
-            } else {
-                Text("未演奏")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(.secondary)
-            }
 
-            Divider()
-
-            if let nextInfo = keyboardHandler.nextPlayingInfo, let beats = keyboardHandler.beatsToNextChord {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("下一个和弦")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(nextInfo.chordName.replacingOccurrences(of: "_", with: " "))
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                        
-                        Text(nextInfo.shortcut)
-                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                            .padding(5)
-                            .background(Color.secondary.opacity(0.2))
-                            .cornerRadius(6)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        ProgressView(value: keyboardHandler.currentChordProgress)
-                            .progressViewStyle(.linear)
-                            .frame(height: 4)
-                        Text("剩余 \(beats) 拍")
-                            .font(.caption2)
+                if let info = keyboardHandler.currentPlayingInfo {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("当前和弦")
+                            .font(.caption)
                             .foregroundColor(.secondary)
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(info.chordName.replacingOccurrences(of: "_", with: " "))
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .foregroundColor(.accentColor)
+                        }
                     }
-                    .padding(.top, 4)
+                } else {
+                    Text("未演奏")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(.secondary)
                 }
-            } else {
-                Text("-")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundColor(.secondary)
-            }
+
+                Divider()
+
+                if let nextInfo = keyboardHandler.nextPlayingInfo, let beats = keyboardHandler.beatsToNextChord {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("下一个和弦")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(nextInfo.chordName.replacingOccurrences(of: "_", with: " "))
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                            
+                            Text(nextInfo.shortcut)
+                                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                                .padding(5)
+                                .background(Color.secondary.opacity(0.2))
+                                .cornerRadius(6)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            ProgressView(value: keyboardHandler.currentChordProgress)
+                                .progressViewStyle(.linear)
+                                .frame(height: 4)
+                            Text("剩余 \(beats) 拍")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.top, 4)
+                    }
+                } else {
+                    Text("-")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundColor(.secondary)
+                }
+            }.padding(.horizontal)
+            .frame(maxHeight: 180)
             
-            Spacer()
+            Divider()
+            
+            // Bottom section with the score view
+            Text("乐谱")
+                .font(.headline)
+                .padding(.horizontal)
+            
+            ScrollView {
+                GuitarScoreView()
+                    .environmentObject(appData)
+            }
+            .frame(height: 300)
+            
         }
-        .padding()
+        .padding(.vertical)
         .background(Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
@@ -93,7 +109,10 @@ struct PerformanceInfoView_Previews: PreviewProvider {
         return PerformanceInfoView()
             .environmentObject(appData)
             .environmentObject(keyboardHandler)
-            .frame(width: 250, height: 300)
+            .frame(width: 250, height: 600)
             .padding()
     }
 }
+
+
+
