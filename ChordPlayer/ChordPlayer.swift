@@ -159,6 +159,9 @@ class ChordPlayer: ObservableObject {
                 }
             }
 
+            // Calculate adaptive velocity based on the number of notes being played simultaneously
+            let adaptiveVelocity = calculateAdaptiveVelocity(baseVelocity: velocity, noteCount: notesToSchedule.count)
+            
             for (i, item) in notesToSchedule.enumerated() {
                 var strumOffsetMs: Double = 0
                 if let delta = event.delta {
@@ -176,7 +179,7 @@ class ChordPlayer: ObservableObject {
                     // The immediate sendNoteOff is removed to allow for smooth transition.
                 }
 
-                self.midiManager.scheduleNoteOn(note: item.note, velocity: velocity, channel: 0, scheduledUptimeMs: scheduledNoteOnUptimeMs)
+                self.midiManager.scheduleNoteOn(note: item.note, velocity: adaptiveVelocity, channel: 0, scheduledUptimeMs: scheduledNoteOnUptimeMs)
                 self.stringNotes[item.stringIndex] = item.note
 
                 let scheduledNoteOffUptimeMs = scheduledNoteOnUptimeMs + (duration * 1000.0)
@@ -192,6 +195,26 @@ class ChordPlayer: ObservableObject {
         midiManager.cancelAllPendingScheduledEvents()
         playingNotes.removeAll()
         stringNotes.removeAll()
+    }
+    
+    /// Calculates adaptive velocity based on the number of notes being played simultaneously
+    /// to prevent volume buildup when multiple notes are played together
+    private func calculateAdaptiveVelocity(baseVelocity: UInt8, noteCount: Int) -> UInt8 {
+        guard noteCount > 1 else {
+            // Single note: use full velocity
+            return baseVelocity
+        }
+        
+        // Apply velocity reduction based on note count to prevent volume buildup
+        // Formula: adaptiveVelocity = baseVelocity * (1.0 / sqrt(noteCount)) * scalingFactor
+        let scalingFactor: Double = 1.2 // Slight boost to maintain presence
+        let reductionFactor = 1.0 / sqrt(Double(noteCount))
+        let adaptiveVelocity = Double(baseVelocity) * reductionFactor * scalingFactor
+        
+        // Ensure velocity stays within valid MIDI range (1-127)
+        let clampedVelocity = max(1, min(127, Int(round(adaptiveVelocity))))
+        
+        return UInt8(clampedVelocity)
     }
     
     func playChordDirectly(chordDefinition: [StringOrInt], key: String = "C", capo: Int = 0, velocity: UInt8 = 100, duration: TimeInterval = 2.0) {
@@ -213,6 +236,10 @@ class ChordPlayer: ObservableObject {
             }
         }
 
+        // Count active notes to calculate adaptive velocity
+        let activeNotes = midiNotes.filter { $0 != -1 }
+        let adaptiveVelocity = calculateAdaptiveVelocity(baseVelocity: velocity, noteCount: activeNotes.count)
+        
         // Iterate through all 6 strings
         for stringIndex in 0..<6 {
             let newNote = midiNotes[stringIndex]
@@ -235,8 +262,8 @@ class ChordPlayer: ObservableObject {
             if newNote != -1 {
                 let noteToPlay = UInt8(newNote)
                 
-                // Schedule the new note
-                self.midiManager.scheduleNoteOn(note: noteToPlay, velocity: velocity, channel: 0, scheduledUptimeMs: currentUptimeMs)
+                // Schedule the new note with adaptive velocity
+                self.midiManager.scheduleNoteOn(note: noteToPlay, velocity: adaptiveVelocity, channel: 0, scheduledUptimeMs: currentUptimeMs)
                 self.stringNotes[stringIndex] = noteToPlay
 
                 // Schedule the corresponding note-off
