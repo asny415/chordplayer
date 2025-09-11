@@ -663,22 +663,33 @@ private struct BeatLabel: View {
     let beat: Int
     let isCurrentBeat: Bool
     let content: String
+    let shouldHighlightForAction: Bool // 是否需要强调提示用户按键
+    
+    init(beat: Int, isCurrentBeat: Bool, content: String, shouldHighlightForAction: Bool = false) {
+        self.beat = beat
+        self.isCurrentBeat = isCurrentBeat
+        self.content = content
+        self.shouldHighlightForAction = shouldHighlightForAction
+    }
     
     var body: some View {
         Text(content)
-            .font(.system(.title3, weight: .semibold))
-            .foregroundColor(isCurrentBeat ? .primary : (content == "·" ? .secondary : .primary))
+            .font(.system(.title3, weight: shouldHighlightForAction ? .bold : .semibold))
+            .foregroundColor(shouldHighlightForAction ? .white : (isCurrentBeat ? .primary : (content == "·" ? .secondary : .primary)))
             .frame(width: 60, height: 40)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isCurrentBeat ? Color.accentColor.opacity(0.3) : Color.clear)
+                    .fill(shouldHighlightForAction ? Color.orange : (isCurrentBeat ? Color.accentColor.opacity(0.3) : Color.clear))
             )
             .background(Material.thin, in: RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isCurrentBeat ? Color.accentColor : Color.clear, lineWidth: 2)
+                    .stroke(shouldHighlightForAction ? Color.orange : (isCurrentBeat ? Color.accentColor : Color.clear), lineWidth: shouldHighlightForAction ? 3 : 2)
             )
+            .scaleEffect(shouldHighlightForAction ? 1.1 : 1.0)
+            .zIndex(shouldHighlightForAction ? 2 : (isCurrentBeat ? 1 : 0))
             .animation(.easeInOut(duration: 0.1), value: isCurrentBeat)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: shouldHighlightForAction)
             .transition(.opacity.combined(with: .scale(scale: 0.8)))
     }
 }
@@ -752,10 +763,18 @@ private struct AssistPlayingView: View {
             
             HStack(spacing: 0) {
                 ForEach(0..<12, id: \.self) { index in
+                    let beatForIndex = calculateBeatForIndex(index)
+                    let content = getContentForBeat(beatForIndex)
+                    let isCurrentBeat = index == 2 // 第3个位置是当前拍（提前一拍提醒）
+                    
+                    // 在辅助演奏模式下，如果当前拍有内容且不是"·"，需要高亮提示
+                    let shouldHighlight = isCurrentBeat && content != "·" && appData.playingMode == .assisted
+                    
                     BeatLabel(
-                        beat: calculateBeatForIndex(index),
-                        isCurrentBeat: index == 2, // 第3个位置是当前拍（提前一拍提醒）
-                        content: getContentForBeat(calculateBeatForIndex(index))
+                        beat: beatForIndex,
+                        isCurrentBeat: isCurrentBeat,
+                        content: content,
+                        shouldHighlightForAction: shouldHighlight
                     )
                 }
             }
