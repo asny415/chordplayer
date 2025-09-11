@@ -23,11 +23,6 @@ struct PresetWorkspaceView: View {
                 GroupBox {
                     ChordProgressionView()
                 }
-
-                GroupBox {
-                    PerformanceInfoView()
-                        .environmentObject(keyboardHandler)
-                }
             }
             .padding()
         }
