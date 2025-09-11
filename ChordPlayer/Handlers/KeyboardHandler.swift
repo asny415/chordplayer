@@ -14,6 +14,7 @@ class KeyboardHandler: ObservableObject {
     private var chordPlayer: ChordPlayer
     private var drumPlayer: DrumPlayer
     private var appData: AppData
+    private let customPlayingPatternManager: CustomPlayingPatternManager
 
     @Published var lastPlayedChord: String? = nil
     @Published var currentPlayingInfo: PlayingInfo? = nil
@@ -24,11 +25,12 @@ class KeyboardHandler: ObservableObject {
     private var eventMonitor: Any?
     private var cancellables = Set<AnyCancellable>()
 
-    init(midiManager: MidiManager, chordPlayer: ChordPlayer, drumPlayer: DrumPlayer, appData: AppData) {
+    init(midiManager: MidiManager, chordPlayer: ChordPlayer, drumPlayer: DrumPlayer, appData: AppData, customPlayingPatternManager: CustomPlayingPatternManager) {
         self.midiManager = midiManager
         self.chordPlayer = chordPlayer
         self.drumPlayer = drumPlayer
         self.appData = appData
+        self.customPlayingPatternManager = customPlayingPatternManager
 
         setupEventMonitor()
 
@@ -303,7 +305,7 @@ class KeyboardHandler: ObservableObject {
         if let library = appData.patternLibrary?[timeSignature] {
             pattern = library.first(where: { $0.id == playingPatternId })
         }
-        if pattern == nil, let customLibrary = CustomPlayingPatternManager.shared.customPlayingPatterns[timeSignature] {
+        if pattern == nil, let customLibrary = customPlayingPatternManager.customPlayingPatterns[timeSignature] {
             pattern = customLibrary.first(where: { $0.id == playingPatternId })
         }
         

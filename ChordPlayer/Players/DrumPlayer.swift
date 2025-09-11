@@ -9,6 +9,7 @@ class DrumPlayer: ObservableObject {
 
     private var midiManager: MidiManager
     private var appData: AppData
+    private let customDrumPatternManager: CustomDrumPatternManager
 
     @Published private(set) var isPlaying: Bool = false
     @Published private(set) var currentPreviewStep: Int? = nil
@@ -48,9 +49,17 @@ class DrumPlayer: ObservableObject {
         }
     }
 
-    init(midiManager: MidiManager, appData: AppData) {
+    init(midiManager: MidiManager, appData: AppData, customDrumPatternManager: CustomDrumPatternManager) {
         self.midiManager = midiManager
         self.appData = appData
+        self.customDrumPatternManager = customDrumPatternManager
+    }
+
+    private func scheduleMidiEvent(notes: [Int], at timeMs: Double, velocity: UInt8 = 100, channel: UInt8 = 9, durationMs: Double = 200) {
+        for note in notes {
+            midiManager.scheduleNoteOn(note: UInt8(note), velocity: velocity, channel: channel, scheduledUptimeMs: timeMs)
+            midiManager.scheduleNoteOff(note: UInt8(note), velocity: 0, channel: channel, scheduledUptimeMs: timeMs + durationMs)
+        }
     }
 
     // MARK: - Preview Player
@@ -106,11 +115,7 @@ class DrumPlayer: ObservableObject {
         DispatchQueue.main.async { self.currentPreviewStep = self.previewPatternIndex }
 
         let scheduledOnUptimeMs = previewStartTime + (Double(previewLoopCount) * previewLoopDuration) + ev.timestampMs
-        for note in ev.notes {
-            midiManager.sendNoteOnScheduled(note: UInt8(note), velocity: 100, channel: 9, scheduledUptimeMs: scheduledOnUptimeMs)
-            let scheduledOffUptimeMs = scheduledOnUptimeMs + 200.0
-            midiManager.sendNoteOffScheduled(note: UInt8(note), velocity: 0, channel: 9, scheduledUptimeMs: scheduledOffUptimeMs)
-        }
+        scheduleMidiEvent(notes: ev.notes, at: scheduledOnUptimeMs)
 
         previewPatternIndex += 1
         if previewPatternIndex >= schedule.count {
@@ -200,16 +205,12 @@ class DrumPlayer: ObservableObject {
                 if currentMeasure == 0 { // Count-in measure
                     for i in 0..<self.beatsPerMeasure {
                         let beatUptimeMs = self.startTimeMs + (Double(i) * self.beatDurationMs)
-                        self.midiManager.sendNoteOnScheduled(note: self.countInNote, velocity: 100, channel: 9, scheduledUptimeMs: beatUptimeMs)
-                        self.midiManager.sendNoteOffScheduled(note: self.countInNote, velocity: 0, channel: 9, scheduledUptimeMs: beatUptimeMs + 100)
+                        self.scheduleMidiEvent(notes: [Int(self.countInNote)], at: beatUptimeMs, durationMs: 100)
                     }
                 } else if let schedule = self.currentPatternSchedule { // Formal pattern measures
                     for event in schedule {
                         let scheduledOnUptimeMs = measureStartUptimeMs + event.timestampMs
-                        for note in event.notes {
-                            self.midiManager.sendNoteOnScheduled(note: UInt8(note), velocity: 100, channel: 9, scheduledUptimeMs: scheduledOnUptimeMs)
-                            self.midiManager.sendNoteOffScheduled(note: UInt8(note), velocity: 0, channel: 9, scheduledUptimeMs: scheduledOnUptimeMs + 200)
-                        }
+                        self.scheduleMidiEvent(notes: event.notes, at: scheduledOnUptimeMs)
                     }
                 }
             }
@@ -290,7 +291,7 @@ class DrumPlayer: ObservableObject {
     private func findDrumPattern(named name: String, timeSignature: String) -> DrumPattern? {
         if let pattern = appData.drumPatternLibrary?[timeSignature]?[name] {
             return pattern
-        } else if let pattern = CustomDrumPatternManager.shared.customDrumPatterns[timeSignature]?[name] {
+        } else if let pattern = customDrumPatternManager.customDrumPatterns[timeSignature]?[name] {
             return pattern
         }
         return nil

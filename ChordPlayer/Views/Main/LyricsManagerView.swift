@@ -372,5 +372,5 @@ private struct TimeRangeRowView: View {
 
 #Preview {
     LyricsManagerView()
-        .environmentObject(AppData())
+        .environmentObject(AppData(customChordManager: CustomChordManager.shared))
 }

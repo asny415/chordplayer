@@ -176,8 +176,13 @@ struct CustomPlayingPatternLibraryView: View {
 
 struct CustomPlayingPatternLibraryView_Previews: PreviewProvider {
     static var previews: some View {
-        let manager = CustomPlayingPatternManager.shared
-        manager.customPlayingPatterns = [
+        let customPlayingPatternManager = CustomPlayingPatternManager.shared
+        let customChordManager = CustomChordManager.shared
+        let appData = AppData(customChordManager: customChordManager)
+        let midiManager = MidiManager()
+        let chordPlayer = ChordPlayer(midiManager: midiManager, appData: appData)
+
+        customPlayingPatternManager.customPlayingPatterns = [
             "4/4": [
                 GuitarPattern(id: "4-4-arpeggio", name: "基础分解", pattern: []),
                 GuitarPattern(id: "4-4-strum", name: "基础扫弦", pattern: [])
@@ -188,6 +193,7 @@ struct CustomPlayingPatternLibraryView_Previews: PreviewProvider {
         ]
         
         return CustomPlayingPatternLibraryView()
-            .environmentObject(manager)
+            .environmentObject(customPlayingPatternManager)
+            .environmentObject(chordPlayer)
     }
 }

@@ -16,17 +16,20 @@ struct ChordPlayerApp: App {
     @StateObject private var keyboardHandler: KeyboardHandler // Add this
 
     init() {
-        let initialAppData = AppData()
+        let customChordManager = CustomChordManager.shared
+        let customDrumPatternManager = CustomDrumPatternManager.shared
+        let customPlayingPatternManager = CustomPlayingPatternManager.shared
+        let initialAppData = AppData(customChordManager: customChordManager)
         let initialMidiManager = MidiManager()
         let initialChordPlayer = ChordPlayer(midiManager: initialMidiManager, appData: initialAppData)
-        let initialDrumPlayer = DrumPlayer(midiManager: initialMidiManager, appData: initialAppData)
-        let initialKeyboardHandler = KeyboardHandler(midiManager: initialMidiManager, chordPlayer: initialChordPlayer, drumPlayer: initialDrumPlayer, appData: initialAppData) // Initialize KeyboardHandler
+        let initialDrumPlayer = DrumPlayer(midiManager: initialMidiManager, appData: initialAppData, customDrumPatternManager: customDrumPatternManager)
+        let initialKeyboardHandler = KeyboardHandler(midiManager: initialMidiManager, chordPlayer: initialChordPlayer, drumPlayer: initialDrumPlayer, appData: initialAppData, customPlayingPatternManager: customPlayingPatternManager)
 
         _appData = StateObject(wrappedValue: initialAppData)
         _midiManager = StateObject(wrappedValue: initialMidiManager)
         _chordPlayer = StateObject(wrappedValue: initialChordPlayer)
         _drumPlayer = StateObject(wrappedValue: initialDrumPlayer)
-        _keyboardHandler = StateObject(wrappedValue: initialKeyboardHandler) // Assign KeyboardHandler
+        _keyboardHandler = StateObject(wrappedValue: initialKeyboardHandler)
     }
 
     @State private var showCustomChordCreatorFromMenu = false

@@ -6,6 +6,7 @@ struct AddChordPlayingPatternAssociationSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
+    @EnvironmentObject var customPlayingPatternManager: CustomPlayingPatternManager
     
     let chordName: String
     
@@ -28,7 +29,7 @@ struct AddChordPlayingPatternAssociationSheet: View {
             patterns.append(contentsOf: library)
         }
         
-        if let customLibrary = CustomPlayingPatternManager.shared.customPlayingPatterns[timeSignature] {
+        if let customLibrary = customPlayingPatternManager.customPlayingPatterns[timeSignature] {
             patterns.append(contentsOf: customLibrary)
         }
         

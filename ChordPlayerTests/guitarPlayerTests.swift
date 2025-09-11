@@ -14,18 +14,20 @@ class MockMidiManager: MidiManager {
         sentNotes.append((note, velocity, channel))
     }
 
-    override func sendNoteOnScheduled(note: UInt8, velocity: UInt8, channel: UInt8, scheduledUptimeMs: Double?) {
-        if let uptime = scheduledUptimeMs {
-            scheduledNotes.append((note, velocity, channel, uptime))
-        }
+    @discardableResult
+    override func scheduleNoteOn(note: UInt8, velocity: UInt8, channel: UInt8, scheduledUptimeMs: Double) -> UUID {
+        scheduledNotes.append((note, velocity, channel, scheduledUptimeMs))
+        return UUID()
     }
     
     override func sendNoteOff(note: UInt8, velocity: UInt8, channel: UInt8) {
         // For simplicity, we don't track note off in this mock
     }
     
-    override func sendNoteOffScheduled(note: UInt8, velocity: UInt8, channel: UInt8, scheduledUptimeMs: Double?) {
+    @discardableResult
+    override func scheduleNoteOff(note: UInt8, velocity: UInt8, channel: UInt8, scheduledUptimeMs: Double) -> UUID {
         // For simplicity, we don't track note off in this mock
+        return UUID()
     }
 
     override func sendPanic() {
@@ -47,8 +49,8 @@ class MockMidiManager: MidiManager {
 
 // A basic AppData that can be used for testing
 class TestAppData: AppData {
-    override init() {
-        super.init()
+    init() {
+        super.init(customChordManager: CustomChordManager.shared)
         // Setup with some default data for predictability
         self.performanceConfig = PerformanceConfig(
             tempo: 120.0,
@@ -83,7 +85,7 @@ class DrumPlayerTests: XCTestCase {
         super.setUp()
         mockMidiManager = MockMidiManager()
         testAppData = TestAppData()
-        drumPlayer = DrumPlayer(midiManager: mockMidiManager, appData: testAppData)
+        drumPlayer = DrumPlayer(midiManager: mockMidiManager, appData: testAppData, customDrumPatternManager: CustomDrumPatternManager.shared)
     }
 
     override func tearDown() {

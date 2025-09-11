@@ -115,8 +115,17 @@ struct ChordDiagramEditor: View {
 
 struct ChordDiagramEditor_Previews: PreviewProvider {
     static var previews: some View {
-        ChordDiagramEditor(onSave: { name, def in }, onCancel: {})
-            .environmentObject(AppData())
-            .environmentObject(KeyboardHandler(midiManager: MidiManager(), chordPlayer: ChordPlayer(midiManager: MidiManager(), appData: AppData()), drumPlayer: DrumPlayer(midiManager: MidiManager(), appData: AppData()), appData: AppData()))
+        let customChordManager = CustomChordManager.shared
+        let customDrumPatternManager = CustomDrumPatternManager.shared
+        let customPlayingPatternManager = CustomPlayingPatternManager.shared
+        let appData = AppData(customChordManager: customChordManager)
+        let midiManager = MidiManager()
+        let chordPlayer = ChordPlayer(midiManager: midiManager, appData: appData)
+        let drumPlayer = DrumPlayer(midiManager: midiManager, appData: appData, customDrumPatternManager: customDrumPatternManager)
+        let keyboardHandler = KeyboardHandler(midiManager: midiManager, chordPlayer: chordPlayer, drumPlayer: drumPlayer, appData: appData, customPlayingPatternManager: customPlayingPatternManager)
+
+        return ChordDiagramEditor(onSave: { name, def in }, onCancel: {})
+            .environmentObject(appData)
+            .environmentObject(keyboardHandler)
     }
 }

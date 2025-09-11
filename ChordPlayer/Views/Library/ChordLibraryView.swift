@@ -157,7 +157,10 @@ struct ChordLibraryView: View {
 
 struct ChordLibraryView_Previews: PreviewProvider {
     static var previews: some View {
-        ChordLibraryView(onAddChord: { name in print("Added \(name)") }, existingChordNames: Set<String>())
-            .environmentObject(AppData())
+        let customChordManager = CustomChordManager.shared
+        let appData = AppData(customChordManager: customChordManager)
+        
+        return ChordLibraryView(onAddChord: { name in print("Added \(name)") }, existingChordNames: Set<String>())
+            .environmentObject(appData)
     }
 }

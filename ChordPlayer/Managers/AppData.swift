@@ -28,7 +28,7 @@ class AppData: ObservableObject {
     
     @Published var autoPlaySchedule: [AutoPlayEvent] = []
     
-    @Published var customChordManager = CustomChordManager.shared
+    let customChordManager: CustomChordManager
     
     @Published var playingMode: PlayingMode = .manual {
         didSet {
@@ -55,7 +55,8 @@ class AppData: ObservableObject {
     private let presetManager = PresetManager.shared
     private var cancellables = Set<AnyCancellable>()
 
-    init() {
+    init(customChordManager: CustomChordManager) {
+        self.customChordManager = customChordManager
         self.KEY_CYCLE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
         self.TIME_SIGNATURE_CYCLE = ["4/4", "3/4", "6/8"]
         

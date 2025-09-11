@@ -12,7 +12,7 @@ struct CustomChordLibraryView: View {
     @EnvironmentObject var midiManager: MidiManager
     @Environment(\.dismiss) var dismiss
     
-    @StateObject private var customChordManager = CustomChordManager.shared
+    @EnvironmentObject var customChordManager: CustomChordManager
     
     @State private var searchText: String = ""
     @State private var showingCreateSheet = false
@@ -169,7 +169,7 @@ struct CustomChordLibraryView: View {
 // MARK: - Chord Editor View (Restored)
 struct CustomChordEditorView: View {
     @Environment(\.dismiss) var dismiss
-    @StateObject private var customChordManager = CustomChordManager.shared
+    @EnvironmentObject var customChordManager: CustomChordManager
     
     let chordName: String
     
@@ -240,9 +240,15 @@ struct CustomChordEditorView: View {
 // MARK: - Preview Provider
 struct CustomChordLibraryView_Previews: PreviewProvider {
     static var previews: some View {
-        CustomChordLibraryView()
-            .environmentObject(AppData())
-            .environmentObject(MidiManager())
-            .environmentObject(ChordPlayer(midiManager: MidiManager(), appData: AppData()))
+        let customChordManager = CustomChordManager.shared
+        let appData = AppData(customChordManager: customChordManager)
+        let midiManager = MidiManager()
+        let chordPlayer = ChordPlayer(midiManager: midiManager, appData: appData)
+
+        return CustomChordLibraryView()
+            .environmentObject(appData)
+            .environmentObject(midiManager)
+            .environmentObject(chordPlayer)
+            .environmentObject(customChordManager)
     }
 }

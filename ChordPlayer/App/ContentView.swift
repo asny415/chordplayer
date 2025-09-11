@@ -29,41 +29,24 @@ struct ContentView: View {
         .onAppear(perform: setupInitialState)
         .sheet(isPresented: $showCustomChordCreatorFromMenu) {
             CustomChordCreatorView()
-                .environmentObject(appData)
-                .environmentObject(chordPlayer)
-                .environmentObject(midiManager)
         }
         .sheet(isPresented: $showCustomChordManagerFromMenu) {
             CustomChordLibraryView()
-                .environmentObject(appData)
-                .environmentObject(chordPlayer)
-                .environmentObject(midiManager)
         }
         .sheet(isPresented: $showDrumPatternCreatorFromMenu) {
             AddDrumPatternSheetView()
-                .environmentObject(CustomDrumPatternManager.shared)
-                .environmentObject(drumPlayer)
         }
         .sheet(isPresented: $showCustomDrumPatternManagerFromMenu) {
             CustomDrumPatternLibraryView()
-                .environmentObject(CustomDrumPatternManager.shared)
-                .environmentObject(drumPlayer)
         }
         .sheet(isPresented: $showPlayingPatternCreatorFromMenu) {
             PlayingPatternEditorView()
-                .environmentObject(CustomPlayingPatternManager.shared)
-                .environmentObject(chordPlayer)
-                .environmentObject(midiManager)
         }
         .sheet(isPresented: $showCustomPlayingPatternManagerFromMenu) {
             CustomPlayingPatternLibraryView()
-                .environmentObject(CustomPlayingPatternManager.shared)
-                .environmentObject(chordPlayer)
-                .environmentObject(midiManager)
         }
         .sheet(isPresented: $showLyricsManagerFromMenu) {
             LyricsManagerView()
-                .environmentObject(appData)
         }
     }
 

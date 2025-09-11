@@ -6,7 +6,7 @@ struct CustomChordCreatorView: View {
     @EnvironmentObject var midiManager: MidiManager
     @Environment(\.dismiss) var dismiss
     
-    @StateObject private var customChordManager = CustomChordManager.shared
+    @EnvironmentObject var customChordManager: CustomChordManager
     
     // --- State ---
     @State private var chordName: String = ""

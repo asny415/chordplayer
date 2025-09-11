@@ -79,8 +79,6 @@ struct SelectDrumPatternsSheet: View {
         .frame(minWidth: 500, minHeight: 400)
         .sheet(isPresented: $showingCreateSheet) {
             AddDrumPatternSheetView()
-                .environmentObject(customDrumPatternManager)
-                .environmentObject(drumPlayer)
         }
     }
     
@@ -118,10 +116,14 @@ struct SelectDrumPatternsSheet: View {
 
 struct SelectDrumPatternsSheet_Previews: PreviewProvider {
     static var previews: some View {
-        let appData = AppData()
+        let customChordManager = CustomChordManager.shared
+        let customDrumPatternManager = CustomDrumPatternManager.shared
+        let appData = AppData(customChordManager: customChordManager)
+        let drumPlayer = DrumPlayer(midiManager: MidiManager(), appData: appData, customDrumPatternManager: customDrumPatternManager)
         
         SelectDrumPatternsSheet(initialSelection: [], onDone: { _ in })
             .environmentObject(appData)
-            .environmentObject(CustomDrumPatternManager.shared)
+            .environmentObject(customDrumPatternManager)
+            .environmentObject(drumPlayer)
     }
 }

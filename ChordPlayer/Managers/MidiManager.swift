@@ -251,23 +251,7 @@ class MidiManager: ObservableObject {
         }
     }
 
-    // Legacy immediate methods remain
-    func sendNoteOnScheduled(note: UInt8, velocity: UInt8, channel: UInt8 = 0, scheduledUptimeMs: Double?) {
-        // For backward compatibility: if scheduledUptimeMs provided, schedule; else immediate
-        guard let scheduled = scheduledUptimeMs else {
-            sendNoteOn(note: note, velocity: velocity, channel: channel)
-            return
-        }
-        _ = scheduleNoteOn(note: note, velocity: velocity, channel: channel, scheduledUptimeMs: scheduled)
-    }
-
-    func sendNoteOffScheduled(note: UInt8, velocity: UInt8, channel: UInt8 = 0, scheduledUptimeMs: Double?) {
-        guard let scheduled = scheduledUptimeMs else {
-            sendNoteOff(note: note, velocity: velocity, channel: channel)
-            return
-        }
-        _ = scheduleNoteOff(note: note, velocity: velocity, channel: channel, scheduledUptimeMs: scheduled)
-    }
+    
 
     func sendNoteOff(note: UInt8, velocity: UInt8, channel: UInt8 = 0) {
         guard let destination = selectedOutput else { return }
