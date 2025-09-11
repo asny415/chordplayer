@@ -15,6 +15,7 @@ struct ContentView: View {
     @Binding var showCustomDrumPatternManagerFromMenu: Bool
     @Binding var showPlayingPatternCreatorFromMenu: Bool
     @Binding var showCustomPlayingPatternManagerFromMenu: Bool
+    @Binding var showLyricsManagerFromMenu: Bool
 
     var body: some View {
         NavigationSplitView {
@@ -59,6 +60,10 @@ struct ContentView: View {
                 .environmentObject(CustomPlayingPatternManager.shared)
                 .environmentObject(chordPlayer)
                 .environmentObject(midiManager)
+        }
+        .sheet(isPresented: $showLyricsManagerFromMenu) {
+            LyricsManagerView()
+                .environmentObject(appData)
         }
     }
 

@@ -35,6 +35,7 @@ struct ChordPlayerApp: App {
     @State private var showCustomDrumPatternManagerFromMenu = false
     @State private var showPlayingPatternCreatorFromMenu = false
     @State private var showCustomPlayingPatternManagerFromMenu = false
+    @State private var showLyricsManagerFromMenu = false
 
 
     var body: some Scene {
@@ -45,7 +46,8 @@ struct ChordPlayerApp: App {
                 showDrumPatternCreatorFromMenu: $showDrumPatternCreatorFromMenu,
                 showCustomDrumPatternManagerFromMenu: $showCustomDrumPatternManagerFromMenu,
                 showPlayingPatternCreatorFromMenu: $showPlayingPatternCreatorFromMenu,
-                showCustomPlayingPatternManagerFromMenu: $showCustomPlayingPatternManagerFromMenu
+                showCustomPlayingPatternManagerFromMenu: $showCustomPlayingPatternManagerFromMenu,
+                showLyricsManagerFromMenu: $showLyricsManagerFromMenu
             )
                 .environmentObject(appData)
                 .environmentObject(midiManager)
@@ -58,6 +60,13 @@ struct ChordPlayerApp: App {
                 .environmentObject(CustomPlayingPatternManager.shared)
         }
         .commands {
+            CommandMenu("编辑") {
+                Button("歌词管理...") {
+                    showLyricsManagerFromMenu = true
+                }
+                .keyboardShortcut("L", modifiers: [.command])
+            }
+            
             CommandMenu("自定义库") {
                 Button("创建自定义和弦...") {
                     showCustomChordCreatorFromMenu = true

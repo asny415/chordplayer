@@ -157,6 +157,7 @@ class PresetManager: ObservableObject {
             chords: [],
             selectedDrumPatterns: [],
             selectedPlayingPatterns: [],
+            lyrics: [],
             activeDrumPatternId: "",
             activePlayingPatternId: ""
         )

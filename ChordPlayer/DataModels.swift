@@ -285,11 +285,12 @@ struct PerformanceConfig: Codable, Equatable {
     var chords: [ChordPerformanceConfig]
     var selectedDrumPatterns: [String]
     var selectedPlayingPatterns: [String]
+    var lyrics: [Lyric]
     
     var activeDrumPatternId: String?
     var activePlayingPatternId: String?
 
-    init(tempo: Double, timeSignature: String, key: String, quantize: String? = nil, chords: [ChordPerformanceConfig] = [], selectedDrumPatterns: [String] = [], selectedPlayingPatterns: [String] = [], activeDrumPatternId: String? = nil, activePlayingPatternId: String? = nil) {
+    init(tempo: Double, timeSignature: String, key: String, quantize: String? = nil, chords: [ChordPerformanceConfig] = [], selectedDrumPatterns: [String] = [], selectedPlayingPatterns: [String] = [], lyrics: [Lyric] = [], activeDrumPatternId: String? = nil, activePlayingPatternId: String? = nil) {
         self.tempo = tempo
         self.timeSignature = timeSignature
         self.key = key
@@ -297,13 +298,14 @@ struct PerformanceConfig: Codable, Equatable {
         self.chords = chords
         self.selectedDrumPatterns = selectedDrumPatterns
         self.selectedPlayingPatterns = selectedPlayingPatterns
+        self.lyrics = lyrics
         self.activeDrumPatternId = activeDrumPatternId
         self.activePlayingPatternId = activePlayingPatternId
     }
     
     enum CodingKeys: String, CodingKey {
         case tempo, timeSignature, key, quantize
-        case chords, selectedDrumPatterns, selectedPlayingPatterns
+        case chords, selectedDrumPatterns, selectedPlayingPatterns, lyrics
         case activeDrumPatternId, activePlayingPatternId
         // Old keys for migration
         case patternGroups, drumPattern
@@ -327,6 +329,7 @@ struct PerformanceConfig: Codable, Equatable {
 
         selectedDrumPatterns = try container.decodeIfPresent([String].self, forKey: .selectedDrumPatterns) ?? []
         selectedPlayingPatterns = try container.decodeIfPresent([String].self, forKey: .selectedPlayingPatterns) ?? []
+        lyrics = try container.decodeIfPresent([Lyric].self, forKey: .lyrics) ?? []
         activeDrumPatternId = try container.decodeIfPresent(String.self, forKey: .activeDrumPatternId)
         activePlayingPatternId = try container.decodeIfPresent(String.self, forKey: .activePlayingPatternId)
 
@@ -360,6 +363,7 @@ struct PerformanceConfig: Codable, Equatable {
         try container.encode(chords, forKey: .chords)
         try container.encode(selectedDrumPatterns, forKey: .selectedDrumPatterns)
         try container.encode(selectedPlayingPatterns, forKey: .selectedPlayingPatterns)
+        try container.encode(lyrics, forKey: .lyrics)
         try container.encodeIfPresent(activeDrumPatternId, forKey: .activeDrumPatternId)
         try container.encodeIfPresent(activePlayingPatternId, forKey: .activePlayingPatternId)
     }
@@ -483,6 +487,81 @@ struct AutoPlayEvent: Codable, Hashable {
     let triggerBeat: Int
     var durationBeats: Int? // This will be calculated
     let shortcut: String?
+}
+
+// MARK: - Lyric Models
+
+struct LyricTimeRange: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var startBeat: Int
+    var endBeat: Int
+    
+    init(startBeat: Int, endBeat: Int) {
+        self.startBeat = startBeat
+        self.endBeat = endBeat
+    }
+    
+    // 计算时间段的持续拍数
+    var durationBeats: Int {
+        return max(1, endBeat - startBeat + 1)
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, startBeat, endBeat
+    }
+}
+
+struct Lyric: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var content: String
+    var timeRanges: [LyricTimeRange]
+    
+    init(content: String, timeRanges: [LyricTimeRange] = []) {
+        self.content = content
+        self.timeRanges = timeRanges
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, content, timeRanges
+        // 为了向后兼容旧格式
+        case triggerBeat, endBeat
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(content, forKey: .content)
+        try container.encode(timeRanges, forKey: .timeRanges)
+    }
+    
+    // 向后兼容的初始化器
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        content = try container.decode(String.self, forKey: .content)
+        
+        // 尝试读取新格式
+        if let ranges = try? container.decode([LyricTimeRange].self, forKey: .timeRanges) {
+            timeRanges = ranges
+        } 
+        // 兼容旧格式
+        else if let triggerBeat = try? container.decode(Int.self, forKey: .triggerBeat),
+                let endBeat = try? container.decode(Int.self, forKey: .endBeat) {
+            timeRanges = [LyricTimeRange(startBeat: triggerBeat, endBeat: endBeat)]
+        } else {
+            timeRanges = []
+        }
+    }
+    
+    // 计算歌词总的显示拍数
+    var totalDurationBeats: Int {
+        return timeRanges.reduce(0) { $0 + $1.durationBeats }
+    }
+    
+    // 获取最早的开始拍号
+    var earliestStartBeat: Int? {
+        return timeRanges.map { $0.startBeat }.min()
+    }
 }
 
 // MARK: - Editor Data Models
