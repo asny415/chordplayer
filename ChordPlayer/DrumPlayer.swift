@@ -23,6 +23,9 @@ class DrumPlayer: ObservableObject {
     private var beatDurationMs: Double = 0
     private var beatsPerMeasure: Int = 4
     private var measureDurationMs: Double = 0
+    
+    // UI Update scheduling
+    private var uiUpdateTasks: [DispatchWorkItem] = []
 
     // Pattern Management
     private var currentPattern: DrumPattern?
@@ -155,43 +158,12 @@ class DrumPlayer: ObservableObject {
         self.nextPattern = drumPattern
         self.lastScheduledMeasure = -1
 
-        // 4. Start the two independent loops
-        startUIUpdater()
+        // 4. Start the measure scheduler (which will also handle UI updates)
         scheduleMeasureAndReschedule(after: 0)
         
         print("[DrumPlayer] Playback started. Tempo: \(tempo), Time Signature: \(timeSignature)")
     }
     
-    private func startUIUpdater() {
-        uiUpdateTimer?.invalidate()
-        uiUpdateTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            self?.updateUI()
-        }
-    }
-    
-    private func updateUI() {
-        guard playbackState == .playing else { return }
-        
-        let elapsedMs = (ProcessInfo.processInfo.systemUptime * 1000.0) - startTimeMs
-        let totalBeatsElapsed = elapsedMs / beatDurationMs
-        
-        let newMeasure: Int
-        let newBeat: Int
-
-        if totalBeatsElapsed < Double(beatsPerMeasure) {
-            newMeasure = 0
-            newBeat = Int(floor(totalBeatsElapsed)) - beatsPerMeasure
-        } else {
-            let beatsIntoPattern = totalBeatsElapsed - Double(beatsPerMeasure)
-            newMeasure = Int(floor(beatsIntoPattern / Double(beatsPerMeasure))) + 1
-            newBeat = Int(floor(beatsIntoPattern)) % beatsPerMeasure
-        }
-        
-        DispatchQueue.main.async {
-            if self.appData.currentMeasure != newMeasure { self.appData.currentMeasure = newMeasure }
-            if self.appData.currentBeat != newBeat { self.appData.currentBeat = newBeat }
-        }
-    }
 
     private func scheduleMeasureAndReschedule(after delayMs: Double) {
         measureScheduler?.cancel()
@@ -206,6 +178,9 @@ class DrumPlayer: ObservableObject {
             
             if currentMeasure > self.lastScheduledMeasure {
                 self.lastScheduledMeasure = currentMeasure
+                
+                // --- UI Update Logic (synchronized with MIDI events) ---
+                self.scheduleUIUpdatesForMeasure(currentMeasure)
                 
                 // --- Pattern Switching Logic ---
                 let isFirstFormalMeasure = (currentMeasure == 1)
@@ -283,6 +258,12 @@ class DrumPlayer: ObservableObject {
         measureScheduler = nil
         previewWorkItem?.cancel()
         previewWorkItem = nil
+        
+        // Cancel all scheduled UI update tasks
+        for task in uiUpdateTasks {
+            task.cancel()
+        }
+        uiUpdateTasks.removeAll()
 
         midiManager.sendPanic()
         midiManager.cancelAllPendingScheduledEvents()
@@ -337,6 +318,51 @@ class DrumPlayer: ObservableObject {
             newPatternSchedule.append((timestampMs: physicalTime.truncatingRemainder(dividingBy: measureDurationMs), notes: event.notes))
         }
         return newPatternSchedule.sorted(by: { $0.timestampMs < $1.timestampMs })
+    }
+    
+    // MARK: - UI Update Logic
+    
+    private func scheduleUIUpdatesForMeasure(_ measureIndex: Int) {
+        // Calculate UI state for this measure and schedule beat-by-beat updates
+        let measureStartUptimeMs = startTimeMs + (Double(measureIndex) * measureDurationMs)
+        
+        for beat in 0..<beatsPerMeasure {
+            let beatUptimeMs = measureStartUptimeMs + (Double(beat) * beatDurationMs)
+            let nowMs = ProcessInfo.processInfo.systemUptime * 1000.0
+            let delayMs = max(0, beatUptimeMs - nowMs)
+            
+            // Create a cancellable UI update task
+            let task = DispatchWorkItem { [weak self] in
+                guard let self = self, self.playbackState == .playing else { return }
+                
+                let newMeasure: Int
+                let newBeat: Int
+                
+                if measureIndex == 0 {
+                    // Count-in phase
+                    newMeasure = 0
+                    newBeat = beat - self.beatsPerMeasure
+                } else {
+                    // Normal playback
+                    newMeasure = measureIndex
+                    newBeat = beat
+                }
+                
+                // Only update if the values actually changed to avoid unnecessary UI updates
+                if self.appData.currentMeasure != newMeasure {
+                    self.appData.currentMeasure = newMeasure
+                }
+                if self.appData.currentBeat != newBeat {
+                    self.appData.currentBeat = newBeat
+                }
+            }
+            
+            // Store the task so we can cancel it later if needed
+            uiUpdateTasks.append(task)
+            
+            // Schedule the task
+            DispatchQueue.main.asyncAfter(deadline: .now() + (delayMs / 1000.0), execute: task)
+        }
     }
 }
 
