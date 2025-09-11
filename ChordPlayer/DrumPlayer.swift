@@ -280,7 +280,7 @@ class DrumPlayer: ObservableObject {
             self.appData.currentBeat = -beatsPerMeasure
             self.appData.currentlyPlayingChordName = nil
             self.appData.currentlyPlayingPatternName = nil
-            self.appData.autoPlaySchedule = []
+            // Don't clear autoPlaySchedule - it should persist for repeat playback
             self.currentPreviewStep = nil
         }
     }
