@@ -24,9 +24,9 @@ struct PresetWorkspaceView: View {
                     ChordProgressionView()
                 }
 
-                if appData.playingMode == .assisted {
+                if appData.playingMode == .assisted || appData.playingMode == .automatic {
                     GroupBox {
-                        AssistPlayingView()
+                        TimingDisplayView()
                     }
                 }
             }
@@ -694,8 +694,9 @@ private struct BeatLabel: View {
     }
 }
 
-private struct AssistPlayingView: View {
+private struct TimingDisplayView: View {
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var keyboardHandler: KeyboardHandler
     
     private var beatsPerMeasure: Int {
         let timeSigParts = appData.performanceConfig.timeSignature.split(separator: "/")
@@ -751,37 +752,130 @@ private struct AssistPlayingView: View {
         return nil
     }
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("辅助演奏").font(.headline)
-                Spacer()
-                Text("\(beatsPerMeasure)拍/小节")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+    private func getChordNameForBeat(_ beat: Int) -> String? {
+        if let event = appData.autoPlaySchedule.first(where: { $0.triggerBeat == beat }) {
+            return event.chordName
+        }
+        return nil
+    }
+    
+    // 获取当前拍号范围内的歌词
+    private func getCurrentLyric() -> Lyric? {
+        let currentBeat = currentTotalBeat
+        return appData.performanceConfig.lyrics.first { lyric in
+            lyric.timeRanges.contains { range in
+                currentBeat >= range.startBeat && currentBeat <= range.endBeat
             }
-            
+        }
+    }
+    
+    // 获取下一句歌词（预览）
+    private func getNextLyric() -> Lyric? {
+        let currentBeat = currentTotalBeat
+        let upcomingLyrics = appData.performanceConfig.lyrics.filter { lyric in
+            lyric.timeRanges.contains { range in
+                range.startBeat > currentBeat
+            }
+        }.sorted { lyric1, lyric2 in
+            let earliestStart1 = lyric1.earliestStartBeat ?? Int.max
+            let earliestStart2 = lyric2.earliestStartBeat ?? Int.max
+            return earliestStart1 < earliestStart2
+        }
+        
+        return upcomingLyrics.first
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // 节拍时间轴
             HStack(spacing: 0) {
-                ForEach(0..<12, id: \.self) { index in
-                    let beatForIndex = calculateBeatForIndex(index)
-                    let content = getContentForBeat(beatForIndex)
-                    let isCurrentBeat = index == 2 // 第3个位置是当前拍（提前一拍提醒）
-                    
-                    // 在辅助演奏模式下，只有当用户按下正确按键时才高亮提示
-                    let shouldHighlight = isCurrentBeat && content != "·" && appData.playingMode == .assisted && appData.currentActivePositionTriggered
-                    
-                    BeatLabel(
-                        beat: beatForIndex,
-                        isCurrentBeat: isCurrentBeat,
-                        content: content,
-                        shouldHighlightForAction: shouldHighlight
+                let indices = Array(0..<12)
+                ForEach(indices, id: \.self) { index in
+                    TimingBeatView(
+                        index: index,
+                        appData: appData,
+                        keyboardHandler: keyboardHandler,
+                        calculateBeatForIndex: calculateBeatForIndex,
+                        getContentForBeat: getContentForBeat,
+                        getChordNameForBeat: getChordNameForBeat
                     )
                 }
             }
             .frame(maxWidth: .infinity)
+            
+            // 歌词显示区域
+            if let currentLyric = getCurrentLyric() {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(currentLyric.content)
+                        .font(.title3)
+                        .foregroundColor(.primary)
+                        .fontWeight(.medium)
+                    
+                    if let nextLyric = getNextLyric() {
+                        Text(nextLyric.content)
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .opacity(0.7)
+                    }
+                }
+                .padding(.top, 8)
+            } else if let nextLyric = getNextLyric() {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("即将到来")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text(nextLyric.content)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .opacity(0.7)
+                }
+                .padding(.top, 8)
+            }
         }
-        .frame(height: 80)
         .padding()
+    }
+}
+
+private struct TimingBeatView: View {
+    let index: Int
+    let appData: AppData
+    let keyboardHandler: KeyboardHandler
+    let calculateBeatForIndex: (Int) -> Int
+    let getContentForBeat: (Int) -> String
+    let getChordNameForBeat: (Int) -> String?
+    
+    var body: some View {
+        let beatForIndex = calculateBeatForIndex(index)
+        let content = getContentForBeat(beatForIndex)
+        let isCurrentBeat = index == 2 // 第3个位置是当前拍（提前一拍提醒）
+        
+        // 根据播放模式确定高亮逻辑
+        let shouldHighlight: Bool = {
+            if appData.playingMode == .assisted {
+                // 辅助模式：只有当用户按下正确按键时才高亮
+                return isCurrentBeat && content != "·" && appData.currentActivePositionTriggered
+            } else if appData.playingMode == .automatic {
+                // 自动模式：当前拍自动高亮（模拟按键按下效果）
+                return isCurrentBeat && content != "·"
+            }
+            return false
+        }()
+        
+        BeatLabel(
+            beat: beatForIndex,
+            isCurrentBeat: isCurrentBeat,
+            content: content,
+            shouldHighlightForAction: shouldHighlight
+        )
+        .onChange(of: isCurrentBeat) { oldValue, newValue in
+            // 自动模式下：当拍子到达时自动播放和弦
+            if newValue && appData.playingMode == .automatic && content != "·" {
+                if let chordName = getChordNameForBeat(beatForIndex) {
+                    keyboardHandler.playChordByName(chordName)
+                }
+            }
+        }
     }
 }
 
