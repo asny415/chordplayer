@@ -9,6 +9,7 @@ class AppData: ObservableObject {
     
     @Published var currentMeasure: Int = 0
     @Published var currentBeat: Int = 0
+    @Published var totalMeasures: Int = 0
     
     // 跟踪当前active位置是否已经被正确按键触发（用于辅助演奏模式的高亮效果）
     @Published var currentActivePositionTriggered: Bool = false
@@ -216,6 +217,7 @@ class AppData: ObservableObject {
             if !autoPlaySchedule.isEmpty {
                 autoPlaySchedule = []
             }
+            totalMeasures = 0
             return
         }
 
@@ -254,8 +256,15 @@ class AppData: ObservableObject {
             }
             // The total duration is the end of the highest measure number assigned.
             // If the highest is 3.5, it means we have 4 measures total (1, 2, 3, 4).
-            let totalMeasures = ceil(maxMeasure)
-            let totalBeatsInLoop = Int(totalMeasures * Double(beatsPerMeasure))
+            if (maxMeasure == floor(maxMeasure)) {
+                // Exact integer, e.g. 3.0 means 4 measures
+                maxMeasure += 1
+            } else {
+                // Non-integer, e.g. 3.5 means we need to round up to 4 measures
+                maxMeasure = ceil(maxMeasure)
+            }
+            self.totalMeasures = Int(ceil(maxMeasure))
+            let totalBeatsInLoop = self.totalMeasures * beatsPerMeasure
 
             // Calculate duration for each event
             for i in 0..<finalSchedule.count {

@@ -812,54 +812,68 @@ private struct TimingDisplayView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 节拍时间轴
-            HStack(spacing: 0) {
-                let indices = Array(0..<12)
-                ForEach(indices, id: \.self) { index in
-                    TimingBeatView(
-                        index: index,
-                        appData: appData,
-                        keyboardHandler: keyboardHandler,
-                        calculateBeatForIndex: calculateBeatForIndex,
-                        getContentForBeat: getContentForBeat,
-                        getChordNameForBeat: getChordNameForBeat
-                    )
+        ZStack(alignment: .bottomTrailing) {
+            VStack(alignment: .leading, spacing: 12) {
+                // 节拍时间轴
+                HStack(spacing: 0) {
+                    let indices = Array(0..<12)
+                    ForEach(indices, id: \.self) { index in
+                        TimingBeatView(
+                            index: index,
+                            appData: appData,
+                            keyboardHandler: keyboardHandler,
+                            calculateBeatForIndex: calculateBeatForIndex,
+                            getContentForBeat: getContentForBeat,
+                            getChordNameForBeat: getChordNameForBeat
+                        )
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity)
-            
-            // 歌词显示区域
-            if let currentLyric = getCurrentLyric() {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(currentLyric.content)
-                        .font(.title3)
-                        .foregroundColor(.primary)
-                        .fontWeight(.medium)
-                    
-                    if let nextLyric = getNextLyric() {
+                .frame(maxWidth: .infinity)
+                
+                // 歌词显示区域
+                if let currentLyric = getCurrentLyric() {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(currentLyric.content)
+                            .font(.title3)
+                            .foregroundColor(.primary)
+                            .fontWeight(.medium)
+                        
+                        if let nextLyric = getNextLyric() {
+                            Text(nextLyric.content)
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .opacity(0.7)
+                        }
+                    }
+                    .padding(.top, 8)
+                } else if let nextLyric = getNextLyric() {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("即将到来")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
                         Text(nextLyric.content)
                             .font(.body)
                             .foregroundColor(.secondary)
                             .opacity(0.7)
                     }
+                    .padding(.top, 8)
                 }
-                .padding(.top, 8)
-            } else if let nextLyric = getNextLyric() {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("即将到来")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Text(nextLyric.content)
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .opacity(0.7)
-                }
-                .padding(.top, 8)
+                
+                Spacer()
+            }
+            
+            if appData.totalMeasures > 0 {
+                Text("\(appData.currentMeasure) / \(appData.totalMeasures)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Material.thin, in: RoundedRectangle(cornerRadius: 6))
             }
         }
         .padding()
+        .frame(height: 120)
     }
 }
 
