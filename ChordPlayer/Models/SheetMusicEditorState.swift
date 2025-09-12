@@ -20,8 +20,17 @@ class SheetMusicEditorState: ObservableObject {
     @Published var shortcutDialogData: ShortcutDialogData? = nil
 
     // The active tab in the editor's sidebar.
-    enum EditorTab { case chords, patterns }
+    enum EditorTab { case chords, patterns, lyrics }
     @Published var activeEditorTab: EditorTab = .chords
+
+    // The lyric ID currently selected from the sidebar lyric list.
+    @Published var selectedLyricID: UUID? = nil
+    
+    // The beats to be highlighted in the editor, derived from the selected lyric.
+    @Published var highlightedBeats: Set<Int> = []
+
+    // The start beat for creating a new lyric time range.
+    @Published var lyricTimeRangeStartBeat: Int? = nil
 
     // Pattern IDs associated with the currently selected chord.
     @Published var associatedPatternIds: Set<String> = []

@@ -1,5 +1,4 @@
 
-
 import SwiftUI
 import AppKit
 
@@ -84,11 +83,11 @@ struct SheetMusicEditorView: View {
         .padding()
         .alert("快捷键冲突", isPresented: $showConflictAlert) { Button("确定") { } } message: { Text(conflictMessage) }
         .onAppear(perform: recalculateTotalBeats)
-        .onChange(of: appData.performanceConfig.chords) { _ in recalculateTotalBeats() }
+        .onChange(of: appData.performanceConfig) { recalculateTotalBeats() }
         .onDisappear(perform: cleanupCaptureMonitor)
         // When selections from the sidebar change, trigger the auto-apply logic.
-        .onChange(of: editorState.selectedChordName) { _ in checkAndAutoApply() }
-        .onChange(of: editorState.selectedPatternId) { _ in checkAndAutoApply() }
+        .onChange(of: editorState.selectedChordName) { checkAndAutoApply() }
+        .onChange(of: editorState.selectedPatternId) { checkAndAutoApply() }
         .overlay(
             Group {
                 if editorState.showShortcutDialog {
@@ -114,16 +113,13 @@ struct SheetMusicEditorView: View {
                     .font(.caption2)
                     .foregroundColor(.secondary.opacity(0.8))
             }
-            
-            
         }
     }
     
     private var pianoRollView: some View {
         ScrollView(.vertical) {
             LazyVStack(spacing: 2) {
-                ForEach(0..<numberOfRows, id: \.self) {
- rowIndex in
+                ForEach(0..<numberOfRows, id: \.self) { rowIndex in
                     pianoRollRowView(rowIndex: rowIndex)
                 }
             }
@@ -134,9 +130,6 @@ struct SheetMusicEditorView: View {
     
     private func pianoRollRowView(rowIndex: Int) -> some View {
         HStack(spacing: 0) {
-            
-            
-            // 钢琴卷粗格子
             GeometryReader { geometry in
                 let totalSpacing = CGFloat(beatsPerRow - 1) * 1 // 1pt spacing between cells
                 let cellWidth = (geometry.size.width - totalSpacing) / CGFloat(beatsPerRow)
@@ -165,6 +158,8 @@ struct SheetMusicEditorView: View {
         
         let patternIdForBeat = getPatternId(for: beat)
         let isHighlightedByPattern = editorState.highlightedPatternId != nil && patternIdForBeat == editorState.highlightedPatternId
+        let isHighlightedByLyric = editorState.highlightedBeats.contains(beat)
+        let isAwaitingEndBeat = editorState.lyricTimeRangeStartBeat == beat
 
         return ZStack {
             // Chord Name in the center
@@ -194,18 +189,18 @@ struct SheetMusicEditorView: View {
         .frame(width: width, height: 48)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(backgroundColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne, isHighlightedByPattern: isHighlightedByPattern))
+                .fill(backgroundColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne, isHighlightedByPattern: isHighlightedByPattern, isHighlightedByLyric: isHighlightedByLyric, isAwaitingEndBeat: isAwaitingEndBeat))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .stroke(borderColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne, isHighlightedByPattern: isHighlightedByPattern),
-                       lineWidth: isSelected || isHighlightedByPattern ? 2 : 1)
+                .stroke(borderColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne, isHighlightedByPattern: isHighlightedByPattern, isHighlightedByLyric: isHighlightedByLyric, isAwaitingEndBeat: isAwaitingEndBeat),
+                       lineWidth: isSelected || isHighlightedByPattern || isHighlightedByLyric || isAwaitingEndBeat ? 2 : 1)
         )
         .onHover { hovering in
             hoveredBeat = hovering ? beat : nil
         }
         .onTapGesture {
-            selectBeat(beat)
+            handleBeatTap(beat: beat)
         }
     }
     
@@ -221,12 +216,18 @@ struct SheetMusicEditorView: View {
         return nil
     }
     
-    private func backgroundColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool, isHighlightedByPattern: Bool) -> Color {
+    private func backgroundColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool, isHighlightedByPattern: Bool, isHighlightedByLyric: Bool, isAwaitingEndBeat: Bool) -> Color {
         if isSelected {
             return .accentColor.opacity(0.8)
         }
+        if isAwaitingEndBeat {
+            return Color.green.opacity(0.6)
+        }
+        if isHighlightedByLyric {
+            return Color.purple.opacity(0.5)
+        }
         if isHighlightedByPattern {
-            return Color.yellow.opacity(0.5) // Highlight color
+            return Color.yellow.opacity(0.5)
         }
         if isHovered {
             return Color.primary.opacity(0.2)
@@ -237,12 +238,18 @@ struct SheetMusicEditorView: View {
         return Color.primary.opacity(0.05)
     }
 
-    private func borderColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool, isHighlightedByPattern: Bool) -> Color {
+    private func borderColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool, isHighlightedByPattern: Bool, isHighlightedByLyric: Bool, isAwaitingEndBeat: Bool) -> Color {
         if isSelected {
             return .accentColor
         }
+        if isAwaitingEndBeat {
+            return Color.green
+        }
+        if isHighlightedByLyric {
+            return Color.purple.opacity(0.9)
+        }
         if isHighlightedByPattern {
-            return Color.yellow.opacity(0.9) // Highlight color
+            return Color.yellow.opacity(0.9)
         }
         if isHovered {
             return Color.primary.opacity(0.5)
@@ -272,12 +279,70 @@ struct SheetMusicEditorView: View {
         .cornerRadius(8)
     }
     
+    private func handleBeatTap(beat: Int) {
+        // Check if a lyric is selected
+        guard let selectedLyricID = editorState.selectedLyricID else {
+            // Original behavior: select beat for chord/pattern editing
+            selectBeat(beat)
+            return
+        }
+
+        var newConfig = appData.performanceConfig
+        guard let lyricIndex = newConfig.lyrics.firstIndex(where: { $0.id == selectedLyricID }) else { return }
+
+        // If the tapped beat is the start of an existing range for this lyric, remove it.
+        if let rangeIndexToRemove = newConfig.lyrics[lyricIndex].timeRanges.firstIndex(where: { $0.startBeat == beat }) {
+            newConfig.lyrics[lyricIndex].timeRanges.remove(at: rangeIndexToRemove)
+            appData.performanceConfig = newConfig // Update the main config
+            
+            updateHighlightedBeatsForSelectedLyric()
+            
+            // Cancel any pending range creation
+            if editorState.lyricTimeRangeStartBeat != nil {
+                editorState.lyricTimeRangeStartBeat = nil
+            }
+            return
+        }
+        
+        // If we are in the process of creating a new range (start beat is set)
+        if let startBeat = editorState.lyricTimeRangeStartBeat {
+            let newRange = LyricTimeRange(startBeat: min(startBeat, beat), endBeat: max(startBeat, beat))
+            newConfig.lyrics[lyricIndex].timeRanges.append(newRange)
+            appData.performanceConfig = newConfig // Update the main config
+            
+            editorState.lyricTimeRangeStartBeat = nil // Reset
+            updateHighlightedBeatsForSelectedLyric()
+        } else {
+            // This is the first tap to define a new range
+            editorState.lyricTimeRangeStartBeat = beat
+        }
+    }
+
+    private func updateHighlightedBeatsForSelectedLyric() {
+        guard let lyricID = editorState.selectedLyricID,
+              let lyric = appData.performanceConfig.lyrics.first(where: { $0.id == lyricID }) else {
+            editorState.highlightedBeats = []
+            return
+        }
+        
+        var beats = Set<Int>()
+        for timeRange in lyric.timeRanges {
+            let start = max(1, timeRange.startBeat)
+            let end = timeRange.endBeat
+            if end >= start {
+                beats.formUnion(start...end)
+            }
+        }
+        editorState.highlightedBeats = beats
+    }
+    
     private func selectBeat(_ beat: Int) {
         // Modify local state, not global AppData
         editorState.selectedBeat = beat
         editorState.selectedChordName = nil
         editorState.selectedPatternId = nil
         editorState.highlightedPatternId = nil // Clear highlight when selecting a beat
+        editorState.lyricTimeRangeStartBeat = nil // Also clear lyric range selection
     }
     
     private func finishEditing() {
@@ -304,15 +369,11 @@ struct SheetMusicEditorView: View {
         }
     }
     
-    
-    
-    
-    
     // MARK: - Shortcut Dialog
     
     private var shortcutDialogView: some View {
         ZStack {
-            // 半透明背景
+            // ... (rest of the file is unchanged)
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
                 .onTapGesture {
