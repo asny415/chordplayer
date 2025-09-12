@@ -12,6 +12,7 @@ struct SheetMusicEditorView: View {
     @State private var captureMonitor: Any? = nil
     @State private var showConflictAlert: Bool = false
     @State private var conflictMessage: String = ""
+    @State private var hoveredBeat: Int? = nil
     
     private var beatsPerMeasure: Int {
         let timeSigParts = appData.performanceConfig.timeSignature.split(separator: "/")
@@ -124,12 +125,7 @@ struct SheetMusicEditorView: View {
     
     private func pianoRollRowView(rowIndex: Int) -> some View {
         HStack(spacing: 0) {
-            // 行号标签
-            Text("\(rowIndex * beatsPerRow)")
-                .font(.caption.monospacedDigit())
-                .foregroundColor(.secondary)
-                .frame(width: 30, alignment: .trailing)
-                .padding(.trailing, 4)
+            
             
             // 钢琴卷粗格子
             GeometryReader { geometry in
@@ -155,65 +151,76 @@ struct SheetMusicEditorView: View {
         let hasChord = chordName != nil
         let measurePosition = beat % beatsPerMeasure
         let isBeatOne = measurePosition == 0
-        
-        return Button(action: {
-            selectBeat(beat)
-        }) {
-            VStack(spacing: 2) {
-                // 和弦名称显示
-                if let name = chordName {
-                    Text(formatChordName(name))
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                } else {
-                    Text("·")
-                        .font(.caption2)
-                        .foregroundColor(.secondary.opacity(0.5))
+        let isHovered = hoveredBeat == beat
+        let measureNumber = beat / beatsPerMeasure + 1
+
+        return ZStack {
+            // Chord Name in the center
+            if let name = chordName {
+                Text(formatChordName(name))
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(isSelected ? .white : .primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 2)
+            }
+
+            // Measure number at the bottom left
+            if isBeatOne {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Text("\(measureNumber)")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .padding([.leading, .bottom], 3)
+                        Spacer()
+                    }
                 }
-                
-                // 拍号
-                Text("\(beat)")
-                    .font(.system(size: 8, weight: .regular))
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
             }
         }
         .frame(width: width, height: 48)
         .background(
-            RoundedRectangle(cornerRadius: 3)
-                .fill(backgroundColorForBeat(beat: beat, hasChord: hasChord, isSelected: isSelected, isBeatOne: isBeatOne))
+            RoundedRectangle(cornerRadius: 4)
+                .fill(backgroundColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 3)
-                .stroke(borderColorForBeat(beat: beat, hasChord: hasChord, isSelected: isSelected, isBeatOne: isBeatOne), 
-                       lineWidth: isSelected ? 2 : (isBeatOne ? 1.5 : 0.5))
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(borderColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne),
+                       lineWidth: isSelected ? 2 : 1)
         )
-    }
-    
-    private func backgroundColorForBeat(beat: Int, hasChord: Bool, isSelected: Bool, isBeatOne: Bool) -> Color {
-        if isSelected {
-            return .accentColor.opacity(0.4)
-        } else if hasChord {
-            return .green.opacity(0.3)
-        } else if isBeatOne {
-            return .blue.opacity(0.1) // 每小节第一拍用蓝色
-        } else {
-            return .primary.opacity(0.05)
+        .onHover { hovering in
+            hoveredBeat = hovering ? beat : nil
+        }
+        .onTapGesture {
+            selectBeat(beat)
         }
     }
     
-    private func borderColorForBeat(beat: Int, hasChord: Bool, isSelected: Bool, isBeatOne: Bool) -> Color {
+    private func backgroundColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool) -> Color {
+        if isSelected {
+            return .accentColor.opacity(0.8)
+        }
+        if isHovered {
+            return Color.primary.opacity(0.2)
+        }
+        if isBeatOne {
+            return Color.primary.opacity(0.1)
+        }
+        return Color.primary.opacity(0.05)
+    }
+
+    private func borderColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool) -> Color {
         if isSelected {
             return .accentColor
-        } else if hasChord {
-            return .green.opacity(0.8)
-        } else if isBeatOne {
-            return .blue.opacity(0.5)
-        } else {
-            return .primary.opacity(0.2)
         }
+        if isHovered {
+            return Color.primary.opacity(0.5)
+        }
+        if isBeatOne {
+            return Color.primary.opacity(0.4)
+        }
+        return Color.primary.opacity(0.2)
     }
     
     private var editingControlsView: some View {
