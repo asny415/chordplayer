@@ -44,6 +44,7 @@ struct SheetMusicEditorWindow: View {
                     editorState.selectedBeat = nil
                     editorState.selectedChordName = nil
                     editorState.selectedPatternId = nil
+                    editorState.activeEditorTab = .chords // Switch back to chords tab
                     return nil // Consume the event
                 }
                 
@@ -64,33 +65,27 @@ struct SheetMusicEditorWindow: View {
 }
 
 struct EditorLibraryView: View {
-    // Using a local enum for tab identifiers for clarity
-    enum Tab {
-        case chords
-        case patterns
-    }
-    
-    @State private var activeTab: Tab = .chords
+    @EnvironmentObject var editorState: SheetMusicEditorState
     
     var body: some View {
         VStack(alignment: .leading) {
-            TabView(selection: $activeTab) {
+            TabView(selection: $editorState.activeEditorTab) {
                 // Tab 1: Chords for the current preset
                 EditorChordListView(onChordSelected: {
                     // When a chord is selected, automatically switch to the patterns tab
-                    activeTab = .patterns
+                    editorState.activeEditorTab = .patterns
                 })
                 .tabItem {
                     Label("和弦进行", systemImage: "guitars.fill")
                 }
-                .tag(Tab.chords)
+                .tag(SheetMusicEditorState.EditorTab.chords)
                 
                 // Tab 2: Patterns for the current preset
                 EditorPatternListView()
                 .tabItem {
                     Label("演奏指法", systemImage: "hand.draw.fill")
                 }
-                .tag(Tab.patterns)
+                .tag(SheetMusicEditorState.EditorTab.patterns)
             }
         }
         .background(.ultraThickMaterial)

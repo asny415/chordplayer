@@ -20,6 +20,12 @@ struct EditorChordListView: View {
                     
                     Button(action: {
                         editorState.selectedChordName = chordConfig.name
+                        // Populate associatedPatternIds
+                        var associatedIds = Set<String>()
+                        for (_, association) in chordConfig.patternAssociations {
+                            associatedIds.insert(association.patternId)
+                        }
+                        editorState.associatedPatternIds = associatedIds
                         onChordSelected()
                     }) {
                         HStack {

@@ -40,7 +40,17 @@ struct EditorPatternListView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .listRowBackground(isSelected ? Color.accentColor.opacity(0.3) : Color.clear)
+                        .listRowBackground(
+                            Group {
+                                if isSelected {
+                                    Color.accentColor.opacity(0.3)
+                                } else if editorState.selectedChordName != nil && editorState.associatedPatternIds.contains(patternId) {
+                                    Color.blue.opacity(0.2) // Highlight color for associated patterns
+                                } else {
+                                    Color.clear
+                                }
+                            }
+                        )
                     }
                 }
             }

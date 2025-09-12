@@ -285,6 +285,9 @@ struct SheetMusicEditorView: View {
         editorState.selectedBeat = nil
         editorState.selectedChordName = nil
         editorState.selectedPatternId = nil
+        
+        // Switch back to the chords tab
+        editorState.activeEditorTab = .chords
     }
     
     private func checkAndAutoApply() {

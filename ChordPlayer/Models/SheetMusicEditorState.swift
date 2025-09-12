@@ -18,5 +18,12 @@ class SheetMusicEditorState: ObservableObject {
     // State for the shortcut assignment dialog.
     @Published var showShortcutDialog: Bool = false
     @Published var shortcutDialogData: ShortcutDialogData? = nil
+
+    // The active tab in the editor's sidebar.
+    enum EditorTab { case chords, patterns }
+    @Published var activeEditorTab: EditorTab = .chords
+
+    // Pattern IDs associated with the currently selected chord.
+    @Published var associatedPatternIds: Set<String> = []
 }
 
