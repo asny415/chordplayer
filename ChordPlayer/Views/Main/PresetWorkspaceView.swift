@@ -4,6 +4,7 @@ import AppKit
 struct PresetWorkspaceView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
+    @State private var escapeMonitor: Any? = nil
 
     var body: some View {
         ZStack {
@@ -48,6 +49,34 @@ struct PresetWorkspaceView: View {
                     .environmentObject(appData)
                     .environmentObject(keyboardHandler)
             }
+        }
+        .onAppear {
+            setupEscapeKeyMonitoring()
+        }
+        .onDisappear {
+            cleanupEscapeKeyMonitoring()
+        }
+    }
+    
+    private func setupEscapeKeyMonitoring() {
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 { // ESC key
+                if appData.sheetMusicEditingBeat != nil {
+                    // 取消曲谱编辑
+                    appData.sheetMusicEditingBeat = nil
+                    appData.sheetMusicSelectedChordName = nil
+                    appData.sheetMusicSelectedPatternId = nil
+                    return nil // 消费该事件，不让其传播
+                }
+            }
+            return event // 其他情况下让事件继续传播
+        }
+    }
+    
+    private func cleanupEscapeKeyMonitoring() {
+        if let monitor = escapeMonitor {
+            NSEvent.removeMonitor(monitor)
+            escapeMonitor = nil
         }
     }
 }
@@ -476,6 +505,7 @@ private struct PlayingPatternCardView: View {
     let category: String
     let timeSignature: String
     let isActive: Bool
+    let isEditingSelected: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -509,7 +539,8 @@ private struct PlayingPatternCardView: View {
         .background(isActive ? Material.thick : Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(isActive ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isActive ? 2.5 : 1)
+                .stroke(isEditingSelected ? Color.orange : (isActive ? Color.accentColor : Color.secondary.opacity(0.2)), 
+                       lineWidth: isEditingSelected ? 3 : (isActive ? 2.5 : 1))
         )
     }
 }
@@ -554,10 +585,12 @@ private struct PlayingPatternsView: View {
                     ForEach(Array(appData.performanceConfig.selectedPlayingPatterns.enumerated()), id: \.element) { index, patternId in
                         if let details = findPlayingPatternDetails(for: patternId) {
                             let isActive = appData.performanceConfig.activePlayingPatternId == patternId
+                            let isEditingSelected = appData.sheetMusicEditingBeat != nil && appData.sheetMusicSelectedPatternId == patternId
                             Button(action: {
                                 if appData.sheetMusicEditingBeat != nil {
                                     // 曲谱编辑模式：选择演奏指法
                                     appData.sheetMusicSelectedPatternId = patternId
+                                    checkAndAutoApply()
                                 } else {
                                     // 普通模式：设置活动指法
                                     appData.performanceConfig.activePlayingPatternId = patternId
@@ -569,7 +602,8 @@ private struct PlayingPatternsView: View {
                                         pattern: details.pattern,
                                         category: details.category,
                                         timeSignature: appData.performanceConfig.timeSignature,
-                                        isActive: isActive
+                                        isActive: isActive,
+                                        isEditingSelected: isEditingSelected
                                     )
 
                                     if index < 9 {
@@ -625,12 +659,95 @@ private struct PlayingPatternsView: View {
         
         return nil
     }
+    
+    private func checkAndAutoApply() {
+        // 只有在两者都选择了才自动应用
+        if appData.sheetMusicSelectedChordName != nil && appData.sheetMusicSelectedPatternId != nil {
+            // 直接调用SheetMusicEditorView的逻辑，但我们需要在这里实现
+            if let beat = appData.sheetMusicEditingBeat,
+               let chordName = appData.sheetMusicSelectedChordName,
+               let patternId = appData.sheetMusicSelectedPatternId {
+                
+                // 查找对应的和弦配置
+                guard let chordIndex = appData.performanceConfig.chords.firstIndex(where: { $0.name == chordName }) else {
+                    return
+                }
+                
+                // 检查是否已经存在这个组合的快捷键
+                let existingShortcut = findExistingShortcut(chordName: chordName, patternId: patternId)
+                
+                if let shortcut = existingShortcut {
+                    // 已经存在快捷键，直接添加beat到beatIndices
+                    addBeatToAssociation(chordIndex: chordIndex, shortcut: shortcut, beat: beat)
+                    finishEditing()
+                } else {
+                    // 不存在快捷键，需要用户指定
+                    requestShortcutForCombination(chordIndex: chordIndex, chordName: chordName, patternId: patternId, beat: beat)
+                }
+            }
+        }
+    }
+    
+    private func findExistingShortcut(chordName: String, patternId: String) -> Shortcut? {
+        guard let chordConfig = appData.performanceConfig.chords.first(where: { $0.name == chordName }) else {
+            return nil
+        }
+        
+        for (shortcut, association) in chordConfig.patternAssociations {
+            if association.patternId == patternId {
+                return shortcut
+            }
+        }
+        return nil
+    }
+    
+    private func addBeatToAssociation(chordIndex: Int, shortcut: Shortcut, beat: Int) {
+        guard var association = appData.performanceConfig.chords[chordIndex].patternAssociations[shortcut] else { return }
+        
+        if association.beatIndices == nil {
+            association.beatIndices = []
+        }
+        
+        if let currentIndices = association.beatIndices, !currentIndices.contains(beat) {
+            association.beatIndices?.append(beat)
+            association.beatIndices?.sort()
+            
+            // 使用专用的更新方法
+            appData.updateChordPatternAssociation(chordIndex: chordIndex, shortcut: shortcut, association: association)
+        }
+    }
+    
+    private func requestShortcutForCombination(chordIndex: Int, chordName: String, patternId: String, beat: Int) {
+        // 显示快捷键设置对话框
+        appData.shortcutDialogData = ShortcutDialogData(
+            chordName: chordName,
+            patternId: patternId,
+            beat: beat,
+            chordIndex: chordIndex,
+            onComplete: { shortcut in
+                // 成功设置快捷键后的回调
+                self.finishEditing()
+            },
+            onCancel: {
+                // 用户取消设置快捷键
+                self.finishEditing()
+            }
+        )
+        appData.showShortcutDialog = true
+    }
+    
+    private func finishEditing() {
+        appData.sheetMusicEditingBeat = nil
+        appData.sheetMusicSelectedChordName = nil
+        appData.sheetMusicSelectedPatternId = nil
+    }
 }
 
 private struct ChordCardView: View {
     @EnvironmentObject var appData: AppData
     let chord: String
     let isFlashing: Bool
+    let isEditingSelected: Bool
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -646,7 +763,8 @@ private struct ChordCardView: View {
             .background(isFlashing ? Material.thick : Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isFlashing ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isFlashing ? 2.5 : 1)
+                    .stroke(isEditingSelected ? Color.orange : (isFlashing ? Color.accentColor : Color.secondary.opacity(0.2)), 
+                           lineWidth: isEditingSelected ? 3 : (isFlashing ? 2.5 : 1))
             )
 
             // Chord diagram in the bottom-left corner
@@ -981,13 +1099,17 @@ private struct ChordProgressionView: View {
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                     ForEach(appData.performanceConfig.chords, id: \.id) { chordConfig in
+                        let isEditingSelected = appData.sheetMusicEditingBeat != nil && appData.sheetMusicSelectedChordName == chordConfig.name
                         ZStack(alignment: .topTrailing) {
-                            ChordCardView(chord: chordConfig.name, isFlashing: flashingChord == chordConfig.name)
+                            ChordCardView(chord: chordConfig.name, 
+                                         isFlashing: flashingChord == chordConfig.name, 
+                                         isEditingSelected: isEditingSelected)
                                 .animation(.easeInOut(duration: 0.15), value: flashingChord)
                                 .onTapGesture {
                                     if appData.sheetMusicEditingBeat != nil {
                                         // 曲谱编辑模式：选择和弦
                                         appData.sheetMusicSelectedChordName = chordConfig.name
+                                        checkAndAutoApply()
                                     } else {
                                         // 普通模式：播放和弦
                                         keyboardHandler.playChordByName(chordConfig.name)
@@ -1161,6 +1283,88 @@ private struct ChordProgressionView: View {
         if wa != wb { return wa > wb }
         // Then by key lexicographically
         return a.key < b.key
+    }
+
+    private func checkAndAutoApply() {
+        // 只有在两者都选择了才自动应用
+        if appData.sheetMusicSelectedChordName != nil && appData.sheetMusicSelectedPatternId != nil {
+            // 直接调用SheetMusicEditorView的逻辑，但我们需要在这里实现
+            if let beat = appData.sheetMusicEditingBeat,
+               let chordName = appData.sheetMusicSelectedChordName,
+               let patternId = appData.sheetMusicSelectedPatternId {
+                
+                // 查找对应的和弦配置
+                guard let chordIndex = appData.performanceConfig.chords.firstIndex(where: { $0.name == chordName }) else {
+                    return
+                }
+                
+                // 检查是否已经存在这个组合的快捷键
+                let existingShortcut = findExistingShortcut(chordName: chordName, patternId: patternId)
+                
+                if let shortcut = existingShortcut {
+                    // 已经存在快捷键，直接添加beat到beatIndices
+                    addBeatToAssociation(chordIndex: chordIndex, shortcut: shortcut, beat: beat)
+                    finishEditing()
+                } else {
+                    // 不存在快捷键，需要用户指定
+                    requestShortcutForCombination(chordIndex: chordIndex, chordName: chordName, patternId: patternId, beat: beat)
+                }
+            }
+        }
+    }
+    
+    private func findExistingShortcut(chordName: String, patternId: String) -> Shortcut? {
+        guard let chordConfig = appData.performanceConfig.chords.first(where: { $0.name == chordName }) else {
+            return nil
+        }
+        
+        for (shortcut, association) in chordConfig.patternAssociations {
+            if association.patternId == patternId {
+                return shortcut
+            }
+        }
+        return nil
+    }
+    
+    private func addBeatToAssociation(chordIndex: Int, shortcut: Shortcut, beat: Int) {
+        guard var association = appData.performanceConfig.chords[chordIndex].patternAssociations[shortcut] else { return }
+        
+        if association.beatIndices == nil {
+            association.beatIndices = []
+        }
+        
+        if let currentIndices = association.beatIndices, !currentIndices.contains(beat) {
+            association.beatIndices?.append(beat)
+            association.beatIndices?.sort()
+            
+            // 使用专用的更新方法
+            appData.updateChordPatternAssociation(chordIndex: chordIndex, shortcut: shortcut, association: association)
+        }
+    }
+    
+    private func requestShortcutForCombination(chordIndex: Int, chordName: String, patternId: String, beat: Int) {
+        // 显示快捷键设置对话框
+        appData.shortcutDialogData = ShortcutDialogData(
+            chordName: chordName,
+            patternId: patternId,
+            beat: beat,
+            chordIndex: chordIndex,
+            onComplete: { shortcut in
+                // 成功设置快捷键后的回调
+                self.finishEditing()
+            },
+            onCancel: {
+                // 用户取消设置快捷键
+                self.finishEditing()
+            }
+        )
+        appData.showShortcutDialog = true
+    }
+    
+    private func finishEditing() {
+        appData.sheetMusicEditingBeat = nil
+        appData.sheetMusicSelectedChordName = nil
+        appData.sheetMusicSelectedPatternId = nil
     }
 
     private func captureShortcutForChord(chord: String) {
@@ -1416,32 +1620,20 @@ private struct SheetMusicEditorView: View {
     }
     
     private var editingControlsView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("为第 \(appData.sheetMusicEditingBeat ?? 0) 拍选择和弦和指法：")
-                .font(.subheadline)
+        HStack {
+            Text("编辑第 \(appData.sheetMusicEditingBeat ?? 0) 拍")
+                .font(.subheadline.weight(.medium))
             
-            Text("1. 点击下方\"和弦指法\"区域选择指法")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            Spacer()
             
-            Text("2. 点击下方\"和弦进行\"区域选择和弦")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            
-            if let chordName = appData.sheetMusicSelectedChordName, let patternId = appData.sheetMusicSelectedPatternId {
-                HStack {
-                    Text("已选择: \(formatChordName(chordName)) + \(patternId)")
-                        .font(.caption)
-                    
-                    Button("应用") {
-                        applySelectionToBeat()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
+            Button("取消 (ESC)") {
+                finishEditing()
             }
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary)
+            .font(.caption)
         }
-        .padding()
+        .padding(12)
         .background(Color.blue.opacity(0.1))
         .cornerRadius(8)
     }
@@ -1456,6 +1648,14 @@ private struct SheetMusicEditorView: View {
         appData.sheetMusicEditingBeat = nil
         appData.sheetMusicSelectedChordName = nil
         appData.sheetMusicSelectedPatternId = nil
+    }
+    
+    // 自动检查并应用选择
+    private func checkAndAutoApply() {
+        // 只有在两者都选择了才自动应用
+        if appData.sheetMusicSelectedChordName != nil && appData.sheetMusicSelectedPatternId != nil {
+            applySelectionToBeat()
+        }
     }
     
     private func getChordNameForBeat(_ beat: Int) -> String? {
@@ -1752,23 +1952,16 @@ private struct GlobalShortcutDialogView: View {
                 Divider()
                 
                 VStack(spacing: 12) {
-                    if capturingShortcut {
-                        HStack {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("请按下快捷键...")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        Text("按 ESC 取消")
-                            .font(.caption)
+                    HStack {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("请按下快捷键...")
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
-                    } else {
-                        Button("开始捕获快捷键") {
-                            startCapturingShortcut()
-                        }
-                        .buttonStyle(.borderedProminent)
                     }
+                    Text("按 ESC 取消")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 
                 HStack {
@@ -1790,6 +1983,10 @@ private struct GlobalShortcutDialogView: View {
             Button("确定") { }
         } message: {
             Text(conflictMessage)
+        }
+        .onAppear {
+            // 对话框出现时立即开始捕获快捷键
+            startCapturingShortcut()
         }
         .onDisappear(perform: cleanupCaptureMonitor)
     }
