@@ -15,7 +15,7 @@ struct ContentView: View {
     @Binding var showCustomDrumPatternManagerFromMenu: Bool
     @Binding var showPlayingPatternCreatorFromMenu: Bool
     @Binding var showCustomPlayingPatternManagerFromMenu: Bool
-    @Binding var showLyricsManagerFromMenu: Bool
+    
 
     var body: some View {
         NavigationSplitView {
@@ -45,9 +45,7 @@ struct ContentView: View {
         .sheet(isPresented: $showCustomPlayingPatternManagerFromMenu) {
             CustomPlayingPatternLibraryView()
         }
-        .sheet(isPresented: $showLyricsManagerFromMenu) {
-            LyricsManagerView()
-        }
+        
     }
 
     private func setupInitialState() {

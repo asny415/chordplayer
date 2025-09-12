@@ -51,8 +51,7 @@ struct ChordPlayerApp: App {
                 showDrumPatternCreatorFromMenu: $showDrumPatternCreatorFromMenu,
                 showCustomDrumPatternManagerFromMenu: $showCustomDrumPatternManagerFromMenu,
                 showPlayingPatternCreatorFromMenu: $showPlayingPatternCreatorFromMenu,
-                showCustomPlayingPatternManagerFromMenu: $showCustomPlayingPatternManagerFromMenu,
-                showLyricsManagerFromMenu: $showLyricsManagerFromMenu
+                showCustomPlayingPatternManagerFromMenu: $showCustomPlayingPatternManagerFromMenu
             )
                 .environmentObject(appData)
                 .environmentObject(midiManager)

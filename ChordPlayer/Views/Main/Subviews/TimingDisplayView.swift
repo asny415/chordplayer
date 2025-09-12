@@ -69,7 +69,7 @@ struct TimingDisplayView: View {
     // 获取当前应该显示的歌词（提前两拍显示）
     private func getCurrentLyric() -> Lyric? {
         let currentBeat = currentTotalBeat
-        let previewBeat = currentBeat + 2 // 提前两拍
+        let previewBeat = currentBeat + 1 // 提前一拍
         
         // 查找在预览拍号范围内的歌词
         let candidateLyrics = appData.performanceConfig.lyrics.filter { lyric in
