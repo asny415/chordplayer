@@ -103,72 +103,105 @@ struct EditorLyricsView: View {
     @EnvironmentObject var editorState: SheetMusicEditorState
     
     @State private var editingLyric: Lyric? = nil
-    @State private var isAddingLyric = false
-    
+    @State private var isAddingInPlace = false
+    @State private var newLyricContent = ""
+    @FocusState private var isNewLyricFieldFocused: Bool
+
     private var sortedLyrics: [Lyric] {
         appData.performanceConfig.lyrics.sorted(by: { $0.earliestStartBeat ?? 0 < $1.earliestStartBeat ?? 0 })
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            List(selection: $editorState.selectedLyricID) {
+            List {
                 ForEach(sortedLyrics) { lyric in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(lyric.content)
-                            .font(.body)
-                            .lineLimit(nil)
-                            .allowsHitTesting(false)
-                        
-                        Text(formatTimeRangesDisplay(lyric.timeRanges))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .allowsHitTesting(false)
-                    }
-                    .padding(.vertical, 4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .tag(lyric.id)
-                    .simultaneousGesture(
-                        TapGesture(count: 2)
-                            .onEnded { _ in
-                                editingLyric = lyric
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(lyric.content)
+                                .font(.body)
+                                .lineLimit(nil)
+                            
+                            Text(formatTimeRangesDisplay(lyric.timeRanges))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Spacer()
+
+                        if editorState.selectedLyricID == lyric.id {
+                            Button(action: { editingLyric = lyric }) {
+                                Image(systemName: "pencil.circle.fill")
+                                    .font(.title3)
                             }
-                    )
+                            .buttonStyle(PlainButtonStyle())
+                            .foregroundColor(.accentColor)
+                            .padding(.trailing, 4)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .background(editorState.selectedLyricID == lyric.id ? Color.accentColor.opacity(0.2) : Color.clear)
+                    .cornerRadius(6)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 1) {
+                        editorState.selectedLyricID = (editorState.selectedLyricID == lyric.id) ? nil : lyric.id
+                    }
                 }
                 
-                // Add new lyric row
-                HStack {
-                    Spacer()
-                    Text("单击添加新歌词")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 12))
-                    Spacer()
-                }
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-                .onTapGesture(count: 1) { // Changed to single tap
-                    isAddingLyric = true
+                // In-place add new lyric row
+                if isAddingInPlace {
+                    HStack(spacing: 8) {
+                        TextField("输入新歌词后按 Enter 保存", text: $newLyricContent)
+                            .focused($isNewLyricFieldFocused)
+                            .onSubmit {
+                                if !newLyricContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    addNewLyric(content: newLyricContent)
+                                }
+                                newLyricContent = ""
+                                isAddingInPlace = false
+                            }
+                            .textFieldStyle(PlainTextFieldStyle())
+                            .padding(8)
+                            .background(Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(6)
+
+                        Button("取消") {
+                            newLyricContent = ""
+                            isAddingInPlace = false
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 4)
+                } else {
+                    HStack {
+                        Spacer()
+                        Image(systemName: "plus.circle")
+                        Text("添加新歌词")
+                        Spacer()
+                    }
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isAddingInPlace = true
+                    }
                 }
             }
             .listStyle(PlainListStyle())
-            .background(
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        editorState.selectedLyricID = nil
-                    }
-            )
+            .background(Color.clear)
         }
         .padding(.top)
-        .onChange(of: editorState.selectedLyricID) { updateHighlightedBeats(for: editorState.selectedLyricID) }
+        .onChange(of: editorState.selectedLyricID) { newLyricID in updateHighlightedBeats(for: newLyricID) }
+        .onChange(of: isAddingInPlace) { isAdding in
+            if isAdding {
+                isNewLyricFieldFocused = true
+            }
+        }
         .sheet(item: $editingLyric) { lyric in
             LyricContentEditorSheet(lyric: lyric) { newContent in
                 updateLyricContent(lyricID: lyric.id, newContent: newContent)
-            }
-        }
-        .sheet(isPresented: $isAddingLyric) {
-            LyricContentEditorSheet(lyric: Lyric(content: "")) { newContent in
-                addNewLyric(content: newContent)
             }
         }
     }
@@ -199,21 +232,23 @@ struct EditorLyricsView: View {
     }
     
     private func updateHighlightedBeats(for lyricID: UUID?) {
-        guard let lyricID = lyricID,
-              let lyric = appData.performanceConfig.lyrics.first(where: { $0.id == lyricID }) else {
-            editorState.highlightedBeats = []
-            return
-        }
-        
-        var beats = Set<Int>()
-        for timeRange in lyric.timeRanges {
-            let start = max(1, timeRange.startBeat)
-            let end = timeRange.endBeat
-            if end >= start {
-                beats.formUnion(start...end)
+        DispatchQueue.main.async {
+            guard let lyricID = lyricID,
+                  let lyric = appData.performanceConfig.lyrics.first(where: { $0.id == lyricID }) else {
+                editorState.highlightedBeats = []
+                return
             }
+            
+            var beats = Set<Int>()
+            for timeRange in lyric.timeRanges {
+                let start = max(1, timeRange.startBeat)
+                let end = timeRange.endBeat
+                if end >= start {
+                    beats.formUnion(start...end)
+                }
+            }
+            editorState.highlightedBeats = beats
         }
-        editorState.highlightedBeats = beats
     }
     
     private func formatTimeRangesDisplay(_ timeRanges: [LyricTimeRange]) -> String {

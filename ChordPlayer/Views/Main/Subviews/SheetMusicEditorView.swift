@@ -319,21 +319,23 @@ struct SheetMusicEditorView: View {
     }
 
     private func updateHighlightedBeatsForSelectedLyric() {
-        guard let lyricID = editorState.selectedLyricID,
-              let lyric = appData.performanceConfig.lyrics.first(where: { $0.id == lyricID }) else {
-            editorState.highlightedBeats = []
-            return
-        }
-        
-        var beats = Set<Int>()
-        for timeRange in lyric.timeRanges {
-            let start = max(1, timeRange.startBeat)
-            let end = timeRange.endBeat
-            if end >= start {
-                beats.formUnion(start...end)
+        DispatchQueue.main.async {
+            guard let lyricID = editorState.selectedLyricID,
+                  let lyric = appData.performanceConfig.lyrics.first(where: { $0.id == lyricID }) else {
+                editorState.highlightedBeats = []
+                return
             }
+            
+            var beats = Set<Int>()
+            for timeRange in lyric.timeRanges {
+                let start = max(1, timeRange.startBeat)
+                let end = timeRange.endBeat
+                if end >= start {
+                    beats.formUnion(start...end)
+                }
+            }
+            editorState.highlightedBeats = beats
         }
-        editorState.highlightedBeats = beats
     }
     
     private func selectBeat(_ beat: Int) {
