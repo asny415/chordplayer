@@ -33,7 +33,7 @@ struct GlobalShortcutDialogView: View {
                         Text("为以下组合设置快捷键：")
                             .font(.subheadline)
                         
-                        Text("和弦: \(formatChordName(data.chordName))")
+                        Text("和弦: \(MusicTheory.formatChordNameForDisplay(data.chordName))")
                             .font(.headline)
                         
                         Text("指法: \(data.patternId)")
@@ -91,10 +91,7 @@ struct GlobalShortcutDialogView: View {
         .onDisappear(perform: cleanupCaptureMonitor)
     }
     
-    private func formatChordName(_ chordName: String) -> String {
-        return chordName.replacingOccurrences(of: "_Sharp", with: "#")
-                       .replacingOccurrences(of: "_", with: " ")
-    }
+    
     
     // MARK: - Shortcut Dialog Methods
     

@@ -340,7 +340,7 @@ struct ChordCardView: View {
         ZStack(alignment: .bottomLeading) {
             // Main content - chord name
             VStack(alignment: .center) {
-                Text(displayChordName(for: chord))
+                Text(MusicTheory.formatChordNameForDisplayAbbreviated(chord))
                     .font(.title3.weight(.medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -363,24 +363,5 @@ struct ChordCardView: View {
         }
     }
 
-    private func displayChordName(for chord: String) -> String {
-        // Handle names like "C_Sharp_Major", "A_Minor", "C_Sharp_7", etc.
-        let components = chord.split(separator: "_")
-        guard components.count >= 2 else { return chord.replacingOccurrences(of: "_Sharp", with: "#") }
-
-        let quality = String(components.last!)
-        let noteParts = components.dropLast()
-        let noteRaw = noteParts.joined(separator: "_") // e.g. "C" or "C_Sharp"
-        let noteDisplay = noteRaw.replacingOccurrences(of: "_Sharp", with: "#")
-
-        switch quality {
-        case "Major":
-            return noteDisplay
-        case "Minor":
-            return noteDisplay + "m"
-        default:
-            // Full name: replace _Sharp -> # and remove other underscores so "C_Sharp_7" -> "C#7"
-            return chord.replacingOccurrences(of: "_Sharp", with: "#").replacingOccurrences(of: "_", with: "")
-        }
-    }
+    
 }

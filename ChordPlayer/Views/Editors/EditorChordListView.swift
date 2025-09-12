@@ -23,7 +23,7 @@ struct EditorChordListView: View {
                         onChordSelected()
                     }) {
                         HStack {
-                            Text(displayChordName(for: chordConfig.name))
+                            Text(MusicTheory.formatChordNameForDisplay(chordConfig.name))
                                 .font(.system(size: 12))
                             Spacer()
                             if let shortcutValue = chordConfig.shortcut, let s = Shortcut(stringValue: shortcutValue) {
@@ -45,7 +45,5 @@ struct EditorChordListView: View {
         }
     }
     
-    private func displayChordName(for chord: String) -> String {
-        return chord.replacingOccurrences(of: "_Sharp", with: "#").replacingOccurrences(of: "_", with: " ")
-    }
+    
 }
