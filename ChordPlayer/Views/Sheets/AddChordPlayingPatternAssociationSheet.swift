@@ -132,12 +132,12 @@ struct AddChordPlayingPatternAssociationSheet: View {
             set: { if !$0 { editingAssociationId = nil } }
         ), arrowEdge: .bottom) {
             if let association = findAssociation(for: pattern.id) {
-                MeasureIndexEditorView(
+                BeatIndexEditorView(
                     patternName: pattern.name,
                     shortcut: association.key,
-                    initialIndices: association.value.measureIndices ?? [],
+                    initialIndices: association.value.beatIndices ?? [],
                     onSave: { indices in
-                        updateMeasureIndices(for: association.key, newIndices: indices)
+                        updateBeatIndices(for: association.key, newIndices: indices)
                         editingAssociationId = nil
                     },
                     onDeleteAssociation: {
@@ -172,8 +172,8 @@ struct AddChordPlayingPatternAssociationSheet: View {
                         .background(Color.gray.opacity(0.2))
                         .cornerRadius(6)
                     
-                    if let indices = assoc.value.measureIndices, !indices.isEmpty {
-                        Text("应用小节: \(indices.map { String(format: "%g", $0) }.joined(separator: ", "))")
+                    if let indices = assoc.value.beatIndices, !indices.isEmpty {
+                        Text("应用拍号: \(indices.map { String($0) }.joined(separator: ", "))")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .lineLimit(1)
@@ -243,7 +243,7 @@ struct AddChordPlayingPatternAssociationSheet: View {
     private func saveAssociation(with shortcut: Shortcut) {
         guard let patternId = selectedPlayingPatternId, let index = chordConfigIndex else { return }
         
-        let newAssociation = PatternAssociation(patternId: patternId, measureIndices: nil)
+        let newAssociation = PatternAssociation(patternId: patternId, beatIndices: nil)
         appData.performanceConfig.chords[index].patternAssociations[shortcut] = newAssociation
         selectedPlayingPatternId = nil // Reset selection
     }
@@ -253,10 +253,10 @@ struct AddChordPlayingPatternAssociationSheet: View {
         appData.performanceConfig.chords[index].patternAssociations.removeValue(forKey: shortcut)
     }
     
-    private func updateMeasureIndices(for shortcut: Shortcut, newIndices: [Double]) {
+    private func updateBeatIndices(for shortcut: Shortcut, newIndices: [Int]) {
         guard let index = chordConfigIndex else { return }
         let sortedIndices = newIndices.sorted()
-        appData.performanceConfig.chords[index].patternAssociations[shortcut]?.measureIndices = sortedIndices.isEmpty ? nil : sortedIndices
+        appData.performanceConfig.chords[index].patternAssociations[shortcut]?.beatIndices = sortedIndices.isEmpty ? nil : sortedIndices
     }
     
     private func cleanupCaptureMonitor() {
@@ -274,17 +274,17 @@ struct AddChordPlayingPatternAssociationSheet: View {
 
 // MARK: - Popover Editor View
 
-private struct MeasureIndexEditorView: View {
+private struct BeatIndexEditorView: View {
     let patternName: String
     let shortcut: Shortcut
-    let onSave: ([Double]) -> Void
+    let onSave: ([Int]) -> Void
     let onDeleteAssociation: () -> Void
 
-    @State private var indices: [Double]
+    @State private var indices: [Int]
     @State private var input: String = ""
     @State private var isInputInvalid: Bool = false
 
-    init(patternName: String, shortcut: Shortcut, initialIndices: [Double], onSave: @escaping ([Double]) -> Void, onDeleteAssociation: @escaping () -> Void) {
+    init(patternName: String, shortcut: Shortcut, initialIndices: [Int], onSave: @escaping ([Int]) -> Void, onDeleteAssociation: @escaping () -> Void) {
         self.patternName = patternName
         self.shortcut = shortcut
         self._indices = State(initialValue: initialIndices)
@@ -319,7 +319,7 @@ private struct MeasureIndexEditorView: View {
     
     private var tokenFieldView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("指定应用小节 (如 1, 2.5)")
+            Text("指定应用拍号 (如 0, 4, 8)")
                 .font(.caption)
                 .foregroundColor(.secondary)
             
@@ -327,8 +327,8 @@ private struct MeasureIndexEditorView: View {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(indices, id: \.self) { index in
                         HStack(spacing: 4) {
-                            Text(String(format: "%g", index))
-                            Button(action: { removeMeasureIndex(index) }) {
+                            Text(String(index))
+                            Button(action: { removeBeatIndex(index) }) {
                                 Image(systemName: "xmark")
                             }
                             .buttonStyle(.plain)
@@ -346,12 +346,12 @@ private struct MeasureIndexEditorView: View {
                         .onChange(of: input) { newValue in
                             if newValue.contains(",") || newValue.contains(" ") {
                                 let processedInput = newValue.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
-                                addMeasureIndex(from: processedInput)
+                                addBeatIndex(from: processedInput)
                                 input = ""
                             }
                         }
                         .onSubmit {
-                            addMeasureIndex(from: input)
+                            addBeatIndex(from: input)
                             input = ""
                         }
                         .overlay(
@@ -367,10 +367,10 @@ private struct MeasureIndexEditorView: View {
         }
     }
     
-    private func addMeasureIndex(from text: String) {
+    private func addBeatIndex(from text: String) {
         guard !text.isEmpty else { return }
         
-        if let number = Double(text), (number == floor(number) || number.truncatingRemainder(dividingBy: 1) == 0.5), number > 0 {
+        if let number = Int(text), number >= 0 {
             if !indices.contains(number) {
                 indices.append(number)
                 indices.sort()
@@ -381,7 +381,7 @@ private struct MeasureIndexEditorView: View {
         }
     }
     
-    private func removeMeasureIndex(_ index: Double) {
+    private func removeBeatIndex(_ index: Int) {
         indices.removeAll { $0 == index }
     }
 }

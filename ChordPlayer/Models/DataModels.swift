@@ -200,7 +200,7 @@ typealias PatternLibrary = [String: [GuitarPattern]]
 
 struct PatternAssociation: Codable, Hashable {
     var patternId: String
-    var measureIndices: [Double]?
+    var beatIndices: [Int]?
 }
 
 struct ChordPerformanceConfig: Codable, Identifiable, Equatable {
@@ -239,7 +239,7 @@ struct ChordPerformanceConfig: Codable, Identifiable, Equatable {
             patternAssociations = [:]
             for (key, value) in oldAssociations {
                 if let shortcut = Shortcut(stringValue: key) {
-                    patternAssociations[shortcut] = PatternAssociation(patternId: value, measureIndices: nil)
+                    patternAssociations[shortcut] = PatternAssociation(patternId: value, beatIndices: nil)
                 }
             }
         } else {

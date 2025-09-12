@@ -231,10 +231,9 @@ class AppData: ObservableObject {
 
         for chordConfig in performanceConfig.chords {
             for (shortcut, association) in chordConfig.patternAssociations {
-                if let measureIndices = association.measureIndices, !measureIndices.isEmpty {
-                    for measureIndex in measureIndices {
-                        let targetBeat = (measureIndex - 1) * Double(beatsPerMeasure)
-                        let action = AutoPlayEvent(chordName: chordConfig.name, patternId: association.patternId, triggerBeat: Int(round(targetBeat)), shortcut: shortcut.stringValue)
+                if let beatIndices = association.beatIndices, !beatIndices.isEmpty {
+                    for beatIndex in beatIndices {
+                        let action = AutoPlayEvent(chordName: chordConfig.name, patternId: association.patternId, triggerBeat: beatIndex, shortcut: shortcut.stringValue)
                         schedule.append(action)
                     }
                 }
@@ -246,24 +245,17 @@ class AppData: ObservableObject {
 
         if !finalSchedule.isEmpty {
             // Find the total length of the performance in beats
-            var maxMeasure: Double = 0
+            var maxBeat: Int = 0
             for chordConfig in performanceConfig.chords {
                 for (_, association) in chordConfig.patternAssociations {
-                    if let measureIndices = association.measureIndices, let maxIndex = measureIndices.max() {
-                        maxMeasure = max(maxMeasure, maxIndex)
+                    if let beatIndices = association.beatIndices, let maxIndex = beatIndices.max() {
+                        maxBeat = max(maxBeat, maxIndex)
                     }
                 }
             }
-            // The total duration is the end of the highest measure number assigned.
-            // If the highest is 3.5, it means we have 4 measures total (1, 2, 3, 4).
-            if (maxMeasure == floor(maxMeasure)) {
-                // Exact integer, e.g. 3.0 means 4 measures
-                maxMeasure += 1
-            } else {
-                // Non-integer, e.g. 3.5 means we need to round up to 4 measures
-                maxMeasure = ceil(maxMeasure)
-            }
-            self.totalMeasures = Int(ceil(maxMeasure))
+            // Calculate total measures from the highest beat index
+            // maxBeat is 0-based, so we add 1, then divide by beatsPerMeasure and round up
+            self.totalMeasures = Int(ceil(Double(maxBeat + 1) / Double(beatsPerMeasure)))
             let totalBeatsInLoop = self.totalMeasures * beatsPerMeasure
 
             // Calculate duration for each event
