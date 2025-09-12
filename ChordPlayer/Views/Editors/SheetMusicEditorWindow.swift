@@ -4,9 +4,13 @@ import SwiftUI
 struct SheetMusicEditorWindow: View {
     // Global App Data
     @EnvironmentObject var appData: AppData
+    @Environment(\.dismiss) var dismiss
     
     // Local state for the editor window
     @StateObject private var editorState = SheetMusicEditorState()
+    
+    // State for the escape key monitor
+    @State private var escapeMonitor: Any? = nil
 
     var body: some View {
         HSplitView {
@@ -22,6 +26,34 @@ struct SheetMusicEditorWindow: View {
         .frame(minWidth: 900, minHeight: 550)
         // Provide the local editor state to all children of this window
         .environmentObject(editorState)
+        .onAppear(perform: setupEscapeKeyMonitoring)
+        .onDisappear(perform: cleanupEscapeKeyMonitoring)
+    }
+    
+    private func setupEscapeKeyMonitoring() {
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 { // ESC key
+                // If a beat is selected, deselect it (cancel editing)
+                if editorState.selectedBeat != nil {
+                    editorState.selectedBeat = nil
+                    editorState.selectedChordName = nil
+                    editorState.selectedPatternId = nil
+                    return nil // Consume the event
+                } else {
+                    // If nothing is selected, close the window
+                    dismiss()
+                    return nil // Consume the event
+                }
+            }
+            return event // Allow other events to propagate
+        }
+    }
+    
+    private func cleanupEscapeKeyMonitoring() {
+        if let monitor = escapeMonitor {
+            NSEvent.removeMonitor(monitor)
+            escapeMonitor = nil
+        }
     }
 }
 

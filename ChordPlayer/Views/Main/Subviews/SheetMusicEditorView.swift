@@ -108,17 +108,7 @@ struct SheetMusicEditorView: View {
                     .foregroundColor(.secondary.opacity(0.8))
             }
             
-            if let beat = editorState.selectedBeat {
-                Text("编辑第 \(beat) 拍")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Button("完成编辑") {
-                    finishEditing()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
+            
         }
     }
     

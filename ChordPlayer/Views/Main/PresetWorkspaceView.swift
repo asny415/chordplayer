@@ -5,7 +5,6 @@ import AppKit
 struct PresetWorkspaceView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
-    @State private var escapeMonitor: Any? = nil
 
     var body: some View {
         ZStack {
@@ -27,8 +26,6 @@ struct PresetWorkspaceView: View {
                         ChordProgressionView()
                     }
 
-                    
-
                     if appData.playingMode == .assisted || appData.playingMode == .automatic {
                         GroupBox {
                             TimingDisplayView()
@@ -48,34 +45,6 @@ struct PresetWorkspaceView: View {
                     .environmentObject(appData)
                     .environmentObject(keyboardHandler)
             }
-        }
-        .onAppear {
-            setupEscapeKeyMonitoring()
-        }
-        .onDisappear {
-            cleanupEscapeKeyMonitoring()
-        }
-    }
-    
-    private func setupEscapeKeyMonitoring() {
-        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == 53 { // ESC key
-                if appData.sheetMusicEditingBeat != nil {
-                    // 取消曲谱编辑
-                    appData.sheetMusicEditingBeat = nil
-                    appData.sheetMusicSelectedChordName = nil
-                    appData.sheetMusicSelectedPatternId = nil
-                    return nil // 消费该事件，不让其传播
-                }
-            }
-            return event // 其他情况下让事件继续传播
-        }
-    }
-    
-    private func cleanupEscapeKeyMonitoring() {
-        if let monitor = escapeMonitor {
-            NSEvent.removeMonitor(monitor)
-            escapeMonitor = nil
         }
     }
 }

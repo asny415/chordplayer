@@ -10,8 +10,7 @@ struct ChordProgressionView: View {
     @State private var captureMonitor: Any? = nil
     @State private var isHoveringGroup: Bool = false
     @State private var badgeHoveredForChord: String? = nil
-    @State private var showAddAssociationSheet: Bool = false
-    @State private var selectedChordForAssociation: String? = nil
+    
 
     var body: some View {
         let _ = print("[DEBUG] ChordProgressionView.body render start")
@@ -142,15 +141,6 @@ struct ChordProgressionView: View {
                             }
                         }
                         .contextMenu {
-                            Button {
-                                selectedChordForAssociation = chordConfig.name
-                                showAddAssociationSheet = true
-                            } label: {
-                                Label("管理演奏指法关联", systemImage: "link")
-                            }
-                            
-                            Divider()
-                            
                             Button(role: .destructive) {
                                 appData.removeChord(chordName: chordConfig.name)
                             } label: {
@@ -199,11 +189,7 @@ struct ChordProgressionView: View {
                 appData.performanceConfig.chords.append(ChordPerformanceConfig(name: chordName))
             }, existingChordNames: Set(appData.performanceConfig.chords.map { $0.name }))
         }
-        .sheet(isPresented: $showAddAssociationSheet) {
-            if let chordName = selectedChordForAssociation {
-                AddChordPlayingPatternAssociationSheet(chordName: chordName)
-            }
-        }
+        
     }
 
     // MARK: - Helpers for sorting pattern association shortcuts
