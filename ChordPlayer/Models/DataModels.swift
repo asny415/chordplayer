@@ -585,6 +585,7 @@ struct PlayingPatternEditorData: Identifiable {
 enum ShortcutConflict: Equatable {
     case defaultChordShortcut
     case otherAssociation(chordName: String)
+    case sameChordAssociation
     case numericKey
     case systemShortcut
     
@@ -594,10 +595,22 @@ enum ShortcutConflict: Equatable {
             return "与和弦默认快捷键冲突"
         case .otherAssociation(let chordName):
             return "与和弦 \(chordName) 的演奏指法关联冲突"
+        case .sameChordAssociation:
+            return "此快捷键已被当前和弦的其他指法使用，重复使用将覆盖原有配置"
         case .numericKey:
             return "与演奏指法切换数字键冲突"
         case .systemShortcut:
             return "与系统快捷键冲突"
         }
     }
+}
+
+// MARK: - Shortcut Dialog Data
+struct ShortcutDialogData {
+    let chordName: String
+    let patternId: String
+    let beat: Int
+    let chordIndex: Int
+    let onComplete: (Shortcut) -> Void
+    let onCancel: () -> Void
 }

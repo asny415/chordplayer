@@ -34,6 +34,10 @@ class AppData: ObservableObject {
     @Published var sheetMusicSelectedChordName: String? = nil
     @Published var sheetMusicSelectedPatternId: String? = nil
     
+    // 快捷键设置对话框状态
+    @Published var showShortcutDialog: Bool = false
+    @Published var shortcutDialogData: ShortcutDialogData? = nil
+    
     let customChordManager: CustomChordManager
     
     // 专用的更新方法，确保autoPlaySchedule实时更新

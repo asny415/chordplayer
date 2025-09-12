@@ -205,6 +205,13 @@ class PresetManager: ObservableObject {
             }
         }
 
+        // 2.5. Conflict with current chord's existing pattern associations
+        if let currentChord = config.chords.first(where: { $0.name == chordName }) {
+            if currentChord.patternAssociations.keys.contains(shortcut) {
+                conflicts.append(.sameChordAssociation)
+            }
+        }
+
         // 3. Conflict with numeric keys for pattern switching
         if let number = Int(shortcut.key), number > 0, number < 10,
            !shortcut.modifiersShift && !shortcut.modifiersCommand && !shortcut.modifiersControl && !shortcut.modifiersOption {
