@@ -25,16 +25,6 @@ struct EditorPatternListView: View {
                                 Text(details.pattern.name)
                                     .font(.system(size: 12))
                                 Spacer()
-                                Text(details.category)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                if index < 9 {
-                                    Text("\(index + 1)")
-                                        .font(.caption2).bold()
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 6).padding(.vertical, 3)
-                                        .background(Color.gray, in: RoundedRectangle(cornerRadius: 6))
-                                }
                             }
                             .padding(.vertical, 4)
                             .contentShape(Rectangle())
