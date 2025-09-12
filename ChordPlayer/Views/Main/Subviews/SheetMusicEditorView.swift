@@ -4,7 +4,8 @@ import SwiftUI
 import AppKit
 
 struct SheetMusicEditorView: View {
-    @EnvironmentObject var appData: AppData
+    @EnvironmentObject var appData: AppData // For song data
+    @EnvironmentObject var editorState: SheetMusicEditorState // For local editor state
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     
     // 快捷键对话框状态
@@ -13,6 +14,9 @@ struct SheetMusicEditorView: View {
     @State private var showConflictAlert: Bool = false
     @State private var conflictMessage: String = ""
     @State private var hoveredBeat: Int? = nil
+    @State private var cachedTotalBeats: Int = 0
+    @State private var cachedMaxMeasure: Int = 0
+    @State private var cachedTotalMeasures: Int = 0
     
     private var beatsPerMeasure: Int {
         let timeSigParts = appData.performanceConfig.timeSignature.split(separator: "/")
@@ -21,18 +25,7 @@ struct SheetMusicEditorView: View {
     
     // 自动长度：总节拍数+1小节（直接从配置计算，而非autoPlaySchedule）
     private var totalBeats: Int {
-        let currentMaxBeat = getCurrentMaxBeatFromConfig()
-        
-        if currentMaxBeat < 0 {
-            // 没有任何数据，默认4小节 + 1额外小节 = 5小节
-            return 5 * beatsPerMeasure
-        }
-        
-        // 计算当前最大拍号所在的小节数（从1开始）
-        let maxMeasureNumber = (currentMaxBeat / beatsPerMeasure) + 1
-        
-        // 总小节数 = 最大小节数 + 1额外小节
-        return (maxMeasureNumber + 1) * beatsPerMeasure
+        cachedTotalBeats
     }
     
     // 直接从配置数据计算最大拍号
@@ -52,6 +45,28 @@ struct SheetMusicEditorView: View {
         return maxBeat
     }
     
+    private func recalculateTotalBeats() {
+        let currentMaxBeat = getCurrentMaxBeatFromConfig()
+
+        let maxMeasure = currentMaxBeat < 0 ? 0 : (currentMaxBeat / beatsPerMeasure) + 1
+        let totalMeasures = (maxMeasure == 0 ? 4 : maxMeasure) + 1
+        
+        self.cachedMaxMeasure = maxMeasure
+        self.cachedTotalMeasures = totalMeasures
+        
+        let beats: Int
+        if currentMaxBeat < 0 {
+            // 没有任何数据，默认4小节 + 1额外小节 = 5小节
+            beats = 5 * beatsPerMeasure
+        } else {
+            // 计算当前最大拍号所在的小节数（从1开始）
+            let maxMeasureNumber = (currentMaxBeat / beatsPerMeasure) + 1
+            // 总小节数 = 最大小节数 + 1额外小节
+            beats = (maxMeasureNumber + 1) * beatsPerMeasure
+        }
+        self.cachedTotalBeats = beats
+    }
+    
     private let beatsPerRow = 16 // 每行显示16拍，类似钢琴卷粗
     
     private var numberOfRows: Int {
@@ -62,17 +77,18 @@ struct SheetMusicEditorView: View {
         VStack(alignment: .leading, spacing: 12) {
             headerView
             pianoRollView
-            if appData.sheetMusicEditingBeat != nil {
+            if editorState.selectedBeat != nil {
                 editingControlsView
             }
         }
         .padding()
-        .alert("快捷键冲突", isPresented: $showConflictAlert) {
-            Button("确定") { }
-        } message: {
-            Text(conflictMessage)
-        }
+        .alert("快捷键冲突", isPresented: $showConflictAlert) { Button("确定") { } } message: { Text(conflictMessage) }
+        .onAppear(perform: recalculateTotalBeats)
+        .onChange(of: appData.performanceConfig.chords) { _ in recalculateTotalBeats() }
         .onDisappear(perform: cleanupCaptureMonitor)
+        // When selections from the sidebar change, trigger the auto-apply logic.
+        .onChange(of: editorState.selectedChordName) { _ in checkAndAutoApply() }
+        .onChange(of: editorState.selectedPatternId) { _ in checkAndAutoApply() }
     }
     
     private var headerView: some View {
@@ -83,11 +99,7 @@ struct SheetMusicEditorView: View {
             Spacer()
             
             VStack(alignment: .trailing, spacing: 2) {
-                let currentMaxBeat = getCurrentMaxBeatFromConfig()
-                let maxMeasure = currentMaxBeat < 0 ? 0 : (currentMaxBeat / beatsPerMeasure) + 1
-                let totalMeasures = (maxMeasure == 0 ? 4 : maxMeasure) + 1
-                
-                Text("最大小节: \(maxMeasure) | 总长度: \(totalMeasures)小节")
+                Text("最大小节: \(cachedMaxMeasure) | 总长度: \(cachedTotalMeasures)小节")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -96,7 +108,7 @@ struct SheetMusicEditorView: View {
                     .foregroundColor(.secondary.opacity(0.8))
             }
             
-            if let beat = appData.sheetMusicEditingBeat {
+            if let beat = editorState.selectedBeat {
                 Text("编辑第 \(beat) 拍")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -146,7 +158,7 @@ struct SheetMusicEditorView: View {
     }
     
     private func pianoRollCell(beat: Int, width: CGFloat) -> some View {
-        let isSelected = appData.sheetMusicEditingBeat == beat
+        let isSelected = editorState.selectedBeat == beat
         let chordName = appData.sheetMusicBeatMap[beat]
         let hasChord = chordName != nil
         let measurePosition = beat % beatsPerMeasure
@@ -225,7 +237,7 @@ struct SheetMusicEditorView: View {
     
     private var editingControlsView: some View {
         HStack {
-            Text("编辑第 \(appData.sheetMusicEditingBeat ?? 0) 拍")
+            Text("编辑第 \(editorState.selectedBeat ?? 0) 拍")
                 .font(.subheadline.weight(.medium))
             
             Spacer()
@@ -243,22 +255,30 @@ struct SheetMusicEditorView: View {
     }
     
     private func selectBeat(_ beat: Int) {
-        appData.sheetMusicEditingBeat = beat
-        appData.sheetMusicSelectedChordName = nil
-        appData.sheetMusicSelectedPatternId = nil
+        // Modify local state, not global AppData
+        editorState.selectedBeat = beat
+        editorState.selectedChordName = nil
+        editorState.selectedPatternId = nil
     }
     
     private func finishEditing() {
-        appData.sheetMusicEditingBeat = nil
-        appData.sheetMusicSelectedChordName = nil
-        appData.sheetMusicSelectedPatternId = nil
+        // Modify local state, not global AppData
+        editorState.selectedBeat = nil
+        editorState.selectedChordName = nil
+        editorState.selectedPatternId = nil
     }
     
-    // 自动检查并应用选择
     private func checkAndAutoApply() {
-        // 只有在两者都选择了才自动应用
-        if appData.sheetMusicSelectedChordName != nil && appData.sheetMusicSelectedPatternId != nil {
-            applySelectionToBeat()
+        // Read from local state
+        if let beat = editorState.selectedBeat,
+           let chordName = editorState.selectedChordName,
+           let patternId = editorState.selectedPatternId {
+            
+            // This is the point where we "commit" the change to the global AppData
+            applySelectionToBeat(beat: beat, chordName: chordName, patternId: patternId)
+            
+            // Reset local selection state after applying
+            finishEditing()
         }
     }
     
@@ -346,28 +366,16 @@ struct SheetMusicEditorView: View {
         }
     }
     
-    private func applySelectionToBeat() {
-        guard let beat = appData.sheetMusicEditingBeat,
-              let chordName = appData.sheetMusicSelectedChordName,
-              let patternId = appData.sheetMusicSelectedPatternId else { return }
+    private func applySelectionToBeat(beat: Int, chordName: String, patternId: String) {
+        guard let chordIndex = appData.performanceConfig.chords.firstIndex(where: { $0.name == chordName }) else { return }
         
-        // 查找对应的和弦配置
-        guard let chordIndex = appData.performanceConfig.chords.firstIndex(where: { $0.name == chordName }) else {
-            return
-        }
-        
-        // 检查是否已经存在这个组合的快捷键
         let existingShortcut = findExistingShortcut(chordName: chordName, patternId: patternId)
         
         if let shortcut = existingShortcut {
-            // 已经存在快捷键，直接添加beat到beatIndices
             addBeatToAssociation(chordIndex: chordIndex, shortcut: shortcut, beat: beat)
         } else {
-            // 不存在快捷键，需要用户指定
             requestShortcutForCombination(chordIndex: chordIndex, chordName: chordName, patternId: patternId, beat: beat)
         }
-        
-        finishEditing()
     }
     
     private func findExistingShortcut(chordName: String, patternId: String) -> Shortcut? {

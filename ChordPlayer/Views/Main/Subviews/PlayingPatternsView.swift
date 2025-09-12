@@ -9,6 +9,7 @@ struct PlayingPatternsView: View {
     @State private var isHoveringGroup: Bool = false
 
     var body: some View {
+        let _ = print("[DEBUG] PlayingPatternsView.body render start")
         VStack(alignment: .leading) {
             HStack {
                 Text("和弦指法").font(.headline)

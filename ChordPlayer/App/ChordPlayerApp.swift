@@ -41,6 +41,8 @@ struct ChordPlayerApp: App {
     @State private var showLyricsManagerFromMenu = false
 
 
+    @Environment(\.openWindow) var openWindow
+
     var body: some Scene {
         WindowGroup {
             ContentView(
@@ -62,8 +64,23 @@ struct ChordPlayerApp: App {
                 .environmentObject(CustomDrumPatternManager.shared)
                 .environmentObject(CustomPlayingPatternManager.shared)
         }
+        
+        Window("曲谱编辑器", id: "sheet-music-editor") {
+            SheetMusicEditorWindow()
+                .environmentObject(appData)
+                .environmentObject(keyboardHandler)
+                .environmentObject(PresetManager.shared)
+                .environmentObject(CustomChordManager.shared)
+                .environmentObject(CustomDrumPatternManager.shared)
+                .environmentObject(CustomPlayingPatternManager.shared)
+        }
         .commands {
             CommandMenu("编辑") {
+                Button("曲谱编辑器...") {
+                    openWindow(id: "sheet-music-editor")
+                }
+                .keyboardShortcut("E", modifiers: [.command, .shift])
+                
                 Button("歌词管理...") {
                     showLyricsManagerFromMenu = true
                 }

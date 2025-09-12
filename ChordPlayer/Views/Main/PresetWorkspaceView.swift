@@ -27,9 +27,7 @@ struct PresetWorkspaceView: View {
                         ChordProgressionView()
                     }
 
-                    GroupBox {
-                        SheetMusicEditorView()
-                    }
+                    
 
                     if appData.playingMode == .assisted || appData.playingMode == .automatic {
                         GroupBox {

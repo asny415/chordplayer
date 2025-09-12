@@ -14,6 +14,7 @@ struct ChordProgressionView: View {
     @State private var selectedChordForAssociation: String? = nil
 
     var body: some View {
+        let _ = print("[DEBUG] ChordProgressionView.body render start")
         VStack(alignment: .leading) {
             HStack {
                 Text("和弦进行").font(.headline)
