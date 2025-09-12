@@ -4,7 +4,7 @@ struct LyricsManagerView: View {
     @EnvironmentObject var appData: AppData
     @Environment(\.dismiss) private var dismiss
     
-    @State private var lyrics: [Lyric] = []
+    @State private var sortedLyrics: [Lyric] = []
     @State private var showAddLyricForm = false
     @State private var editingLyric: Lyric? = nil
     @State private var newLyricContent = ""
@@ -47,7 +47,7 @@ struct LyricsManagerView: View {
                     }
                     .padding()
                     
-                    if lyrics.isEmpty {
+                    if sortedLyrics.isEmpty {
                         VStack {
                             Spacer()
                             Text("暂无歌词")
@@ -60,7 +60,7 @@ struct LyricsManagerView: View {
                         }
                     } else {
                         List {
-                            ForEach(lyrics.sorted(by: { $0.earliestStartBeat ?? 0 < $1.earliestStartBeat ?? 0 })) { lyric in
+                            ForEach(sortedLyrics) { lyric in
                                 LyricRowView(
                                     lyric: lyric,
                                     onEdit: { startEditingLyric($0) },
@@ -101,12 +101,12 @@ struct LyricsManagerView: View {
         }
         .frame(width: 800, height: 600)
         .onAppear {
-            loadLyrics()
+            updateAndSortLyrics()
         }
     }
     
-    private func loadLyrics() {
-        lyrics = appData.performanceConfig.lyrics
+    private func updateAndSortLyrics() {
+        sortedLyrics = appData.performanceConfig.lyrics.sorted(by: { $0.earliestStartBeat ?? 0 < $1.earliestStartBeat ?? 0 })
     }
     
     private func addNewLyric() {
@@ -117,32 +117,35 @@ struct LyricsManagerView: View {
     }
     
     private func saveLyric() {
+        var currentLyrics = appData.performanceConfig.lyrics
+        
         if let editingLyric = editingLyric {
-            // 更新现有歌词
-            if let index = lyrics.firstIndex(where: { $0.id == editingLyric.id }) {
-                var updatedLyric = lyrics[index]
+            // Update existing lyric
+            if let index = currentLyrics.firstIndex(where: { $0.id == editingLyric.id }) {
+                var updatedLyric = currentLyrics[index]
                 updatedLyric.content = newLyricContent
                 updatedLyric.timeRanges = newTimeRanges
-                lyrics[index] = updatedLyric
+                currentLyrics[index] = updatedLyric
             }
         } else {
-            // 添加新歌词
+            // Add new lyric
             let lyric = Lyric(content: newLyricContent, timeRanges: newTimeRanges)
-            lyrics.append(lyric)
+            currentLyrics.append(lyric)
         }
         
-        // 保存到 appData
-        appData.performanceConfig.lyrics = lyrics
+        // Save back to appData
+        appData.performanceConfig.lyrics = currentLyrics
+        updateAndSortLyrics()
         
-        // 重置表单
+        // Reset form
         cancelForm()
     }
     
     private func deleteLyric(_ lyric: Lyric) {
-        lyrics.removeAll { $0.id == lyric.id }
-        appData.performanceConfig.lyrics = lyrics
+        appData.performanceConfig.lyrics.removeAll { $0.id == lyric.id }
+        updateAndSortLyrics()
         
-        // 如果删除的是正在编辑的歌词，取消编辑
+        // If the deleted lyric was being edited, cancel editing
         if editingLyric?.id == lyric.id {
             cancelForm()
         }

@@ -37,18 +37,21 @@ class AppData: ObservableObject {
     // 快捷键设置对话框状态
     @Published var showShortcutDialog: Bool = false
     @Published var shortcutDialogData: ShortcutDialogData? = nil
-    
+    @Published var sheetMusicBeatMap: [Int: String] = [:]
+
     let customChordManager: CustomChordManager
     
     // 专用的更新方法，确保autoPlaySchedule实时更新
     func updateChordPatternAssociation(chordIndex: Int, shortcut: Shortcut, association: PatternAssociation) {
         performanceConfig.chords[chordIndex].patternAssociations[shortcut] = association
         buildAutoPlaySchedule() // 手动触发更新
+        updateSheetMusicBeatMap()
     }
     
     func addChordPatternAssociation(chordIndex: Int, shortcut: Shortcut, association: PatternAssociation) {
         performanceConfig.chords[chordIndex].patternAssociations[shortcut] = association
         buildAutoPlaySchedule() // 手动触发更新
+        updateSheetMusicBeatMap()
     }
     
     @Published var playingMode: PlayingMode = .manual {
@@ -61,6 +64,7 @@ class AppData: ObservableObject {
         didSet {
             presetManager.updateCurrentPreset(performanceConfig: performanceConfig, appConfig: CONFIG)
             buildAutoPlaySchedule()
+            updateSheetMusicBeatMap()
         }
     }
     
@@ -90,6 +94,7 @@ class AppData: ObservableObject {
         self.loadData()
         self.initializeActivePatterns()
         self.setupAppLifecycleHandling()
+        self.updateSheetMusicBeatMap()
         
         presetManager.$currentPreset
             .compactMap { $0 }
@@ -228,6 +233,7 @@ class AppData: ObservableObject {
     func removeChord(chordName: String) {
         performanceConfig.chords.removeAll { $0.name == chordName }
         buildAutoPlaySchedule()
+        updateSheetMusicBeatMap()
     }
     
     // MARK: - Auto Play Schedule
@@ -297,5 +303,24 @@ class AppData: ObservableObject {
         print("[AppData] Auto-play schedule built: \(finalSchedule.count) events, total beats: \(totalDuration)")
     }
 
+    func updateSheetMusicBeatMap() {
+        var newMap: [Int: String] = [:]
+        for chordConfig in performanceConfig.chords {
+            for (_, association) in chordConfig.patternAssociations {
+                if let beatIndices = association.beatIndices {
+                    for beat in beatIndices {
+                        newMap[beat] = chordConfig.name
+                    }
+                }
+            }
+        }
+        
+        // Update on the main thread if changes are detected
+        if newMap != sheetMusicBeatMap {
+            DispatchQueue.main.async {
+                self.sheetMusicBeatMap = newMap
+            }
+        }
+    }
     
 }
