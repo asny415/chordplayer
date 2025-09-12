@@ -24,6 +24,10 @@ struct PresetWorkspaceView: View {
                     ChordProgressionView()
                 }
 
+                GroupBox {
+                    SheetMusicEditorView()
+                }
+
                 if appData.playingMode == .assisted || appData.playingMode == .automatic {
                     GroupBox {
                         TimingDisplayView()
@@ -540,7 +544,13 @@ private struct PlayingPatternsView: View {
                         if let details = findPlayingPatternDetails(for: patternId) {
                             let isActive = appData.performanceConfig.activePlayingPatternId == patternId
                             Button(action: {
-                                appData.performanceConfig.activePlayingPatternId = patternId
+                                if appData.sheetMusicEditingBeat != nil {
+                                    // 曲谱编辑模式：选择演奏指法
+                                    appData.sheetMusicSelectedPatternId = patternId
+                                } else {
+                                    // 普通模式：设置活动指法
+                                    appData.performanceConfig.activePlayingPatternId = patternId
+                                }
                             }) {
                                 ZStack(alignment: .topTrailing) {
                                     PlayingPatternCardView(
@@ -964,7 +974,13 @@ private struct ChordProgressionView: View {
                             ChordCardView(chord: chordConfig.name, isFlashing: flashingChord == chordConfig.name)
                                 .animation(.easeInOut(duration: 0.15), value: flashingChord)
                                 .onTapGesture {
-                                    keyboardHandler.playChordByName(chordConfig.name)
+                                    if appData.sheetMusicEditingBeat != nil {
+                                        // 曲谱编辑模式：选择和弦
+                                        appData.sheetMusicSelectedChordName = chordConfig.name
+                                    } else {
+                                        // 普通模式：播放和弦
+                                        keyboardHandler.playChordByName(chordConfig.name)
+                                    }
                                 }
 
                             // Shortcut badge (custom or default). Always show a Text badge.
@@ -1173,6 +1189,343 @@ private struct ChordProgressionView: View {
 
 extension QuantizationMode: CustomStringConvertible {
     public var description: String { self.displayName }
+}
+
+// MARK: - Sheet Music Editor View
+
+private struct SheetMusicEditorView: View {
+    @EnvironmentObject var appData: AppData
+    
+    private var beatsPerMeasure: Int {
+        let timeSigParts = appData.performanceConfig.timeSignature.split(separator: "/")
+        return Int(timeSigParts.first.map(String.init) ?? "4") ?? 4
+    }
+    
+    // 自动长度：总节拍数+1小节（直接从配置计算，而非autoPlaySchedule）
+    private var totalBeats: Int {
+        let currentMaxBeat = getCurrentMaxBeatFromConfig()
+        
+        if currentMaxBeat < 0 {
+            // 没有任何数据，默认4小节 + 1额外小节 = 5小节
+            return 5 * beatsPerMeasure
+        }
+        
+        // 计算当前最大拍号所在的小节数（从1开始）
+        let maxMeasureNumber = (currentMaxBeat / beatsPerMeasure) + 1
+        
+        // 总小节数 = 最大小节数 + 1额外小节
+        return (maxMeasureNumber + 1) * beatsPerMeasure
+    }
+    
+    // 直接从配置数据计算最大拍号
+    private func getCurrentMaxBeatFromConfig() -> Int {
+        var maxBeat = -1
+        
+        for chordConfig in appData.performanceConfig.chords {
+            for (_, association) in chordConfig.patternAssociations {
+                if let beatIndices = association.beatIndices {
+                    if let localMax = beatIndices.max() {
+                        maxBeat = max(maxBeat, localMax)
+                    }
+                }
+            }
+        }
+        
+        return maxBeat
+    }
+    
+    private let beatsPerRow = 16 // 每行显示16拍，类似钢琴卷帘
+    
+    private var numberOfRows: Int {
+        return Int(ceil(Double(totalBeats) / Double(beatsPerRow)))
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            headerView
+            pianoRollView
+            if appData.sheetMusicEditingBeat != nil {
+                editingControlsView
+            }
+        }
+        .padding()
+    }
+    
+    private var headerView: some View {
+        HStack {
+            Text("曲谱编辑")
+                .font(.headline)
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 2) {
+                let currentMaxBeat = getCurrentMaxBeatFromConfig()
+                let maxMeasure = currentMaxBeat < 0 ? 0 : (currentMaxBeat / beatsPerMeasure) + 1
+                let totalMeasures = (maxMeasure == 0 ? 4 : maxMeasure) + 1
+                
+                Text("最大小节: \(maxMeasure) | 总长度: \(totalMeasures)小节")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text("总拍数: \(totalBeats)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.8))
+            }
+            
+            if let beat = appData.sheetMusicEditingBeat {
+                Text("编辑第 \(beat) 拍")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Button("完成编辑") {
+                    finishEditing()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+        }
+    }
+    
+    private var pianoRollView: some View {
+        ScrollView(.vertical) {
+            VStack(spacing: 2) {
+                ForEach(0..<numberOfRows, id: \.self) { rowIndex in
+                    pianoRollRowView(rowIndex: rowIndex)
+                }
+            }
+        }
+        .background(Color.black.opacity(0.05))
+        .cornerRadius(8)
+    }
+    
+    private func pianoRollRowView(rowIndex: Int) -> some View {
+        HStack(spacing: 0) {
+            // 行号标签
+            Text("\(rowIndex * beatsPerRow)")
+                .font(.caption.monospacedDigit())
+                .foregroundColor(.secondary)
+                .frame(width: 30, alignment: .trailing)
+                .padding(.trailing, 4)
+            
+            // 钢琴卷帘格子
+            GeometryReader { geometry in
+                let totalSpacing = CGFloat(beatsPerRow - 1) * 1 // 1pt spacing between cells
+                let cellWidth = (geometry.size.width - totalSpacing) / CGFloat(beatsPerRow)
+                
+                HStack(spacing: 1) {
+                    ForEach(0..<beatsPerRow, id: \.self) { beatInRow in
+                        let absoluteBeat = rowIndex * beatsPerRow + beatInRow
+                        if absoluteBeat < totalBeats {
+                            pianoRollCell(beat: absoluteBeat, width: cellWidth)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(height: 50)
+    }
+    
+    private func pianoRollCell(beat: Int, width: CGFloat) -> some View {
+        let isSelected = appData.sheetMusicEditingBeat == beat
+        let hasChord = getChordNameForBeat(beat) != nil
+        let measurePosition = beat % beatsPerMeasure
+        let isBeatOne = measurePosition == 0
+        
+        return Button(action: {
+            selectBeat(beat)
+        }) {
+            VStack(spacing: 2) {
+                // 和弦名称显示
+                if let chordName = getChordNameForBeat(beat) {
+                    Text(formatChordName(chordName))
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                } else {
+                    Text("·")
+                        .font(.caption2)
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+                
+                // 拍号
+                Text("\(beat)")
+                    .font(.system(size: 8, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+        }
+        .frame(width: width, height: 48)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(backgroundColorForBeat(beat: beat, hasChord: hasChord, isSelected: isSelected, isBeatOne: isBeatOne))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 3)
+                .stroke(borderColorForBeat(beat: beat, hasChord: hasChord, isSelected: isSelected, isBeatOne: isBeatOne), 
+                       lineWidth: isSelected ? 2 : (isBeatOne ? 1.5 : 0.5))
+        )
+    }
+    
+    private func backgroundColorForBeat(beat: Int, hasChord: Bool, isSelected: Bool, isBeatOne: Bool) -> Color {
+        if isSelected {
+            return .accentColor.opacity(0.4)
+        } else if hasChord {
+            return .green.opacity(0.3)
+        } else if isBeatOne {
+            return .blue.opacity(0.1) // 每小节第一拍用蓝色
+        } else {
+            return .primary.opacity(0.05)
+        }
+    }
+    
+    private func borderColorForBeat(beat: Int, hasChord: Bool, isSelected: Bool, isBeatOne: Bool) -> Color {
+        if isSelected {
+            return .accentColor
+        } else if hasChord {
+            return .green.opacity(0.8)
+        } else if isBeatOne {
+            return .blue.opacity(0.5)
+        } else {
+            return .primary.opacity(0.2)
+        }
+    }
+    
+    private var editingControlsView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("为第 \(appData.sheetMusicEditingBeat ?? 0) 拍选择和弦和指法：")
+                .font(.subheadline)
+            
+            Text("1. 点击下方\"和弦指法\"区域选择指法")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Text("2. 点击下方\"和弦进行\"区域选择和弦")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            if let chordName = appData.sheetMusicSelectedChordName, let patternId = appData.sheetMusicSelectedPatternId {
+                HStack {
+                    Text("已选择: \(formatChordName(chordName)) + \(patternId)")
+                        .font(.caption)
+                    
+                    Button("应用") {
+                        applySelectionToBeat()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            }
+        }
+        .padding()
+        .background(Color.blue.opacity(0.1))
+        .cornerRadius(8)
+    }
+    
+    private func selectBeat(_ beat: Int) {
+        appData.sheetMusicEditingBeat = beat
+        appData.sheetMusicSelectedChordName = nil
+        appData.sheetMusicSelectedPatternId = nil
+    }
+    
+    private func finishEditing() {
+        appData.sheetMusicEditingBeat = nil
+        appData.sheetMusicSelectedChordName = nil
+        appData.sheetMusicSelectedPatternId = nil
+    }
+    
+    private func getChordNameForBeat(_ beat: Int) -> String? {
+        // 直接从配置数据查找，而不是从autoPlaySchedule
+        for chordConfig in appData.performanceConfig.chords {
+            for (_, association) in chordConfig.patternAssociations {
+                if let beatIndices = association.beatIndices, beatIndices.contains(beat) {
+                    return chordConfig.name
+                }
+            }
+        }
+        return nil
+    }
+    
+    private func formatChordName(_ chordName: String) -> String {
+        return chordName.replacingOccurrences(of: "_Sharp", with: "#")
+                       .replacingOccurrences(of: "_", with: " ")
+    }
+    
+    private func applySelectionToBeat() {
+        guard let beat = appData.sheetMusicEditingBeat,
+              let chordName = appData.sheetMusicSelectedChordName,
+              let patternId = appData.sheetMusicSelectedPatternId else { return }
+        
+        // 查找对应的和弦配置
+        guard let chordIndex = appData.performanceConfig.chords.firstIndex(where: { $0.name == chordName }) else {
+            return
+        }
+        
+        // 检查是否已经存在这个组合的快捷键
+        let existingShortcut = findExistingShortcut(chordName: chordName, patternId: patternId)
+        
+        if let shortcut = existingShortcut {
+            // 已经存在快捷键，直接添加beat到beatIndices
+            addBeatToAssociation(chordIndex: chordIndex, shortcut: shortcut, beat: beat)
+        } else {
+            // 不存在快捷键，需要用户指定
+            requestShortcutForCombination(chordIndex: chordIndex, chordName: chordName, patternId: patternId, beat: beat)
+        }
+        
+        finishEditing()
+    }
+    
+    private func findExistingShortcut(chordName: String, patternId: String) -> Shortcut? {
+        guard let chordConfig = appData.performanceConfig.chords.first(where: { $0.name == chordName }) else {
+            return nil
+        }
+        
+        for (shortcut, association) in chordConfig.patternAssociations {
+            if association.patternId == patternId {
+                return shortcut
+            }
+        }
+        return nil
+    }
+    
+    private func addBeatToAssociation(chordIndex: Int, shortcut: Shortcut, beat: Int) {
+        guard var association = appData.performanceConfig.chords[chordIndex].patternAssociations[shortcut] else { return }
+        
+        if association.beatIndices == nil {
+            association.beatIndices = []
+        }
+        
+        if let currentIndices = association.beatIndices, !currentIndices.contains(beat) {
+            association.beatIndices?.append(beat)
+            association.beatIndices?.sort()
+            
+            // 使用专用的更新方法
+            appData.updateChordPatternAssociation(chordIndex: chordIndex, shortcut: shortcut, association: association)
+        }
+    }
+    
+    private func requestShortcutForCombination(chordIndex: Int, chordName: String, patternId: String, beat: Int) {
+        // 这里应该弹出一个对话框让用户输入快捷键
+        // 为了简化实现，我们可以自动分配一个默认快捷键
+        let availableShortcuts: [Shortcut] = [
+            Shortcut(key: "A"), Shortcut(key: "S"), Shortcut(key: "D"), Shortcut(key: "F"), 
+            Shortcut(key: "G"), Shortcut(key: "H"), Shortcut(key: "J"), Shortcut(key: "K"), 
+            Shortcut(key: "L"), Shortcut(key: "Z"), Shortcut(key: "X"), Shortcut(key: "C"), 
+            Shortcut(key: "V"), Shortcut(key: "B"), Shortcut(key: "N"), Shortcut(key: "M")
+        ]
+        
+        // 查找已使用的快捷键
+        let usedShortcuts = Set(appData.performanceConfig.chords[chordIndex].patternAssociations.keys)
+        
+        // 找到第一个未使用的快捷键
+        if let availableShortcut = availableShortcuts.first(where: { !usedShortcuts.contains($0) }) {
+            // 创建新的association
+            let newAssociation = PatternAssociation(patternId: patternId, beatIndices: [beat])
+            
+            // 使用专用的更新方法
+            appData.addChordPatternAssociation(chordIndex: chordIndex, shortcut: availableShortcut, association: newAssociation)
+        }
+    }
 }
 
 extension Binding where Value == String? {

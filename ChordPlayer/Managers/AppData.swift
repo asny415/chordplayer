@@ -29,7 +29,23 @@ class AppData: ObservableObject {
     
     @Published var autoPlaySchedule: [AutoPlayEvent] = []
     
+    // 曲谱编辑状态
+    @Published var sheetMusicEditingBeat: Int? = nil
+    @Published var sheetMusicSelectedChordName: String? = nil
+    @Published var sheetMusicSelectedPatternId: String? = nil
+    
     let customChordManager: CustomChordManager
+    
+    // 专用的更新方法，确保autoPlaySchedule实时更新
+    func updateChordPatternAssociation(chordIndex: Int, shortcut: Shortcut, association: PatternAssociation) {
+        performanceConfig.chords[chordIndex].patternAssociations[shortcut] = association
+        buildAutoPlaySchedule() // 手动触发更新
+    }
+    
+    func addChordPatternAssociation(chordIndex: Int, shortcut: Shortcut, association: PatternAssociation) {
+        performanceConfig.chords[chordIndex].patternAssociations[shortcut] = association
+        buildAutoPlaySchedule() // 手动触发更新
+    }
     
     @Published var playingMode: PlayingMode = .manual {
         didSet {
@@ -212,7 +228,7 @@ class AppData: ObservableObject {
     
     // MARK: - Auto Play Schedule
     
-    private func buildAutoPlaySchedule() {
+    func buildAutoPlaySchedule() {
         guard playingMode == .automatic || playingMode == .assisted else {
             if !autoPlaySchedule.isEmpty {
                 autoPlaySchedule = []
