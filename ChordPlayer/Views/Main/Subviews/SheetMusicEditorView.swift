@@ -89,6 +89,13 @@ struct SheetMusicEditorView: View {
         // When selections from the sidebar change, trigger the auto-apply logic.
         .onChange(of: editorState.selectedChordName) { _ in checkAndAutoApply() }
         .onChange(of: editorState.selectedPatternId) { _ in checkAndAutoApply() }
+        .overlay(
+            Group {
+                if editorState.showShortcutDialog {
+                    shortcutDialogView
+                }
+            }
+        )
     }
     
     private var headerView: some View {
@@ -155,6 +162,9 @@ struct SheetMusicEditorView: View {
         let isBeatOne = measurePosition == 0
         let isHovered = hoveredBeat == beat
         let measureNumber = beat / beatsPerMeasure + 1
+        
+        let patternIdForBeat = getPatternId(for: beat)
+        let isHighlightedByPattern = editorState.highlightedPatternId != nil && patternIdForBeat == editorState.highlightedPatternId
 
         return ZStack {
             // Chord Name in the center
@@ -184,12 +194,12 @@ struct SheetMusicEditorView: View {
         .frame(width: width, height: 48)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(backgroundColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne))
+                .fill(backgroundColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne, isHighlightedByPattern: isHighlightedByPattern))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .stroke(borderColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne),
-                       lineWidth: isSelected ? 2 : 1)
+                .stroke(borderColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne, isHighlightedByPattern: isHighlightedByPattern),
+                       lineWidth: isSelected || isHighlightedByPattern ? 2 : 1)
         )
         .onHover { hovering in
             hoveredBeat = hovering ? beat : nil
@@ -199,9 +209,24 @@ struct SheetMusicEditorView: View {
         }
     }
     
-    private func backgroundColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool) -> Color {
+    private func getPatternId(for beat: Int) -> String? {
+        guard let chordName = appData.sheetMusicBeatMap[beat] else { return nil }
+        guard let chordConfig = appData.performanceConfig.chords.first(where: { $0.name == chordName }) else { return nil }
+
+        for (_, association) in chordConfig.patternAssociations {
+            if let beatIndices = association.beatIndices, beatIndices.contains(beat) {
+                return association.patternId
+            }
+        }
+        return nil
+    }
+    
+    private func backgroundColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool, isHighlightedByPattern: Bool) -> Color {
         if isSelected {
             return .accentColor.opacity(0.8)
+        }
+        if isHighlightedByPattern {
+            return Color.yellow.opacity(0.5) // Highlight color
         }
         if isHovered {
             return Color.primary.opacity(0.2)
@@ -212,9 +237,12 @@ struct SheetMusicEditorView: View {
         return Color.primary.opacity(0.05)
     }
 
-    private func borderColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool) -> Color {
+    private func borderColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool, isHighlightedByPattern: Bool) -> Color {
         if isSelected {
             return .accentColor
+        }
+        if isHighlightedByPattern {
+            return Color.yellow.opacity(0.9) // Highlight color
         }
         if isHovered {
             return Color.primary.opacity(0.5)
@@ -249,6 +277,7 @@ struct SheetMusicEditorView: View {
         editorState.selectedBeat = beat
         editorState.selectedChordName = nil
         editorState.selectedPatternId = nil
+        editorState.highlightedPatternId = nil // Clear highlight when selecting a beat
     }
     
     private func finishEditing() {
@@ -293,7 +322,7 @@ struct SheetMusicEditorView: View {
                     .font(.title2)
                     .fontWeight(.bold)
                 
-                if let data = appData.shortcutDialogData {
+                if let data = editorState.shortcutDialogData {
                     VStack(spacing: 12) {
                         Text("为以下组合设置快捷键：")
                             .font(.subheadline)
@@ -396,7 +425,7 @@ struct SheetMusicEditorView: View {
     
     private func requestShortcutForCombination(chordIndex: Int, chordName: String, patternId: String, beat: Int) {
         // 显示快捷键设置对话框
-        appData.shortcutDialogData = ShortcutDialogData(
+        editorState.shortcutDialogData = ShortcutDialogData(
             chordName: chordName,
             patternId: patternId,
             beat: beat,
@@ -410,7 +439,7 @@ struct SheetMusicEditorView: View {
                 finishEditing()
             }
         )
-        appData.showShortcutDialog = true
+        editorState.showShortcutDialog = true
     }
     
     // MARK: - Shortcut Dialog Methods
@@ -441,7 +470,7 @@ struct SheetMusicEditorView: View {
         // 检查快捷键冲突
         let conflicts = PresetManager.shared.detectConflicts(
             for: shortcut,
-            of: appData.shortcutDialogData?.chordName ?? "",
+            of: editorState.shortcutDialogData?.chordName ?? "",
             in: appData.performanceConfig
         )
         
@@ -455,7 +484,7 @@ struct SheetMusicEditorView: View {
     }
     
     private func applyShortcut(_ shortcut: Shortcut) {
-        guard let data = appData.shortcutDialogData else { return }
+        guard let data = editorState.shortcutDialogData else { return }
         
         let newAssociation = PatternAssociation(patternId: data.patternId, beatIndices: [data.beat])
         appData.addChordPatternAssociation(chordIndex: data.chordIndex, shortcut: shortcut, association: newAssociation)
@@ -469,13 +498,13 @@ struct SheetMusicEditorView: View {
     
     private func cancelShortcutDialog() {
         cleanupCaptureMonitor()
-        appData.shortcutDialogData?.onCancel()
+        editorState.shortcutDialogData?.onCancel()
         closeShortcutDialog()
     }
     
     private func closeShortcutDialog() {
-        appData.showShortcutDialog = false
-        appData.shortcutDialogData = nil
+        editorState.showShortcutDialog = false
+        editorState.shortcutDialogData = nil
     }
     
     private func cleanupCaptureMonitor() {

@@ -34,7 +34,7 @@ class AppData: ObservableObject {
     @Published var sheetMusicSelectedChordName: String? = nil
     @Published var sheetMusicSelectedPatternId: String? = nil
     
-    // 快捷键设置对话框状态
+    // 快捷键设置对话框状态 (MOVED to SheetMusicEditorState)
     @Published var showShortcutDialog: Bool = false
     @Published var shortcutDialogData: ShortcutDialogData? = nil
     @Published var sheetMusicBeatMap: [Int: String] = [:]

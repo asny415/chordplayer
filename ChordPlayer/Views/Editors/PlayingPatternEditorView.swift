@@ -5,6 +5,10 @@ struct PlayingPatternEditorView: View {
     @EnvironmentObject var customPlayingPatternManager: CustomPlayingPatternManager
     @EnvironmentObject var chordPlayer: ChordPlayer
     @EnvironmentObject var midiManager: MidiManager
+    @EnvironmentObject var appData: AppData
+
+    // Alert state
+    @State private var showNameConflictAlert = false
 
     // Form state
     @State private var id: String
@@ -173,6 +177,11 @@ struct PlayingPatternEditorView: View {
         .onChange(of: markers) { _ in updateSmartName() }
         .onChange(of: modeIsStrum) { _ in updateSmartName() }
         .onChange(of: strumDirections) { _ in updateSmartName() }
+        .alert("名称已存在", isPresented: $showNameConflictAlert) {
+            Button("好的") { }
+        } message: {
+            Text("已存在一个具有相同名称的演奏模式。请输入一个不同的名称。")
+        }
     }
 
     // MARK: - Views
@@ -468,9 +477,57 @@ struct PlayingPatternEditorView: View {
     }
 
     private func save() {
-        let newPattern = buildPatternFromState()
-        customPlayingPatternManager.addOrUpdatePattern(pattern: newPattern, timeSignature: timeSignature)
-        dismiss()
+        let finalName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if finalName.isEmpty {
+            // Optionally, show an alert for empty name
+            return
+        }
+
+        // 1. Gather all existing names
+        var allNames = Set<String>()
+        // Add built-in names from the main pattern library
+        if let patternLib = appData.patternLibrary {
+            for (_, patterns) in patternLib {
+                for pattern in patterns {
+                    allNames.insert(pattern.name.lowercased())
+                }
+            }
+        }
+        // Add custom names
+        for (_, patterns) in customPlayingPatternManager.customPlayingPatterns {
+            for pattern in patterns {
+                allNames.insert(pattern.name.lowercased())
+            }
+        }
+
+        // 2. Check for conflict
+        var isConflict = false
+        let lowercasedFinalName = finalName.lowercased()
+
+        if isEditing {
+            let originalName = editingPatternData?.pattern.name
+            // If name has changed, check if the new name conflicts with any existing name.
+            if lowercasedFinalName != originalName?.lowercased() {
+                if allNames.contains(lowercasedFinalName) {
+                    isConflict = true
+                }
+            }
+        } else { // Creating a new pattern
+            if allNames.contains(lowercasedFinalName) {
+                isConflict = true
+            }
+        }
+
+        // 3. Handle result
+        if isConflict {
+            showNameConflictAlert = true
+        } else {
+            // Update the name before building the pattern, in case it was just trimmed
+            self.name = finalName
+            let newPattern = buildPatternFromState()
+            customPlayingPatternManager.addOrUpdatePattern(pattern: newPattern, timeSignature: timeSignature)
+            dismiss()
+        }
     }
 }
 

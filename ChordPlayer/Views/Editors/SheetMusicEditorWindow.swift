@@ -33,17 +33,23 @@ struct SheetMusicEditorWindow: View {
     private func setupEscapeKeyMonitoring() {
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 { // ESC key
-                // If a beat is selected, deselect it (cancel editing)
+                // Priority 1: If a pattern is highlighted, just clear the highlight.
+                if editorState.highlightedPatternId != nil {
+                    editorState.highlightedPatternId = nil
+                    return nil // Consume the event
+                }
+                
+                // Priority 2: If a beat is selected, deselect it (cancel editing).
                 if editorState.selectedBeat != nil {
                     editorState.selectedBeat = nil
                     editorState.selectedChordName = nil
                     editorState.selectedPatternId = nil
                     return nil // Consume the event
-                } else {
-                    // If nothing is selected, close the window
-                    dismiss()
-                    return nil // Consume the event
                 }
+                
+                // Priority 3: If nothing is selected or highlighted, close the window.
+                dismiss()
+                return nil // Consume the event
             }
             return event // Allow other events to propagate
         }

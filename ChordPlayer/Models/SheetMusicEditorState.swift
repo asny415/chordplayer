@@ -11,5 +11,12 @@ class SheetMusicEditorState: ObservableObject {
 
     // The pattern ID selected from the sidebar pattern list.
     @Published var selectedPatternId: String? = nil
+
+    // The pattern ID currently selected for highlighting beats in the editor.
+    @Published var highlightedPatternId: String? = nil
+    
+    // State for the shortcut assignment dialog.
+    @Published var showShortcutDialog: Bool = false
+    @Published var shortcutDialogData: ShortcutDialogData? = nil
 }
 

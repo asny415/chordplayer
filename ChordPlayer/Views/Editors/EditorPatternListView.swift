@@ -16,10 +16,20 @@ struct EditorPatternListView: View {
             List {
                 ForEach(Array(appData.performanceConfig.selectedPlayingPatterns.enumerated()), id: \.element) { index, patternId in
                     if let details = findPlayingPatternDetails(for: patternId) {
-                        let isSelected = editorState.selectedPatternId == patternId
+                        let isSelected = (editorState.selectedBeat != nil) ? (editorState.selectedPatternId == patternId) : (editorState.highlightedPatternId == patternId)
                         
                         Button(action: {
-                            editorState.selectedPatternId = patternId
+                            if editorState.selectedBeat != nil {
+                                // We are in cell-editing mode, so apply the pattern to the beat.
+                                editorState.selectedPatternId = patternId
+                            } else {
+                                // We are not in cell-editing mode, so toggle the highlight.
+                                if editorState.highlightedPatternId == patternId {
+                                    editorState.highlightedPatternId = nil // Toggle off
+                                } else {
+                                    editorState.highlightedPatternId = patternId // Highlight this pattern
+                                }
+                            }
                         }) {
                             HStack {
                                 Text(details.pattern.name)

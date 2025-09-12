@@ -7,6 +7,7 @@ struct CustomPlayingPatternLibraryView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var customPlayingPatternManager: CustomPlayingPatternManager
     @EnvironmentObject var chordPlayer: ChordPlayer
+    @EnvironmentObject var appData: AppData
     
     @State private var searchText: String = ""
     @State private var showingCreateSheet = false
@@ -30,10 +31,12 @@ struct CustomPlayingPatternLibraryView: View {
         .sheet(isPresented: $showingCreateSheet) {
             PlayingPatternEditorView()
                 .environmentObject(customPlayingPatternManager)
+                .environmentObject(appData)
         }
         .sheet(item: $patternToEdit) { data in
             PlayingPatternEditorView(editingPatternData: data)
                 .environmentObject(customPlayingPatternManager)
+                .environmentObject(appData)
         }
     }
     
@@ -195,5 +198,6 @@ struct CustomPlayingPatternLibraryView_Previews: PreviewProvider {
         return CustomPlayingPatternLibraryView()
             .environmentObject(customPlayingPatternManager)
             .environmentObject(chordPlayer)
+            .environmentObject(appData)
     }
 }
