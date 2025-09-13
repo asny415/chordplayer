@@ -36,15 +36,11 @@ struct DrumPatternGridView: View {
         var gridData = Array(repeating: Array(repeating: false, count: totalSteps), count: DrumInstrument.allCases.count)
         var absoluteTime: Double = 0.0
 
-        for (index, event) in pattern.pattern.enumerated() {
+        for event in pattern.pattern {
             if let delayFraction = MusicTheory.parseDelay(delayString: event.delay) {
-                // For the first event, delay is 0, so absoluteTime remains 0.
-                // For subsequent events, add the delay from the previous event.
-                if index > 0 { 
-                    absoluteTime += delayFraction
-                }
+                absoluteTime += delayFraction
                 
-                let timeStep = Int(round(absoluteTime * Double(totalSteps)))
+                let timeStep = Int(round(absoluteTime * 16.0)) // A whole note contains 16 sixteenth notes
 
                 if timeStep < totalSteps {
                     for note in event.notes {

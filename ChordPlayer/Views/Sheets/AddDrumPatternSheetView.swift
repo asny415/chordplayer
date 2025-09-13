@@ -207,16 +207,20 @@ struct AddDrumPatternSheetView: View {
     }
     
     private func updateGridSize() {
-        let beats = Int(timeSignature.split(separator: "/").first.map(String.init) ?? "4") ?? 4
-        let columns = beats * (subdivision == 8 ? 2 : 4)
+        let timeParts = timeSignature.split(separator: "/").map(String.init)
+        let numerator = Double(timeParts.first ?? "4") ?? 4.0
+        let denominator = Double(timeParts.last ?? "4") ?? 4.0
+        let columns = Int((numerator / denominator) * Double(subdivision))
         
         var newGrid = Array(repeating: Array(repeating: false, count: columns), count: instruments.count)
         let oldColumns = gridState[0].count
         let minColumns = min(oldColumns, columns)
         
-        for r in 0..<instruments.count {
-            for c in 0..<minColumns {
-                newGrid[r][c] = gridState[r][c]
+        if minColumns > 0 {
+            for r in 0..<instruments.count {
+                for c in 0..<minColumns {
+                    newGrid[r][c] = gridState[r][c]
+                }
             }
         }
         gridState = newGrid

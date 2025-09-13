@@ -151,7 +151,12 @@ class DrumPlayer: ObservableObject {
         // 1. Configure timing
         let timeSigParts = timeSignature.split(separator: "/")
         self.beatsPerMeasure = (timeSigParts.count == 2) ? (Int(timeSigParts[0]) ?? 4) : 4
-        self.beatDurationMs = (60.0 / tempo) * 1000.0
+        
+        // Calculate beat duration, considering the time signature's note value.
+        let quarterNoteDurationMs = (60.0 / tempo) * 1000.0
+        let beatValue = (timeSigParts.count == 2) ? (Double(timeSigParts[1]) ?? 4.0) : 4.0
+        self.beatDurationMs = quarterNoteDurationMs * (4.0 / beatValue)
+        
         self.measureDurationMs = Double(beatsPerMeasure) * beatDurationMs
         
         // 2. Set master start time. THIS IS THE ONLY PLACE.
@@ -194,7 +199,7 @@ class DrumPlayer: ObservableObject {
                 if (isFirstFormalMeasure || isNewMeasureAfterFirst), let patternToSwitch = self.nextPattern {
                     self.currentPattern = patternToSwitch
                     self.nextPattern = nil
-                    let wholeNoteMs = self.beatDurationMs * 4.0
+                    let wholeNoteMs = ((60.0 / self.appData.performanceConfig.tempo) * 1000.0) * 4.0
                     self.currentPatternSchedule = self.buildSchedule(from: self.currentPattern!.pattern, wholeNoteMs: wholeNoteMs)
                     print("[DrumPlayer] \(isFirstFormalMeasure ? "Starting with" : "Switched to") pattern: \(self.currentPattern!.displayName)")
                 }
