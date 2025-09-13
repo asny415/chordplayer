@@ -73,19 +73,8 @@ struct ChordPlayerApp: App {
                 .environmentObject(CustomDrumPatternManager.shared)
                 .environmentObject(CustomPlayingPatternManager.shared)
         }
+        .keyboardShortcut("E", modifiers: .command)
         .commands {
-            CommandMenu("编辑") {
-                Button("曲谱编辑器...") {
-                    openWindow(id: "sheet-music-editor")
-                }
-                .keyboardShortcut("E", modifiers: [.command, .shift])
-                
-                Button("歌词管理...") {
-                    showLyricsManagerFromMenu = true
-                }
-                .keyboardShortcut("L", modifiers: [.command])
-            }
-            
             CommandMenu("自定义库") {
                 Button("创建自定义和弦...") {
                     showCustomChordCreatorFromMenu = true
