@@ -11,7 +11,7 @@ struct PlayingPatternView: View {
 
     private enum EventType {
         case single(string: Int)
-        case strum(direction: StrumDirection)
+        case strum(direction: StrumDirection, fromString: Int, toString: Int)
     }
 
     private enum StrumDirection {
@@ -34,7 +34,10 @@ struct PlayingPatternView: View {
         var parsedEvents: [PatternDisplayEvent] = []
         for event in pattern.pattern {
             guard let delayFraction = MusicTheory.parsePatternDelay(event.delay) else { continue }
-            let timeStep = Int(round(delayFraction * Double(totalSteps)))
+
+            let measureDuration = Double(beats) / Double(beatType)
+            let relativePosition = measureDuration > 0 ? delayFraction / measureDuration : 0
+            let timeStep = Int(round(relativePosition * Double(totalSteps)))
 
             let stringNotes = event.notes.compactMap { note -> Int? in
                 switch note {
@@ -57,9 +60,9 @@ struct PlayingPatternView: View {
 
             let isStrum = (event.delta ?? 0) > 0 && stringNotes.count > 1
 
-            if isStrum {
-                let direction: StrumDirection = (stringNotes.first ?? 0) > (stringNotes.last ?? 0) ? .up : .down
-                parsedEvents.append(PatternDisplayEvent(timeStep: timeStep, type: .strum(direction: direction)))
+            if isStrum, let fromString = stringNotes.first, let toString = stringNotes.last {
+                let direction: StrumDirection = fromString > toString ? .up : .down
+                parsedEvents.append(PatternDisplayEvent(timeStep: timeStep, type: .strum(direction: direction, fromString: fromString, toString: toString)))
             } else { // Treat as single notes
                 for note in stringNotes {
                     parsedEvents.append(PatternDisplayEvent(timeStep: timeStep, type: .single(string: note)))
@@ -102,8 +105,8 @@ struct PlayingPatternView: View {
                     let y = stringSpacing / 2 + CGFloat(stringNum - 1) * stringSpacing
                     let pick = createPickPath(center: CGPoint(x: x, y: y), size: stringSpacing * 0.8)
                     context.fill(pick, with: .color(color))
-                case .strum(let direction):
-                    let arrowPath = createStrumArrow(direction: direction, x: x, height: size.height, stringSpacing: stringSpacing)
+                case .strum(let direction, let fromString, let toString):
+                    let arrowPath = createStrumArrow(direction: direction, x: x, fromString: fromString, toString: toString, stringSpacing: stringSpacing)
                     context.stroke(arrowPath, with: .color(color), lineWidth: 1.5)
                 }
             }
@@ -128,20 +131,23 @@ struct PlayingPatternView: View {
         return path
     }
     
-    private func createStrumArrow(direction: StrumDirection, x: CGFloat, height: CGFloat, stringSpacing: CGFloat) -> Path {
+    private func createStrumArrow(direction: StrumDirection, x: CGFloat, fromString: Int, toString: Int, stringSpacing: CGFloat) -> Path {
         var path = Path()
-        let arrowHeight = height - stringSpacing
-        let startY = stringSpacing / 2
-        let endY = height - stringSpacing / 2
+        let y1 = stringSpacing / 2 + CGFloat(fromString - 1) * stringSpacing
+        let y2 = stringSpacing / 2 + CGFloat(toString - 1) * stringSpacing
         let arrowSize = stringSpacing * 0.4
 
-        if direction == .down {
-            path.move(to: CGPoint(x: x, y: endY))
-            path.addLine(to: CGPoint(x: x, y: startY))
-            path.move(to: CGPoint(x: x - arrowSize, y: startY + arrowSize))
-            path.addLine(to: CGPoint(x: x, y: startY))
-            path.addLine(to: CGPoint(x: x + arrowSize, y: startY + arrowSize))
-        } else { // Up
+        if direction == .down { // physical up-strum, arrow points up
+            let startY = max(y1, y2)
+            let endY = min(y1, y2)
+            path.move(to: CGPoint(x: x, y: startY))
+            path.addLine(to: CGPoint(x: x, y: endY))
+            path.move(to: CGPoint(x: x - arrowSize, y: endY + arrowSize))
+            path.addLine(to: CGPoint(x: x, y: endY))
+            path.addLine(to: CGPoint(x: x + arrowSize, y: endY + arrowSize))
+        } else { // .up, physical down-strum, arrow points down
+            let startY = min(y1, y2)
+            let endY = max(y1, y2)
             path.move(to: CGPoint(x: x, y: startY))
             path.addLine(to: CGPoint(x: x, y: endY))
             path.move(to: CGPoint(x: x - arrowSize, y: endY - arrowSize))
