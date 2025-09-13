@@ -253,10 +253,5 @@ struct BeatLabel: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(shouldHighlightForAction ? Color.orange : (isCurrentBeat ? Color.accentColor : Color.clear), lineWidth: shouldHighlightForAction ? 3 : 2)
             )
-            .scaleEffect(shouldHighlightForAction ? 1.1 : 1.0)
-            .zIndex(shouldHighlightForAction ? 2 : (isCurrentBeat ? 1 : 0))
-            .animation(.easeInOut(duration: 0.1), value: isCurrentBeat)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: shouldHighlightForAction)
-            .transition(.opacity.combined(with: .scale(scale: 0.8)))
     }
 }
