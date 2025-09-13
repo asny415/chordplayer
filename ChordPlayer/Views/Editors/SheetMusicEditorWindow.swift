@@ -32,13 +32,41 @@ struct SheetMusicEditorWindow: View {
     private func setupEscapeKeyMonitoring() {
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 { // ESC key
-                // Priority 1: If a pattern is highlighted, just clear the highlight.
+                // Priority 1: If shortcut dialog is open, let it handle ESC.
+                if editorState.showShortcutDialog {
+                    return event // Don't consume, let the dialog handle it
+                }
+
+                // Priority 2: If lyric content editor sheet is open, let it handle ESC.
+                if editorState.isEditingLyricContent {
+                    return event // Don't consume, let the sheet handle it
+                }
+
+                // Priority 3: If in-place lyric addition is active, cancel it.
+                if editorState.isAddingLyricInPlace {
+                    editorState.isAddingLyricInPlace = false
+                    return nil // Consume the event
+                }
+
+                // Priority 4: If a lyric time range is being selected, cancel it.
+                if editorState.lyricTimeRangeStartBeat != nil {
+                    editorState.lyricTimeRangeStartBeat = nil
+                    return nil // Consume the event
+                }
+                
+                // Priority 5: If a lyric is selected, deselect it.
+                if editorState.selectedLyricID != nil {
+                    editorState.selectedLyricID = nil
+                    return nil // Consume the event
+                }
+
+                // Priority 6: If a pattern is highlighted, just clear the highlight.
                 if editorState.highlightedPatternId != nil {
                     editorState.highlightedPatternId = nil
                     return nil // Consume the event
                 }
                 
-                // Priority 2: If a beat is selected, deselect it (cancel editing).
+                // Priority 7: If a beat is selected, deselect it (cancel editing).
                 if editorState.selectedBeat != nil {
                     editorState.selectedBeat = nil
                     editorState.selectedChordName = nil
@@ -47,7 +75,7 @@ struct SheetMusicEditorWindow: View {
                     return nil // Consume the event
                 }
                 
-                // Priority 3: If nothing is selected or highlighted, close the window.
+                // Priority 8: If nothing is selected or highlighted, close the window.
                 dismiss()
                 return nil // Consume the event
             }
@@ -103,7 +131,6 @@ struct EditorLyricsView: View {
     @EnvironmentObject var editorState: SheetMusicEditorState
     
     @State private var editingLyric: Lyric? = nil
-    @State private var isAddingInPlace = false
     @State private var newLyricContent = ""
     @FocusState private var isNewLyricFieldFocused: Bool
 
@@ -150,7 +177,7 @@ struct EditorLyricsView: View {
                 }
                 
                 // In-place add new lyric row
-                if isAddingInPlace {
+                if editorState.isAddingLyricInPlace {
                     HStack(spacing: 8) {
                         TextField("输入新歌词后按 Enter 保存", text: $newLyricContent)
                             .focused($isNewLyricFieldFocused)
@@ -159,7 +186,7 @@ struct EditorLyricsView: View {
                                     addNewLyric(content: newLyricContent)
                                 }
                                 newLyricContent = ""
-                                isAddingInPlace = false
+                                editorState.isAddingLyricInPlace = false
                             }
                             .textFieldStyle(PlainTextFieldStyle())
                             .padding(8)
@@ -168,7 +195,7 @@ struct EditorLyricsView: View {
 
                         Button("取消") {
                             newLyricContent = ""
-                            isAddingInPlace = false
+                            editorState.isAddingLyricInPlace = false
                         }
                     }
                     .padding(.horizontal)
@@ -185,7 +212,7 @@ struct EditorLyricsView: View {
                     .padding(.vertical, 8)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        isAddingInPlace = true
+                        editorState.isAddingLyricInPlace = true
                     }
                 }
             }
@@ -194,9 +221,11 @@ struct EditorLyricsView: View {
         }
         .padding(.top)
         .onChange(of: editorState.selectedLyricID) { newLyricID in updateHighlightedBeats(for: newLyricID) }
-        .onChange(of: isAddingInPlace) { isAdding in
+        .onChange(of: editorState.isAddingLyricInPlace) { isAdding in
             if isAdding {
                 isNewLyricFieldFocused = true
+            } else {
+                newLyricContent = "" // Clear content when exiting in-place add
             }
         }
         .sheet(item: $editingLyric) { lyric in
@@ -268,6 +297,7 @@ struct LyricContentEditorSheet: View {
     let lyric: Lyric
     let onSave: (String) -> Void
     
+    @EnvironmentObject var editorState: SheetMusicEditorState
     @Environment(\.dismiss) private var dismiss
     @State private var content: String
     
@@ -310,5 +340,7 @@ struct LyricContentEditorSheet: View {
         }
         .padding()
         .frame(width: 450, height: 300)
+        .onAppear { editorState.isEditingLyricContent = true }
+        .onDisappear { editorState.isEditingLyricContent = false }
     }
 }

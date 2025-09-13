@@ -32,6 +32,12 @@ class SheetMusicEditorState: ObservableObject {
     // The start beat for creating a new lyric time range.
     @Published var lyricTimeRangeStartBeat: Int? = nil
 
+    // State for in-place lyric addition.
+    @Published var isAddingLyricInPlace: Bool = false
+
+    // State for lyric content editor sheet.
+    @Published var isEditingLyricContent: Bool = false
+
     // Pattern IDs associated with the currently selected chord.
     @Published var associatedPatternIds: Set<String> = []
 }
