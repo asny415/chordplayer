@@ -215,14 +215,6 @@ struct TimingBeatView: View {
             content: content,
             shouldHighlightForAction: shouldHighlight
         )
-        .onChange(of: isCurrentBeat) { oldValue, newValue in
-            // 自动模式下：当拍子到达时自动播放和弦
-            if newValue && appData.playingMode == .automatic && content != "·" {
-                if let chordName = getChordNameForBeat(beatForIndex) {
-                    keyboardHandler.playChordByName(chordName)
-                }
-            }
-        }
     }
 }
 

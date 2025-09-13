@@ -46,7 +46,6 @@ struct ChordProgressionView: View {
                             ChordCardView(chord: chordConfig.name, 
                                          isFlashing: flashingChord == chordConfig.name, 
                                          isEditingSelected: isEditingSelected)
-                                .animation(.easeInOut(duration: 0.15), value: flashingChord)
                                 .onTapGesture {
                                     if appData.sheetMusicEditingBeat != nil {
                                         // 曲谱编辑模式：选择和弦
