@@ -123,7 +123,7 @@ struct TimingDisplayView: View {
             VStack(alignment: .leading, spacing: 12) {
                 // 节拍时间轴
                 HStack(spacing: 0) {
-                    let indices = Array(0..<12)
+                    let indices = Array(0..<6) // 显示6个位置：提前两拍，当前拍，后续三拍
                     ForEach(indices, id: \.self) { index in
                         TimingBeatView(
                             index: index,
