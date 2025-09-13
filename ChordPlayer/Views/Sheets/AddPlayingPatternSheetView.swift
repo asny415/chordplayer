@@ -57,7 +57,7 @@ struct AddPlayingPatternSheetView: View {
             }
             .onAppear(perform: loadAvailablePatterns)
             .sheet(isPresented: $showingCreateSheet, onDismiss: loadAvailablePatterns) {
-                PlayingPatternEditorView()
+                PlayingPatternEditorView(globalTimeSignature: appData.performanceConfig.timeSignature)
                     .environmentObject(customPlayingPatternManager)
                     .environmentObject(chordPlayer)
                     .environmentObject(midiManager)

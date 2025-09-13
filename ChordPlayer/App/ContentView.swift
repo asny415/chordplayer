@@ -40,7 +40,7 @@ struct ContentView: View {
             CustomDrumPatternLibraryView()
         }
         .sheet(isPresented: $showPlayingPatternCreatorFromMenu) {
-            PlayingPatternEditorView()
+            PlayingPatternEditorView(globalTimeSignature: appData.performanceConfig.timeSignature)
         }
         .sheet(isPresented: $showCustomPlayingPatternManagerFromMenu) {
             CustomPlayingPatternLibraryView()

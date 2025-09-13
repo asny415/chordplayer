@@ -29,7 +29,7 @@ struct CustomPlayingPatternLibraryView: View {
         .frame(minWidth: 700, idealWidth: 900, minHeight: 500, idealHeight: 700)
         .background(Color.black.opacity(0.2))
         .sheet(isPresented: $showingCreateSheet) {
-            PlayingPatternEditorView()
+            PlayingPatternEditorView(globalTimeSignature: appData.performanceConfig.timeSignature)
                 .environmentObject(customPlayingPatternManager)
                 .environmentObject(appData)
         }

@@ -17,27 +17,52 @@ extension GuitarPattern {
 
         // 3. 遍历事件并填充名称数组
         for event in self.pattern {
-            // delay 格式是 "stepIndex/precision", 所以我们直接提取 stepIndex
             if let stepIndex = Int(event.delay.split(separator: "/").first ?? "") {
                 guard stepIndex < totalSteps else { continue }
 
                 var stepString = ""
-                let notes = event.notes
 
-                // 检查是否为扫弦 (基于音符顺序)
-                if let delta = event.delta, delta > 0, let firstNote = notes.first, let lastNote = notes.last {
-                    if case .chordString(let firstVal) = firstNote, case .chordString(let lastVal) = lastNote {
-                        if firstVal > lastVal { // 6 -> 1 is Down
-                            stepString = "下"
-                        } else if firstVal < lastVal { // 1 -> 6 is Up
-                            stepString = "上"
+                // 检查是否为扫弦
+                if event.delta != nil {
+                    let stringValues = event.notes.compactMap { note -> Int? in
+                        if case .chordString(let v) = note { return v }
+                        return nil
+                    }
+
+                    if let firstVal = stringValues.first, let lastVal = stringValues.last {
+                        let isFullStrum = stringValues.count == 6
+
+                        if firstVal > lastVal { // 物理下扫 (e.g., 6 -> 1), 命名为 "上"
+                            if isFullStrum {
+                                stepString = "上"
+                            } else {
+                                if firstVal == 6 {
+                                    stepString = "上\(lastVal)"
+                                } else if lastVal == 1 {
+                                    stepString = "\(firstVal)上"
+                                } else {
+                                    stepString = "\(firstVal)上\(lastVal)"
+                                }
+                            }
+                        } else if firstVal < lastVal { // 物理上扫 (e.g., 1 -> 6), 命名为 "下"
+                            if isFullStrum {
+                                stepString = "下"
+                            } else {
+                                if firstVal == 1 {
+                                    stepString = "下\(lastVal)"
+                                } else if lastVal == 6 {
+                                    stepString = "\(firstVal)下"
+                                } else {
+                                    stepString = "\(firstVal)下\(lastVal)"
+                                }
+                            }
                         }
                     }
                 }
 
-                // 如果不是扫弦，则为分解或和音
+                // 如果不是扫弦或扫弦命名失败，则为分解或和音
                 if stepString.isEmpty {
-                    let noteStrings = notes.map { note -> String in
+                    let noteStrings = event.notes.map { note -> String in
                         switch note {
                         case .chordString(let stringValue):
                             return String(stringValue)
@@ -61,6 +86,6 @@ extension GuitarPattern {
             finalName.removeLast()
         }
         
-        return finalName
+        return finalName.isEmpty ? "新模式" : finalName
     }
 }

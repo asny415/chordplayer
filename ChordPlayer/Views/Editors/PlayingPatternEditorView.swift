@@ -26,13 +26,25 @@ struct PlayingPatternEditorView: View {
     let editingPatternData: PlayingPatternEditorData?
     private var isEditing: Bool { editingPatternData != nil }
 
-    init(editingPatternData: PlayingPatternEditorData? = nil) {
+    init(editingPatternData: PlayingPatternEditorData? = nil, globalTimeSignature: String? = nil) {
         self.editingPatternData = editingPatternData
 
         var initialId = UUID().uuidString
         var initialName = "新演奏模式"
-        var initialTimeSignature = "4/4"
+        var initialTimeSignature: String
         var initialSubdivision = 8
+
+        if let data = editingPatternData {
+            initialId = data.id
+            initialName = data.pattern.name
+            initialTimeSignature = data.timeSignature
+            if let firstEvent = data.pattern.pattern.first,
+               let denominator = Int(firstEvent.delay.split(separator: "/").last ?? "8") {
+                initialSubdivision = (denominator == 16) ? 16 : 8
+            }
+        } else {
+            initialTimeSignature = globalTimeSignature ?? "4/4"
+        }
         
 
         _id = State(initialValue: initialId)
@@ -157,11 +169,7 @@ struct PlayingPatternEditorView: View {
             .padding()
         }
         .frame(minWidth: 700, minHeight: 560)
-        .onAppear {
-            if editingPatternData == nil {
-                self.timeSignature = appData.performanceConfig.timeSignature
-            }
-        }
+        
         .onChange(of: timeSignature) { updateGridSize() }
         .onChange(of: subdivision) { updateGridSize() }
         .onChange(of: grid) { updateSmartName() }
@@ -506,7 +514,7 @@ struct PlayingPatternEditorView: View {
         // If the name hasn't changed, do nothing to avoid unnecessary view updates.
         if newName == self.name { return }
 
-        let isDefaultName = self.name.isEmpty || self.name == "新演奏模式"
+        let isDefaultName = self.name.isEmpty || self.name == "新演奏模式" || self.name == "新模式"
         
         // Check if the current name appears to be auto-generated.
         // An auto-generated name consists of digits, '.', '_', 'R', 'P', '上', '下'.
