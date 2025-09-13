@@ -15,7 +15,7 @@ class ChordPlayer: ObservableObject {
         self.appData = appData
     }
 
-    func playChord(chordName: String, pattern: GuitarPattern, tempo: Double = 120.0, key: String = "C", capo: Int = 0, velocity: UInt8 = 100, duration: TimeInterval = 0.5, quantizationMode: QuantizationMode = .none, drumClockInfo: (isPlaying: Bool, startTime: Double, loopDuration: Double)? = nil) {
+    func playChord(chordName: String, pattern: GuitarPattern, tempo: Double = 120.0, key: String = "C", capo: Int = 0, velocity: UInt8 = 100, duration: TimeInterval = 0.5, quantizationMode: QuantizationMode = .none, drumClockInfo: (isPlaying: Bool, startTime: Double, loopDuration: Double, nextMeasureTime: Double, nextHalfMeasureTime: Double)? = nil) {
         guard let chordDefinition = appData.chordLibrary?[chordName] else {
             print("[ChordPlayer] Chord definition for \(chordName) not found.")
             return
@@ -43,28 +43,25 @@ class ChordPlayer: ObservableObject {
         let currentUptime = ProcessInfo.processInfo.systemUptime * 1000.0
 
         if quantizationMode != .none, let clock = drumClockInfo, clock.isPlaying, clock.loopDuration > 0 {
-            let elapsedTime = currentUptime - clock.startTime
-            var quantizationUnitDuration: Double
             var nextQuantizationTime: Double
 
             switch quantizationMode {
             case .measure:
-                quantizationUnitDuration = clock.loopDuration
+                nextQuantizationTime = clock.nextMeasureTime
             case .halfMeasure:
-                quantizationUnitDuration = clock.loopDuration / 2.0
+                nextQuantizationTime = clock.nextHalfMeasureTime
             case .none:
-                schedulingStartUptimeMs = currentUptime
-                return // Should not happen
+                // This case should not be hit if quantizationMode is not .none, but as a fallback:
+                nextQuantizationTime = currentUptime
             }
 
-            let numUnitsCompleted = floor(elapsedTime / quantizationUnitDuration)
-            nextQuantizationTime = clock.startTime + (numUnitsCompleted + 1) * quantizationUnitDuration
-
-            if nextQuantizationTime < currentUptime {
-                nextQuantizationTime += quantizationUnitDuration
-            }
-
+            // This check is still valuable to prevent manual triggers that are excessively early.
+            // For automated playback that is 1 beat early, this check should now pass reliably
+            // because nextQuantizationTime is calculated authoritatively by the DrumPlayer.
             let timeToNextQuantization = nextQuantizationTime - currentUptime
+            
+            // We still need quantizationUnitDuration for the window calculation
+            let quantizationUnitDuration = (quantizationMode == .measure) ? clock.loopDuration : clock.loopDuration / 2.0
             let quantizationWindow = quantizationUnitDuration / 2.0
 
             if timeToNextQuantization > quantizationWindow {

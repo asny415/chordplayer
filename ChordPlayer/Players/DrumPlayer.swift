@@ -37,8 +37,31 @@ class DrumPlayer: ObservableObject {
     
     private let countInNote: UInt8 = 42 // Closed Hi-hat
 
-    var clockInfo: (isPlaying: Bool, startTime: Double, loopDuration: Double) {
-        return (isPlaying: playbackState != .stopped, startTime: startTimeMs, loopDuration: measureDurationMs)
+    var clockInfo: (isPlaying: Bool, startTime: Double, loopDuration: Double, nextMeasureTime: Double, nextHalfMeasureTime: Double) {
+        let nowMs = ProcessInfo.processInfo.systemUptime * 1000.0
+        var nextMeasureT: Double = 0
+        var nextHalfMeasureT: Double = 0
+
+        if playbackState != .stopped && measureDurationMs > 0 {
+            let elapsedMs = nowMs - startTimeMs
+            
+            // Calculate next measure time
+            let numMeasuresCompleted = floor(elapsedMs / measureDurationMs)
+            nextMeasureT = startTimeMs + (numMeasuresCompleted + 1) * measureDurationMs
+
+            // Calculate next half-measure time
+            let halfMeasureDurationMs = measureDurationMs / 2.0
+            let numHalfMeasuresCompleted = floor(elapsedMs / halfMeasureDurationMs)
+            nextHalfMeasureT = startTimeMs + (numHalfMeasuresCompleted + 1) * halfMeasureDurationMs
+        }
+
+        return (
+            isPlaying: playbackState != .stopped,
+            startTime: startTimeMs,
+            loopDuration: measureDurationMs,
+            nextMeasureTime: nextMeasureT,
+            nextHalfMeasureTime: nextHalfMeasureT
+        )
     }
 
     func playNote(midiNumber: Int) {
