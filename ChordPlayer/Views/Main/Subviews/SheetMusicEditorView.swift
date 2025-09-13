@@ -67,17 +67,10 @@ struct SheetMusicEditorView: View {
     }
     
     private var beatsPerRow: Int {
-        let timeSignature = appData.performanceConfig.timeSignature
-        switch timeSignature {
-        case "4/4":
-            return 16 // 4 measures
-        case "3/4":
-            return 15 // 5 measures
-        case "6/8":
-            return 18 // 3 measures
-        default:
-            return beatsPerMeasure * 4
-        }
+        // 4/4: 6 measures * 4 beats/measure = 24 beats
+        // 3/4: 8 measures * 3 beats/measure = 24 beats
+        // 6/8: 4 measures * 6 beats/measure = 24 beats
+        return 24
     }
     
     private var numberOfRows: Int {
@@ -140,23 +133,63 @@ struct SheetMusicEditorView: View {
         .cornerRadius(8)
     }
     
+    @ViewBuilder
     private func pianoRollRowView(rowIndex: Int) -> some View {
-        HStack(spacing: 0) {
+        let measuresPerLine: Int = beatsPerMeasure > 0 ? (beatsPerRow / beatsPerMeasure) : 0
+        
+        if measuresPerLine > 0 {
+            let firstMeasureInRow = rowIndex * measuresPerLine
+            
             GeometryReader { geometry in
-                let totalSpacing = CGFloat(beatsPerRow - 1) * 1 // 1pt spacing between cells
-                let cellWidth = (geometry.size.width - totalSpacing) / CGFloat(beatsPerRow)
+                let totalRowWidth = geometry.size.width
+                let measureWidth = totalRowWidth / CGFloat(measuresPerLine)
                 
-                HStack(spacing: 1) {
-                    ForEach(0..<beatsPerRow, id: \.self) { beatInRow in
-                        let absoluteBeat = rowIndex * beatsPerRow + beatInRow
-                        if absoluteBeat < totalBeats {
-                            pianoRollCell(beat: absoluteBeat, width: cellWidth)
+                HStack(spacing: 0) {
+                    ForEach(0..<measuresPerLine, id: \.self) { measureInRowIndex in
+                        let absoluteMeasureIndex = firstMeasureInRow + measureInRowIndex
+                        if (absoluteMeasureIndex * beatsPerMeasure) < totalBeats {
+                            MeasureView(measureIndex: absoluteMeasureIndex, availableWidth: measureWidth)
+                        } else {
+                            Color.clear.frame(width: measureWidth)
                         }
                     }
                 }
             }
+            .frame(height: 50)
+        } else {
+            EmptyView()
         }
-        .frame(height: 50)
+    }
+
+    private func MeasureView(measureIndex: Int, availableWidth: CGFloat) -> some View {
+        let firstBeatOfMeasure = measureIndex * beatsPerMeasure
+        
+        var numContentBeats = 0
+        for i in 0..<beatsPerMeasure {
+            if appData.sheetMusicBeatMap[firstBeatOfMeasure + i] != nil {
+                numContentBeats += 1
+            }
+        }
+        let numEmptyBeats = beatsPerMeasure - numContentBeats
+        
+        let totalSpacing = CGFloat(beatsPerMeasure > 0 ? beatsPerMeasure - 1 : 0)
+        let widthForCells = availableWidth - totalSpacing
+        
+        let totalWidthUnits = CGFloat(2 * numContentBeats + numEmptyBeats)
+        let emptyWidth = totalWidthUnits > 0 ? widthForCells / totalWidthUnits : 0
+        let contentWidth = 2 * emptyWidth
+
+        return HStack(spacing: 1) {
+            ForEach(0..<beatsPerMeasure, id: \.self) { beatInMeasureIndex in
+                let absoluteBeat = firstBeatOfMeasure + beatInMeasureIndex
+                if absoluteBeat < totalBeats {
+                    let hasContent = appData.sheetMusicBeatMap[absoluteBeat] != nil
+                    let cellWidth = hasContent ? contentWidth : emptyWidth
+                    pianoRollCell(beat: absoluteBeat, width: cellWidth)
+                }
+            }
+        }
+        .frame(width: availableWidth)
     }
     
     private func pianoRollCell(beat: Int, width: CGFloat) -> some View {
