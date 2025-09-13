@@ -54,8 +54,10 @@ struct PlayingPatternEditorView: View {
         _subdivision = State(initialValue: initialSubdivision)
         _modeIsStrum = State(initialValue: initialModeIsStrum)
 
-        let beats = Int(initialTimeSignature.split(separator: "/").first.map(String.init) ?? "4") ?? 4
-        let cols = beats * (initialSubdivision == 8 ? 2 : 4)
+        let timeParts = initialTimeSignature.split(separator: "/").map(String.init)
+        let numerator = Double(timeParts.first ?? "4") ?? 4.0
+        let denominator = Double(timeParts.last ?? "4") ?? 4.0
+        let cols = Int((numerator / denominator) * Double(initialSubdivision))
         var initialGrid = Array(repeating: Array(repeating: false, count: cols), count: 6)
         var initialMarkers: [[String?]] = Array(repeating: Array(repeating: nil, count: cols), count: 6)
         var initialStrumDirections: [String?] = Array(repeating: nil, count: cols)
@@ -393,8 +395,10 @@ struct PlayingPatternEditorView: View {
     }
 
     private func updateGridSize() {
-        let beats = Int(timeSignature.split(separator: "/").first.map(String.init) ?? "4") ?? 4
-        let cols = beats * (subdivision == 8 ? 2 : 4)
+        let timeParts = timeSignature.split(separator: "/").map(String.init)
+        let numerator = Double(timeParts.first ?? "4") ?? 4.0
+        let denominator = Double(timeParts.last ?? "4") ?? 4.0
+        let cols = Int((numerator / denominator) * Double(subdivision))
         
         var newGrid = Array(repeating: Array(repeating: false, count: cols), count: stringCount)
         var newMarkers: [[String?]] = Array(repeating: Array(repeating: nil, count: cols), count: stringCount)
@@ -483,20 +487,20 @@ struct PlayingPatternEditorView: View {
             return
         }
 
-        // 1. Gather all existing names
-        var allNames = Set<String>()
-        // Add built-in names from the main pattern library
-        if let patternLib = appData.patternLibrary {
-            for (_, patterns) in patternLib {
-                for pattern in patterns {
-                    allNames.insert(pattern.name.lowercased())
-                }
+        // 1. Gather existing names for the current time signature
+        var namesInCurrentTimeSignature = Set<String>()
+        
+        // Add built-in names for the current time signature
+        if let systemPatterns = appData.patternLibrary?[timeSignature] {
+            for pattern in systemPatterns {
+                namesInCurrentTimeSignature.insert(pattern.name.lowercased())
             }
         }
-        // Add custom names
-        for (_, patterns) in customPlayingPatternManager.customPlayingPatterns {
-            for pattern in patterns {
-                allNames.insert(pattern.name.lowercased())
+        
+        // Add custom names for the current time signature
+        if let customPatterns = customPlayingPatternManager.customPlayingPatterns[timeSignature] {
+            for pattern in customPatterns {
+                namesInCurrentTimeSignature.insert(pattern.name.lowercased())
             }
         }
 
@@ -506,14 +510,14 @@ struct PlayingPatternEditorView: View {
 
         if isEditing {
             let originalName = editingPatternData?.pattern.name
-            // If name has changed, check if the new name conflicts with any existing name.
+            // If name has changed, check if the new name conflicts with an existing name in the same time signature.
             if lowercasedFinalName != originalName?.lowercased() {
-                if allNames.contains(lowercasedFinalName) {
+                if namesInCurrentTimeSignature.contains(lowercasedFinalName) {
                     isConflict = true
                 }
             }
         } else { // Creating a new pattern
-            if allNames.contains(lowercasedFinalName) {
+            if namesInCurrentTimeSignature.contains(lowercasedFinalName) {
                 isConflict = true
             }
         }

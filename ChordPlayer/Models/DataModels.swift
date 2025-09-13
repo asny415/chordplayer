@@ -181,6 +181,19 @@ enum GuitarNote: Codable, Hashable {
     }
 }
 
+extension GuitarNote: CustomStringConvertible {
+    var description: String {
+        switch self {
+        case .chordString(let stringNum):
+            return "String(\(stringNum))"
+        case .chordRoot(let rootSymbol):
+            return "Root(\(rootSymbol))"
+        case .specificFret(let string, let fret):
+            return "Fret(string: \(string), fret: \(fret))"
+        }
+    }
+}
+
 
 struct PatternEvent: Codable, Hashable {
     let delay: String
