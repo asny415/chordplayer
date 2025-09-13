@@ -29,7 +29,7 @@ struct EditorChordListView: View {
                         onChordSelected()
                     }) {
                         HStack {
-                            Text(MusicTheory.formatChordNameForDisplayAbbreviated(chordConfig.name))
+                            Text(MusicTheory.formatChordName(chordConfig.name))
                                 .font(.system(size: 12))
                             Spacer()
                             if let shortcutValue = chordConfig.shortcut, let s = Shortcut(stringValue: shortcutValue) {

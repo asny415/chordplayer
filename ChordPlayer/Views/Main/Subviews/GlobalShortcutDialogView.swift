@@ -33,7 +33,7 @@ struct GlobalShortcutDialogView: View {
                         Text("为以下组合设置快捷键：")
                             .font(.subheadline)
                         
-                        Text("和弦: \(MusicTheory.formatChordNameForDisplay(data.chordName))")
+                        Text("和弦: \(MusicTheory.formatChordName(data.chordName))")
                             .font(.headline)
                         
                         Text("指法: \(data.patternId)")

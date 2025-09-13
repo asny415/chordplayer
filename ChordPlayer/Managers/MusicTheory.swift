@@ -128,34 +128,12 @@ struct MusicTheory {
         return (beats, beatType)
     }
 
-    static func formatChordNameForDisplay(_ chordName: String) -> String {
-        return chordName.replacingOccurrences(of: "_Sharp", with: "#")
-                       .replacingOccurrences(of: "_", with: " ")
-    }
-
-    static func formatChordNameForDisplayAbbreviated(_ chordName: String) -> String {
-        let components = chordName.split(separator: "_")
-        
-        // For simple names like "C" or "C_Sharp", just handle sharps.
-        guard components.count >= 2 else {
-            return chordName.replacingOccurrences(of: "_Sharp", with: "#")
-        }
-
-        let quality = String(components.last!)
-        let noteParts = components.dropLast()
-        let noteRaw = noteParts.joined(separator: "_")
-        let noteDisplay = noteRaw.replacingOccurrences(of: "_Sharp", with: "#")
-
-        switch quality {
-        case "Major":
-            return noteDisplay
-        case "Minor":
-            return noteDisplay + "m"
-        default:
-            // For other types like 7, Major7, etc., concatenate them without spaces.
-            // e.g., "C_Sharp_7" -> "C#7"
-            return chordName.replacingOccurrences(of: "_Sharp", with: "#").replacingOccurrences(of: "_", with: "")
-        }
+    static func formatChordName(_ chordName: String) -> String {
+        var result = chordName.replacingOccurrences(of: "_", with: "")
+        result = result.replacingOccurrences(of: "Sharp", with: "#", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "Minor", with: "m", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "Major", with: "", options: .caseInsensitive)
+        return result
     }
 }
 

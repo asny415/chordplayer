@@ -164,7 +164,7 @@ struct SheetMusicEditorView: View {
         return ZStack {
             // Chord Name in the center
             if let name = chordName {
-                Text(MusicTheory.formatChordNameForDisplayAbbreviated(name))
+                Text(MusicTheory.formatChordName(name))
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(isSelected ? .white : .primary)
                     .lineLimit(1)
@@ -393,7 +393,7 @@ struct SheetMusicEditorView: View {
                         Text("为以下组合设置快捷键：")
                             .font(.subheadline)
                         
-                        Text("和弦: \(MusicTheory.formatChordNameForDisplay(data.chordName))")
+                        Text("和弦: \(MusicTheory.formatChordName(data.chordName))")
                             .font(.headline)
                         
                         Text("指法: \(data.patternId)")

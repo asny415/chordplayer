@@ -340,7 +340,7 @@ struct ChordCardView: View {
         ZStack(alignment: .bottomLeading) {
             // Main content - chord name
             VStack(alignment: .center) {
-                Text(MusicTheory.formatChordNameForDisplayAbbreviated(chord))
+                Text(MusicTheory.formatChordName(chord))
                     .font(.title3.weight(.medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
