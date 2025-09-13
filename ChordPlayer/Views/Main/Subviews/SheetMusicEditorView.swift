@@ -12,6 +12,8 @@ struct SheetMusicEditorView: View {
     @State private var captureMonitor: Any? = nil
     @State private var showConflictAlert: Bool = false
     @State private var conflictMessage: String = ""
+    
+    
     @State private var hoveredBeat: Int? = nil
     @State private var cachedTotalBeats: Int = 0
     @State private var cachedMaxMeasure: Int = 0
@@ -93,6 +95,7 @@ struct SheetMusicEditorView: View {
         // When selections from the sidebar change, trigger the auto-apply logic.
         .onChange(of: editorState.selectedChordName) { checkAndAutoApply() }
         .onChange(of: editorState.selectedPatternId) { checkAndAutoApply() }
+        
         .overlay(
             Group {
                 if editorState.showShortcutDialog {
@@ -131,6 +134,7 @@ struct SheetMusicEditorView: View {
         }
         .background(Color.black.opacity(0.05))
         .cornerRadius(8)
+        
     }
     
     @ViewBuilder
@@ -204,6 +208,7 @@ struct SheetMusicEditorView: View {
         let patternIdForBeat = getPatternId(for: beat)
         let isHighlightedByPattern = editorState.highlightedPatternId != nil && patternIdForBeat == editorState.highlightedPatternId
         let isHighlightedByLyric = editorState.highlightedBeats.contains(beat)
+        let isReferenceHighlighted = editorState.referenceHighlightedBeats.contains(beat)
         let isAwaitingEndBeat = editorState.lyricTimeRangeStartBeat == beat
 
         return ZStack {
@@ -234,12 +239,12 @@ struct SheetMusicEditorView: View {
         .frame(width: width, height: 48)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(backgroundColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne, isHighlightedByPattern: isHighlightedByPattern, isHighlightedByLyric: isHighlightedByLyric, isAwaitingEndBeat: isAwaitingEndBeat))
+                .fill(backgroundColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne, isHighlightedByPattern: isHighlightedByPattern, isHighlightedByLyric: isHighlightedByLyric, isReferenceHighlighted: isReferenceHighlighted, isAwaitingEndBeat: isAwaitingEndBeat))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .stroke(borderColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne, isHighlightedByPattern: isHighlightedByPattern, isHighlightedByLyric: isHighlightedByLyric, isAwaitingEndBeat: isAwaitingEndBeat),
-                       lineWidth: isSelected || isHighlightedByPattern || isHighlightedByLyric || isAwaitingEndBeat ? 2 : 1)
+                .stroke(borderColorForBeat(hasChord: hasChord, isSelected: isSelected, isHovered: isHovered, isBeatOne: isBeatOne, isHighlightedByPattern: isHighlightedByPattern, isHighlightedByLyric: isHighlightedByLyric, isReferenceHighlighted: isReferenceHighlighted, isAwaitingEndBeat: isAwaitingEndBeat),
+                       lineWidth: isSelected || isHighlightedByPattern || isHighlightedByLyric || isAwaitingEndBeat || isReferenceHighlighted ? 2 : 1)
         )
         .onHover { hovering in
             hoveredBeat = hovering ? beat : nil
@@ -261,7 +266,7 @@ struct SheetMusicEditorView: View {
         return nil
     }
     
-    private func backgroundColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool, isHighlightedByPattern: Bool, isHighlightedByLyric: Bool, isAwaitingEndBeat: Bool) -> Color {
+    private func backgroundColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool, isHighlightedByPattern: Bool, isHighlightedByLyric: Bool, isReferenceHighlighted: Bool, isAwaitingEndBeat: Bool) -> Color {
         if isSelected {
             return .accentColor.opacity(0.8)
         }
@@ -270,6 +275,9 @@ struct SheetMusicEditorView: View {
         }
         if isHighlightedByLyric {
             return Color.purple.opacity(0.5)
+        }
+        if isReferenceHighlighted {
+            return Color.gray.opacity(0.4)
         }
         if isHighlightedByPattern {
             return Color.yellow.opacity(0.5)
@@ -283,7 +291,7 @@ struct SheetMusicEditorView: View {
         return Color.primary.opacity(0.05)
     }
 
-    private func borderColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool, isHighlightedByPattern: Bool, isHighlightedByLyric: Bool, isAwaitingEndBeat: Bool) -> Color {
+    private func borderColorForBeat(hasChord: Bool, isSelected: Bool, isHovered: Bool, isBeatOne: Bool, isHighlightedByPattern: Bool, isHighlightedByLyric: Bool, isReferenceHighlighted: Bool, isAwaitingEndBeat: Bool) -> Color {
         if isSelected {
             return .accentColor
         }
@@ -292,6 +300,9 @@ struct SheetMusicEditorView: View {
         }
         if isHighlightedByLyric {
             return Color.purple.opacity(0.9)
+        }
+        if isReferenceHighlighted {
+            return Color.gray.opacity(0.7)
         }
         if isHighlightedByPattern {
             return Color.yellow.opacity(0.9)
@@ -359,9 +370,12 @@ struct SheetMusicEditorView: View {
             updateHighlightedBeatsForSelectedLyric()
         } else {
             // This is the first tap to define a new range
+            editorState.referenceHighlightedBeats = [] // Clear reference highlights
             editorState.lyricTimeRangeStartBeat = beat
         }
     }
+
+    
 
     private func updateHighlightedBeatsForSelectedLyric() {
         DispatchQueue.main.async {

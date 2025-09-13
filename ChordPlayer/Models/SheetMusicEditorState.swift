@@ -29,6 +29,9 @@ class SheetMusicEditorState: ObservableObject {
     // The beats to be highlighted in the editor, derived from the selected lyric.
     @Published var highlightedBeats: Set<Int> = []
 
+    // The beats to be highlighted for reference, derived from the previously selected lyric.
+    @Published var referenceHighlightedBeats: Set<Int> = []
+
     // The start beat for creating a new lyric time range.
     @Published var lyricTimeRangeStartBeat: Int? = nil
 

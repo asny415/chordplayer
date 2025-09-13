@@ -8,6 +8,9 @@ struct SheetMusicEditorWindow: View {
     // Local state for the editor window
     @StateObject private var editorState = SheetMusicEditorState()
     
+    // State for delete confirmation
+    @State private var showDeleteConfirmation: Bool = false
+    
     // State for the escape key monitor
     @State private var escapeMonitor: Any? = nil
 
@@ -25,12 +28,67 @@ struct SheetMusicEditorWindow: View {
         .frame(minWidth: 900, minHeight: 550)
         // Provide the local editor state to all children of this window
         .environmentObject(editorState)
-        .onAppear(perform: setupEscapeKeyMonitoring)
-        .onDisappear(perform: cleanupEscapeKeyMonitoring)
+        .alert("确认删除", isPresented: $showDeleteConfirmation) {
+            Button("删除", role: .destructive) { performDeletion() }
+            Button("取消", role: .cancel) { }
+        } message: {
+            if let beat = editorState.selectedBeat {
+                Text("您确定要删除第 \(beat + 1) 拍上的所有和弦和指法关联吗？此操作无法撤销。")
+            } else {
+                Text("此操作无法撤销。")
+            }
+        }
+        .onAppear(perform: setupGlobalKeyMonitoring)
+        .onDisappear(perform: cleanupGlobalKeyMonitoring)
     }
     
-    private func setupEscapeKeyMonitoring() {
+    private func performDeletion() {
+        guard let beatToDelete = editorState.selectedBeat else { return }
+
+        var newConfig = appData.performanceConfig
+
+        for chordIndex in 0..<newConfig.chords.count {
+            var chordConfig = newConfig.chords[chordIndex]
+            var shortcutsToRemove: [Shortcut] = []
+            
+            for (shortcut, association) in chordConfig.patternAssociations {
+                if var beatIndices = association.beatIndices, beatIndices.contains(beatToDelete) {
+                    
+                    beatIndices.removeAll { $0 == beatToDelete }
+                    
+                    if beatIndices.isEmpty {
+                        shortcutsToRemove.append(shortcut)
+                    } else {
+                        var mutableAssociation = association
+                        mutableAssociation.beatIndices = beatIndices
+                        chordConfig.patternAssociations[shortcut] = mutableAssociation
+                    }
+                }
+            }
+            
+            for shortcut in shortcutsToRemove {
+                chordConfig.patternAssociations.removeValue(forKey: shortcut)
+            }
+            
+            newConfig.chords[chordIndex] = chordConfig
+        }
+
+        appData.performanceConfig = newConfig
+        editorState.selectedBeat = nil
+    }
+    
+    private func setupGlobalKeyMonitoring() {
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Handle Delete/Backspace
+            // Key code 51 is backspace, 117 is forward delete.
+            if event.keyCode == 51 || event.keyCode == 117 {
+                if self.editorState.selectedBeat != nil {
+                    self.showDeleteConfirmation = true
+                    return nil // Consume the event
+                }
+            }
+            
+            // Handle ESC
             if event.keyCode == 53 { // ESC key
                 // Priority 1: If shortcut dialog is open, let it handle ESC.
                 if editorState.showShortcutDialog {
@@ -83,7 +141,7 @@ struct SheetMusicEditorWindow: View {
         }
     }
     
-    private func cleanupEscapeKeyMonitoring() {
+    private func cleanupGlobalKeyMonitoring() {
         if let monitor = escapeMonitor {
             NSEvent.removeMonitor(monitor)
             escapeMonitor = nil
@@ -93,6 +151,7 @@ struct SheetMusicEditorWindow: View {
 
 struct EditorLibraryView: View {
     @EnvironmentObject var editorState: SheetMusicEditorState
+    @EnvironmentObject var appData: AppData // Needed for default reference
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -123,6 +182,25 @@ struct EditorLibraryView: View {
             }
         }
         .background(.ultraThickMaterial)
+        .onChange(of: editorState.activeEditorTab) { _, newTab in
+            if newTab == .lyrics {
+                setDefaultReferenceHighlight()
+            }
+        }
+    }
+    
+    private func setDefaultReferenceHighlight() {
+        // Only set default if no lyric is selected and reference is empty
+        guard editorState.selectedLyricID == nil && editorState.referenceHighlightedBeats.isEmpty else { return }
+
+        // Find the last lyric with a time range, sorted by the start of the range
+        guard let lastLyricWithRange = appData.performanceConfig.lyrics.filter({ !$0.timeRanges.isEmpty }).sorted(by: { $0.earliestStartBeat ?? 0 < $1.earliestStartBeat ?? 0 }).last else { return }
+
+        // Find the last time range within that lyric, also sorted
+        guard let lastRange = lastLyricWithRange.timeRanges.sorted(by: { $0.startBeat < $1.startBeat }).last else { return }
+
+        // Set the reference highlight
+        editorState.referenceHighlightedBeats = Set(lastRange.startBeat...lastRange.endBeat)
     }
 }
 
@@ -231,7 +309,13 @@ struct EditorLyricsView: View {
             }
         }
         .padding(.top)
-        .onChange(of: editorState.selectedLyricID) { _, newLyricID in updateHighlightedBeats(for: newLyricID) }
+        .onChange(of: editorState.selectedLyricID) { _, newLyricID in
+            // Before updating to the new lyric's highlights, save the old ones for reference.
+            if editorState.highlightedBeats != editorState.referenceHighlightedBeats {
+                editorState.referenceHighlightedBeats = editorState.highlightedBeats
+            }
+            updateHighlightedBeats(for: newLyricID)
+        }
         .onChange(of: editorState.isAddingLyricInPlace) { _, isAdding in
             if isAdding {
                 isNewLyricFieldFocused = true
