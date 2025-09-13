@@ -22,6 +22,7 @@ struct PlayingPatternEditorView: View {
     @State private var markers: [[String?]]
     
     @State private var strumDirections: [String?]
+    @State private var strumStart: (col: Int, string: Int)? = nil
 
     let editingPatternData: PlayingPatternEditorData?
     private var isEditing: Bool { editingPatternData != nil }
@@ -289,11 +290,22 @@ struct PlayingPatternEditorView: View {
 
     // MARK: - Actions
     private func toggleStrumDirection(for col: Int, direction: String) {
+        // Reset strum state whenever a direction button is clicked
+        strumStart = nil
+
         if strumDirections.indices.contains(col) {
             if strumDirections[col] == direction {
                 strumDirections[col] = nil // Toggle off
+                // Clear the column visually
+                for i in 0..<stringCount {
+                    grid[i][col] = false
+                }
             } else {
                 strumDirections[col] = direction // Set new direction
+                // Clear the column to prepare for new selection
+                for i in 0..<stringCount {
+                    grid[i][col] = false
+                }
             }
         }
     }
@@ -321,9 +333,12 @@ struct PlayingPatternEditorView: View {
     }
     
     private func toggleCell(string: Int, col: Int) {
-        guard let strumDir = strumDirections[safe: col], let direction = strumDir else {
-            // Arpeggio mode for this column
+        // If a strum direction is not set for this column, we are in Arpeggio mode.
+        guard let strumDir = strumDirections[safe: col], let _ = strumDir else {
+            // Arpeggio mode: toggle individual cells
             grid[string][col].toggle()
+            
+            // Preview the single note sound
             if grid[string][col] {
                 let fingering: [StringOrInt] = [.string("x"), .int(3), .int(2), .int(0), .int(1), .int(0)]
                 let chordNotes = MusicTheory.chordToMidiNotes(chordDefinition: fingering, tuning: MusicTheory.standardGuitarTuning)
@@ -338,22 +353,43 @@ struct PlayingPatternEditorView: View {
             return
         }
 
-        // Strum mode for this column. A click always (re)defines the strum range.
-        // Clear the column first.
-        for i in 0..<stringCount {
-            grid[i][col] = false
-        }
+        // Strum mode for this column.
+        if let startInfo = strumStart, startInfo.col == col {
+            // This is the second click, defining the end of the strum.
+            let startString = startInfo.string
+            let endString = string
 
-        if direction == "down" { // from string 1 (index 0) to clicked string
-            for i in 0...string {
+            // Clear the column to draw the final strum range.
+            for i in 0..<stringCount {
+                grid[i][col] = false
+            }
+
+            // Fill the range between start and end strings.
+            let range = min(startString, endString)...max(startString, endString)
+            for i in range {
                 grid[i][col] = true
             }
-        } else { // "up", from string 6 (index 5) to clicked string
-            for i in string..<stringCount {
-                grid[i][col] = true
+
+            // Reset strumStart, so the next click on any column starts a new definition.
+            strumStart = nil
+            
+            // TODO: Preview the full strum sound here
+            
+        } else {
+            // This is the first click, defining the start of the strum.
+            // Clear the column and any other strum start markers.
+            for i in 0..<stringCount {
+                grid[i][col] = false
             }
+            
+            // Mark the single start cell.
+            grid[string][col] = true
+            
+            // Store the starting point for the next click.
+            strumStart = (col: col, string: string)
+            
+            // TODO: Preview a single note sound to indicate start selection
         }
-        // TODO: Preview the strum sound
     }
 
     private func previewChordC() {
