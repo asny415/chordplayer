@@ -101,7 +101,14 @@ class MidiManager: ObservableObject {
             packet.data.2 = ev.velocity
             var packetList = MIDIPacketList(numPackets: 1, packet: packet)
             if let destination = self.selectedOutput {
-                MIDISend(self.outputPort, destination, &packetList)
+                let status = MIDISend(self.outputPort, destination, &packetList)
+                if status != noErr {
+                    print("[MidiManager] ERROR sending MIDI message: \(status) for note \(ev.note) isNoteOn: \(ev.isNoteOn)")
+                } else {
+                    print("[MidiManager] SENT Note \(ev.note) isNoteOn: \(ev.isNoteOn) at \(String(format: "%.2f", nowUptimeMs)) (scheduled \(String(format: "%.2f", ev.scheduledUptimeMs)))")
+                }
+            } else {
+                print("[MidiManager] No MIDI output selected, could not send note \(ev.note)")
             }
         }
     }
@@ -221,6 +228,8 @@ class MidiManager: ObservableObject {
     func scheduleNoteOn(note: UInt8, velocity: UInt8, channel: UInt8 = 0, scheduledUptimeMs: Double) -> UUID {
         let id = UUID()
         let ev = PendingEvent(id: id, note: note, velocity: velocity, channel: channel, isNoteOn: true, scheduledUptimeMs: scheduledUptimeMs)
+        let now = ProcessInfo.processInfo.systemUptime * 1000.0
+        print("[MidiManager] ADD NoteOn: \(note) at \(String(format: "%.2f", scheduledUptimeMs)) (in \(String(format: "%.2f", scheduledUptimeMs - now)) ms)")
         midiQueue.async { [weak self] in
             guard let self = self else { return }
             self.pendingEvents[id] = ev
