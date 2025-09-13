@@ -66,7 +66,19 @@ struct SheetMusicEditorView: View {
         self.cachedTotalBeats = beats
     }
     
-    private let beatsPerRow = 16 // 每行显示16拍，类似钢琴卷粗
+    private var beatsPerRow: Int {
+        let timeSignature = appData.performanceConfig.timeSignature
+        switch timeSignature {
+        case "4/4":
+            return 16 // 4 measures
+        case "3/4":
+            return 15 // 5 measures
+        case "6/8":
+            return 18 // 3 measures
+        default:
+            return beatsPerMeasure * 4
+        }
+    }
     
     private var numberOfRows: Int {
         return Int(ceil(Double(totalBeats) / Double(beatsPerRow)))
