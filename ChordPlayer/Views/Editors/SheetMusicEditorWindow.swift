@@ -140,88 +140,99 @@ struct EditorLyricsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            List {
-                ForEach(sortedLyrics) { lyric in
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(lyric.content)
-                                .font(.body)
-                                .lineLimit(nil)
-                            
-                            Text(formatTimeRangesDisplay(lyric.timeRanges))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                        Spacer()
-
-                        if editorState.selectedLyricID == lyric.id {
-                            Button(action: { editingLyric = lyric }) {
-                                Image(systemName: "pencil.circle.fill")
-                                    .font(.title3)
+            ScrollViewReader { proxy in
+                List {
+                    ForEach(sortedLyrics) { lyric in
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(lyric.content)
+                                    .font(.body)
+                                    .lineLimit(nil)
+                                
+                                Text(formatTimeRangesDisplay(lyric.timeRanges))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .foregroundColor(.accentColor)
-                            .padding(.trailing, 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            Spacer()
+
+                            if editorState.selectedLyricID == lyric.id {
+                                Button(action: { editingLyric = lyric }) {
+                                    Image(systemName: "pencil.circle.fill")
+                                        .font(.title3)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .foregroundColor(.accentColor)
+                                .padding(.trailing, 4)
+                            }
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 8)
+                        .background(editorState.selectedLyricID == lyric.id ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .cornerRadius(6)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 1) {
+                            editorState.selectedLyricID = (editorState.selectedLyricID == lyric.id) ? nil : lyric.id
                         }
                     }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 8)
-                    .background(editorState.selectedLyricID == lyric.id ? Color.accentColor.opacity(0.2) : Color.clear)
-                    .cornerRadius(6)
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 1) {
-                        editorState.selectedLyricID = (editorState.selectedLyricID == lyric.id) ? nil : lyric.id
-                    }
-                }
-                
-                // In-place add new lyric row
-                if editorState.isAddingLyricInPlace {
-                    HStack(spacing: 8) {
-                        TextField("输入新歌词后按 Enter 保存", text: $newLyricContent)
-                            .focused($isNewLyricFieldFocused)
-                            .onSubmit {
-                                if !newLyricContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    addNewLyric(content: newLyricContent)
+                    
+                    // In-place add new lyric row
+                    if editorState.isAddingLyricInPlace {
+                        HStack(spacing: 8) {
+                            TextField("输入新歌词后按 Enter 保存", text: $newLyricContent)
+                                .focused($isNewLyricFieldFocused)
+                                .onSubmit {
+                                    if !newLyricContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        addNewLyric(content: newLyricContent)
+                                    }
+                                    newLyricContent = ""
+                                    isNewLyricFieldFocused = true // Keep focus for next lyric
+                                    // Scroll to the new input field
+                                    DispatchQueue.main.async {
+                                        proxy.scrollTo("newLyricInputRow", anchor: .bottom)
+                                    }
                                 }
+                                .textFieldStyle(PlainTextFieldStyle())
+                                .padding(8)
+                                .background(Color(NSColor.controlBackgroundColor))
+                                .cornerRadius(6)
+
+                            Button("取消") {
                                 newLyricContent = ""
                                 editorState.isAddingLyricInPlace = false
                             }
-                            .textFieldStyle(PlainTextFieldStyle())
-                            .padding(8)
-                            .background(Color(NSColor.controlBackgroundColor))
-                            .cornerRadius(6)
-
-                        Button("取消") {
-                            newLyricContent = ""
-                            editorState.isAddingLyricInPlace = false
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+                        .id("newLyricInputRow") // Assign an ID to this row
+                    } else {
+                        HStack {
+                            Spacer()
+                            Image(systemName: "plus.circle")
+                            Text("添加新歌词")
+                            Spacer()
+                        }
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            editorState.isAddingLyricInPlace = true
+                            // Scroll to the new input field when it appears
+                            DispatchQueue.main.async {
+                                proxy.scrollTo("newLyricInputRow", anchor: .bottom)
+                            }
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 4)
-                } else {
-                    HStack {
-                        Spacer()
-                        Image(systemName: "plus.circle")
-                        Text("添加新歌词")
-                        Spacer()
-                    }
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        editorState.isAddingLyricInPlace = true
-                    }
                 }
+                .listStyle(PlainListStyle())
+                .background(Color.clear)
             }
-            .listStyle(PlainListStyle())
-            .background(Color.clear)
         }
         .padding(.top)
-        .onChange(of: editorState.selectedLyricID) { newLyricID in updateHighlightedBeats(for: newLyricID) }
-        .onChange(of: editorState.isAddingLyricInPlace) { isAdding in
+        .onChange(of: editorState.selectedLyricID) { _, newLyricID in updateHighlightedBeats(for: newLyricID) }
+        .onChange(of: editorState.isAddingLyricInPlace) { _, isAdding in
             if isAdding {
                 isNewLyricFieldFocused = true
             } else {

@@ -59,8 +59,8 @@ struct AddDrumPatternSheetView: View {
                 drumPlayer.stop()
             }
         }
-        .onChange(of: timeSignature) { _ in updateGridSize() }
-        .onChange(of: subdivision) { _ in updateGridSize() }
+        .onChange(of: timeSignature) { updateGridSize() }
+        .onChange(of: subdivision) { updateGridSize() }
     }
 
     private var headerView: some View {

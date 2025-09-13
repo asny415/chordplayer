@@ -71,7 +71,7 @@ struct CustomChordCreatorView: View {
         } message: {
             Text("自定义和弦 \"\(chordName)\" 已成功保存！")
         }
-        .onChange(of: frets) { newFrets in
+        .onChange(of: frets) { _, newFrets in
             // Synchronize the new `frets` array with the old `fingering` array
             // to maintain compatibility with the saving mechanism.
             self.fingering = newFrets.map { fret in
@@ -114,7 +114,7 @@ struct CustomChordCreatorView: View {
             }
             TextField("例如: C_Custom, Am7_Custom", text: $chordName)
                 .textFieldStyle(.roundedBorder)
-                .onChange(of: chordName) { newValue in
+                .onChange(of: chordName) { _, newValue in
                     if newValue.count > maxNameLength {
                         chordName = String(newValue.prefix(maxNameLength))
                     }

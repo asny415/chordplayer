@@ -173,12 +173,12 @@ struct PlayingPatternEditorView: View {
             .padding()
         }
         .frame(minWidth: 700, minHeight: 560)
-        .onChange(of: timeSignature) { _ in updateGridSize() }
-        .onChange(of: subdivision) { _ in updateGridSize() }
-        .onChange(of: grid) { _ in updateSmartName() }
-        .onChange(of: markers) { _ in updateSmartName() }
-        .onChange(of: modeIsStrum) { _ in updateSmartName() }
-        .onChange(of: strumDirections) { _ in updateSmartName() }
+        .onChange(of: timeSignature) { updateGridSize() }
+        .onChange(of: subdivision) { updateGridSize() }
+        .onChange(of: grid) { updateSmartName() }
+        .onChange(of: markers) { updateSmartName() }
+        .onChange(of: modeIsStrum) { updateSmartName() }
+        .onChange(of: strumDirections) { updateSmartName() }
         .alert("名称已存在", isPresented: $showNameConflictAlert) {
             Button("好的") { }
         } message: {

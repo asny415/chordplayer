@@ -229,7 +229,7 @@ struct CustomChordEditorView: View {
         }
         .padding(24)
         .frame(minWidth: 500, idealWidth: 600, minHeight: 600)
-        .onChange(of: frets) { newFrets in
+        .onChange(of: frets) { _, newFrets in
             self.fingeringForSave = newFrets.map {
                 $0 < 0 ? .string("x") : .int($0)
             }
