@@ -61,7 +61,7 @@ struct PlayingPatternView: View {
             let isStrum = (event.delta ?? 0) > 0 && stringNotes.count > 1
 
             if isStrum, let fromString = stringNotes.first, let toString = stringNotes.last {
-                let direction: StrumDirection = fromString > toString ? .up : .down
+                let direction: StrumDirection = fromString > toString ? .down : .up
                 parsedEvents.append(PatternDisplayEvent(timeStep: timeStep, type: .strum(direction: direction, fromString: fromString, toString: toString)))
             } else { // Treat as single notes
                 for note in stringNotes {
