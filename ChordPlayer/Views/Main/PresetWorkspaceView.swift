@@ -26,11 +26,7 @@ struct PresetWorkspaceView: View {
                         ChordProgressionView()
                     }
 
-                    if appData.playingMode == .assisted || appData.playingMode == .automatic {
-                        GroupBox {
-                            TimingDisplayView()
-                        }
-                    }
+                    
                 }
                 .padding()
             }

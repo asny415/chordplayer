@@ -63,6 +63,19 @@ struct ChordPlayerApp: App {
                 .environmentObject(CustomDrumPatternManager.shared)
                 .environmentObject(CustomPlayingPatternManager.shared)
         }
+        .onChange(of: appData.showTimingWindow) { oldValue, newValue in
+            if newValue {
+                openWindow(id: "timing-display")
+            }
+        }
+        
+        Window("演奏助手", id: "timing-display") {
+            TimingDisplayWindowView()
+                .environmentObject(appData)
+                .environmentObject(keyboardHandler)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
         
         Window("曲谱编辑器", id: "sheet-music-editor") {
             SheetMusicEditorWindow()

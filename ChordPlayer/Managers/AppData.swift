@@ -37,6 +37,7 @@ class AppData: ObservableObject {
     
     // 快捷键设置对话框状态 (MOVED to SheetMusicEditorState)
     @Published var showShortcutDialog: Bool = false
+    @Published var showTimingWindow: Bool = false
     @Published var shortcutDialogData: ShortcutDialogData? = nil
     @Published var sheetMusicBeatMap: [Int: String] = [:]
 

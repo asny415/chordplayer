@@ -191,6 +191,13 @@ class DrumPlayer: ObservableObject {
         self.nextPattern = drumPattern
         self.lastScheduledMeasure = -1
 
+        // Show timing window if in auto or assisted mode
+        if appData.playingMode == .automatic || appData.playingMode == .assisted {
+            DispatchQueue.main.async {
+                self.appData.showTimingWindow = true
+            }
+        }
+
         // 4. Start the measure scheduler (which will also handle UI updates)
         scheduleMeasureAndReschedule(after: 0)
         
@@ -301,6 +308,10 @@ class DrumPlayer: ObservableObject {
         self.currentPattern = nil
         self.nextPattern = nil
         
+        DispatchQueue.main.async {
+            self.appData.showTimingWindow = false
+        }
+
         let timeSigParts = appData.performanceConfig.timeSignature.split(separator: "/")
         let beatsPerMeasure = (timeSigParts.count == 2) ? (Int(timeSigParts[0]) ?? 4) : 4
         
