@@ -70,53 +70,65 @@ struct TimingDisplayView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Beat timeline
-            HStack(spacing: 0) {
-                let indices = Array(0..<6)
-                ForEach(indices, id: \.self) { index in
-                    TimingBeatView(
-                        index: index,
-                        appData: appData,
-                        keyboardHandler: keyboardHandler,
-                        calculateBeatForIndex: { currentTotalBeat - 1 + $0 },
-                        getContentForBeat: getContentForBeat,
-                        getChordNameForBeat: getChordNameForBeat
-                    )
-                }
+        if appData.playingMode == .manual || appData.totalMeasures == 0 {
+            VStack {
+                Text("未在演奏中")
+                    .font(.title)
+                    .foregroundColor(.secondary)
+                Text("请在自动或辅助模式下开始演奏以显示提示")
+                    .font(.title3)
+                    .foregroundColor(Color(NSColor.tertiaryLabelColor))
             }
-            .padding(.horizontal)
-            .padding(.top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            VStack(spacing: 0) {
+                // Beat timeline
+                HStack(spacing: 0) {
+                    let indices = Array(0..<6)
+                    ForEach(indices, id: \.self) { index in
+                        TimingBeatView(
+                            index: index,
+                            appData: appData,
+                            keyboardHandler: keyboardHandler,
+                            calculateBeatForIndex: { currentTotalBeat - 1 + $0 },
+                            getContentForBeat: getContentForBeat,
+                            getChordNameForBeat: getChordNameForBeat
+                        )
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top)
 
-            // Lyrics display
-            VStack(spacing: 10) {
-                let upcomingLyrics = getUpcomingLyrics()
-                ForEach(upcomingLyrics.indices, id: \.self) { index in
-                    let lyric = upcomingLyrics[index]
-                    Text(lyric.content)
-                        .font(fontForLyric(at: index, isPlaceholder: lyric.content.isEmpty))
-                        .foregroundColor(colorForLyric(at: index))
-                        .fontWeight(fontWeightForLyric(at: index))
-                        .multilineTextAlignment(.center)
-                        .id(lyric.id)
-                        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .move(edge: .top).combined(with: .opacity)))
+                // Lyrics display
+                VStack(spacing: 10) {
+                    let upcomingLyrics = getUpcomingLyrics()
+                    ForEach(upcomingLyrics.indices, id: \.self) { index in
+                        let lyric = upcomingLyrics[index]
+                        Text(lyric.content)
+                            .font(fontForLyric(at: index, isPlaceholder: lyric.content.isEmpty))
+                            .foregroundColor(colorForLyric(at: index))
+                            .fontWeight(fontWeightForLyric(at: index))
+                            .multilineTextAlignment(.center)
+                            .id(lyric.id)
+                            .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .move(edge: .top).combined(with: .opacity)))
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .animation(.easeInOut, value: getUpcomingLyrics().map { $0.id })
+
+                // Bottom measure counter
+                if appData.totalMeasures > 0 {
+                    Text("\(appData.currentMeasure) / \(appData.totalMeasures)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+                        .background(Material.thin, in: RoundedRectangle(cornerRadius: 6))
+                        .padding(.bottom)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-            .animation(.easeInOut, value: getUpcomingLyrics().map { $0.id })
-
-            // Bottom measure counter
-            if appData.totalMeasures > 0 {
-                Text("\(appData.currentMeasure) / \(appData.totalMeasures)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
-                    .background(Material.thin, in: RoundedRectangle(cornerRadius: 6))
-                    .padding(.bottom)
-            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private func fontForLyric(at index: Int, isPlaceholder: Bool) -> Font {
