@@ -7,6 +7,7 @@ class AppData: ObservableObject {
     @Published var drumPatternLibrary: DrumPatternLibrary?
     @Published var patternLibrary: PatternLibrary?
     
+    @Published var currentBeatInfo: (beat: Int, measure: Int, timestamp: Double) = (-4, 0, 0)
     @Published var currentMeasure: Int = 0
     @Published var currentBeat: Int = 0
     @Published var totalMeasures: Int = 0

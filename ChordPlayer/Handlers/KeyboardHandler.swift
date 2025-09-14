@@ -41,11 +41,13 @@ class KeyboardHandler: ObservableObject {
             }
             .store(in: &cancellables)
 
-        appData.$currentBeat
-            .combineLatest(appData.$currentMeasure)
-            .debounce(for: .milliseconds(10), scheduler: RunLoop.main)
-            .sink { [weak self] beat, measure in
+        appData.$currentBeatInfo
+            .sink { [weak self] beatInfo in
                 guard let self = self else { return }
+
+                let (beat, measure, timestamp) = beatInfo
+                let nowMs = ProcessInfo.processInfo.systemUptime * 1000.0
+                let delay = nowMs - timestamp
 
                 if !([.automatic, .assisted].contains(self.appData.playingMode)) || self.appData.autoPlaySchedule.isEmpty {
                     self.currentPlayingInfo = nil

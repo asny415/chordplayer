@@ -75,6 +75,11 @@ class ChordPlayer: ObservableObject {
             schedulingStartUptimeMs = currentUptime
         }
 
+        let timeDifference = schedulingStartUptimeMs - currentUptime
+        if (timeDifference < 0) {
+            print("[ChordPlayer] Warning: Scheduling chord \(chordName) in the past by \(-timeDifference) ms. This may cause audio glitches.")
+        }
+
         // Schedule the UI update to be perfectly in sync with the audio
         scheduledUIUpdateWorkItem?.cancel()
         let delayMs = max(0, schedulingStartUptimeMs - currentUptime)

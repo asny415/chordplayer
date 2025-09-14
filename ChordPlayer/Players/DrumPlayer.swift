@@ -377,7 +377,11 @@ class DrumPlayer: ObservableObject {
                     newBeat = beat
                 }
                 
-                // Only update if the values actually changed to avoid unnecessary UI updates
+                // Update the combined beat info with a timestamp
+                self.appData.currentBeatInfo = (beat: newBeat, measure: newMeasure, timestamp: beatUptimeMs)
+
+                // Also update the old values for any part of the UI that still depends on them.
+                // This is for backward compatibility during the transition.
                 if self.appData.currentMeasure != newMeasure {
                     self.appData.currentMeasure = newMeasure
                 }
