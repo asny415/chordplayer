@@ -9,6 +9,5 @@ struct TimingDisplayWindowView: View {
         TimingDisplayView()
             .environmentObject(appData)
             .environmentObject(keyboardHandler)
-            .frame(minWidth: 400, minHeight: 120)
     }
 }

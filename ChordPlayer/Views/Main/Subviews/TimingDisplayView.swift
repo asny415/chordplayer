@@ -15,21 +15,136 @@ struct TimingDisplayView: View {
         let beat = appData.effectiveCurrentBeat
         
         if measure == 0 {
-            // 预备拍阶段：effectiveCurrentBeat已经是负数(-4, -3, -2, -1)
             return beat
         } else {
-            // 正式演奏阶段：使用原公式
             return (measure - 1) * beatsPerMeasure + beat
         }
     }
     
-    private func calculateBeatForIndex(_ index: Int) -> Int {
-        return currentTotalBeat - 1 + index
+    private func getUpcomingLyrics() -> [Lyric] {
+        let allLyrics = appData.performanceConfig.lyrics.sorted { $0.timeRanges.first?.startBeat ?? 0 < $1.timeRanges.first?.startBeat ?? 0 }
+        let previewBeat = currentTotalBeat + 2 // Start previewing 2 beats ahead
+
+        // Find the primary lyric: the one that is currently active or the next one to be active.
+        guard let primaryLyricIndex = allLyrics.firstIndex(where: { lyric in
+            lyric.timeRanges.contains { $0.endBeat >= previewBeat }
+        }) else {
+            return [] // No more lyrics
+        }
+        
+        let primaryLyric = allLyrics[primaryLyricIndex]
+        var results = [primaryLyric]
+        
+        // Check if the primary lyric should be on the first line or second
+        let isPrimaryLyricImminent = primaryLyric.timeRanges.contains { $0.startBeat <= previewBeat }
+        
+        var lastLyric = primaryLyric
+        var currentIndex = primaryLyricIndex
+        
+        // If the primary lyric is not imminent, it means it's the second line.
+        // We should try to find one more to be the third line.
+        let maxLyrics = isPrimaryLyricImminent ? 3 : 2
+
+        while results.count < maxLyrics {
+            if currentIndex + 1 < allLyrics.count {
+                let nextLyric = allLyrics[currentIndex + 1]
+                if (nextLyric.timeRanges.first?.startBeat ?? 0) - (lastLyric.timeRanges.first?.endBeat ?? 0) < beatsPerMeasure {
+                    results.append(nextLyric)
+                    lastLyric = nextLyric
+                    currentIndex += 1
+                } else {
+                    break
+                }
+            } else {
+                break
+            }
+        }
+        
+        // If the primary lyric is not imminent, it should be on the second line.
+        // We prepend a placeholder to push it down.
+        if !isPrimaryLyricImminent {
+            results.insert(Lyric(content: "", timeRanges: []), at: 0)
+        }
+
+        return Array(results.prefix(3))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Beat timeline
+            HStack(spacing: 0) {
+                let indices = Array(0..<6)
+                ForEach(indices, id: \.self) { index in
+                    TimingBeatView(
+                        index: index,
+                        appData: appData,
+                        keyboardHandler: keyboardHandler,
+                        calculateBeatForIndex: { currentTotalBeat - 1 + $0 },
+                        getContentForBeat: getContentForBeat,
+                        getChordNameForBeat: getChordNameForBeat
+                    )
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top)
+
+            // Lyrics display
+            VStack(spacing: 10) {
+                let upcomingLyrics = getUpcomingLyrics()
+                ForEach(upcomingLyrics.indices, id: \.self) { index in
+                    let lyric = upcomingLyrics[index]
+                    Text(lyric.content)
+                        .font(fontForLyric(at: index, isPlaceholder: lyric.content.isEmpty))
+                        .foregroundColor(colorForLyric(at: index))
+                        .fontWeight(fontWeightForLyric(at: index))
+                        .multilineTextAlignment(.center)
+                        .id(lyric.id)
+                        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .move(edge: .top).combined(with: .opacity)))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .animation(.easeInOut, value: getUpcomingLyrics().map { $0.id })
+
+            // Bottom measure counter
+            if appData.totalMeasures > 0 {
+                Text("\(appData.currentMeasure) / \(appData.totalMeasures)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+                    .background(Material.thin, in: RoundedRectangle(cornerRadius: 6))
+                    .padding(.bottom)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private func fontForLyric(at index: Int, isPlaceholder: Bool) -> Font {
+        if isPlaceholder { return .largeTitle } // Keep space
+        switch index {
+        case 0: return .largeTitle
+        case 1: return .title2
+        default: return .title3
+        }
+    }
+    
+    private func colorForLyric(at index: Int) -> Color {
+        switch index {
+        case 0: return .primary
+        case 1: return .secondary
+        default: return Color(NSColor.tertiaryLabelColor)
+        }
+    }
+    
+    private func fontWeightForLyric(at index: Int) -> Font.Weight {
+        switch index {
+        case 0: return .bold
+        case 1: return .medium
+        default: return .regular
+        }
     }
     
     private func getContentForBeat(_ beat: Int) -> String {
-        // 从autoPlaySchedule中查找指定beat的事件
-        // 第一个和弦通常在triggerBeat=0时出现
         if let event = appData.autoPlaySchedule.first(where: { $0.triggerBeat == beat }) {
             if let shortcutValue = event.shortcut, let shortcut = Shortcut(stringValue: shortcutValue) {
                 return shortcut.displayText
@@ -38,6 +153,13 @@ struct TimingDisplayView: View {
             }
         }
         return "·"
+    }
+    
+    private func getChordNameForBeat(_ beat: Int) -> String? {
+        if let event = appData.autoPlaySchedule.first(where: { $0.triggerBeat == beat }) {
+            return event.chordName
+        }
+        return nil
     }
     
     private func getDefaultShortcutForChord(_ chordName: String) -> String? {
@@ -58,136 +180,12 @@ struct TimingDisplayView: View {
         }
         return nil
     }
-    
-    private func getChordNameForBeat(_ beat: Int) -> String? {
-        if let event = appData.autoPlaySchedule.first(where: { $0.triggerBeat == beat }) {
-            return event.chordName
-        }
-        return nil
-    }
-    
-    // 获取当前应该显示的歌词（提前两拍显示）
-    private func getCurrentLyric() -> Lyric? {
-        let currentBeat = currentTotalBeat
-        let previewBeat = currentBeat + 1 // 提前一拍
-        
-        // 查找在预览拍号范围内的歌词
-        let candidateLyrics = appData.performanceConfig.lyrics.filter { lyric in
-            lyric.timeRanges.contains { range in
-                previewBeat >= range.startBeat && previewBeat <= range.endBeat
-            }
-        }
-        
-        // 如果有多个候选歌词，选择开始拍号最晚的（优先级最高的）
-        return candidateLyrics.max { lyric1, lyric2 in
-            let maxStart1 = lyric1.timeRanges.compactMap { range in
-                previewBeat >= range.startBeat && previewBeat <= range.endBeat ? range.startBeat : nil
-            }.max() ?? Int.min
-            
-            let maxStart2 = lyric2.timeRanges.compactMap { range in
-                previewBeat >= range.startBeat && previewBeat <= range.endBeat ? range.startBeat : nil
-            }.max() ?? Int.min
-            
-            return maxStart1 < maxStart2
-        }
-    }
-    
-    // 获取下一句歌词（预览）
-    private func getNextLyric() -> Lyric? {
-        let currentBeat = currentTotalBeat
-        let previewBeat = currentBeat + 2
-        
-        // 查找在预览拍号之后开始的歌词
-        let upcomingLyrics = appData.performanceConfig.lyrics.filter { lyric in
-            lyric.timeRanges.contains { range in
-                range.startBeat > previewBeat
-            }
-        }.sorted { lyric1, lyric2 in
-            // 获取每个歌词最早的开始拍号
-            let earliestStart1 = lyric1.timeRanges.compactMap { range in
-                range.startBeat > previewBeat ? range.startBeat : nil
-            }.min() ?? Int.max
-            
-            let earliestStart2 = lyric2.timeRanges.compactMap { range in
-                range.startBeat > previewBeat ? range.startBeat : nil
-            }.min() ?? Int.max
-            
-            return earliestStart1 < earliestStart2
-        }
-        
-        return upcomingLyrics.first
-    }
-    
-    var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            VStack(alignment: .leading, spacing: 12) {
-                // 节拍时间轴
-                HStack(spacing: 0) {
-                    let indices = Array(0..<6) // 显示6个位置：提前两拍，当前拍，后续三拍
-                    ForEach(indices, id: \.self) { index in
-                        TimingBeatView(
-                            index: index,
-                            appData: appData,
-                            keyboardHandler: keyboardHandler,
-                            calculateBeatForIndex: calculateBeatForIndex,
-                            getContentForBeat: getContentForBeat,
-                            getChordNameForBeat: getChordNameForBeat
-                        )
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                
-                // 歌词显示区域
-                if let currentLyric = getCurrentLyric() {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(currentLyric.content)
-                            .font(.title3)
-                            .foregroundColor(.primary)
-                            .fontWeight(.medium)
-                        
-                        if let nextLyric = getNextLyric() {
-                            Text(nextLyric.content)
-                                .font(.body)
-                                .foregroundColor(.secondary)
-                                .opacity(0.7)
-                        }
-                    }
-                    .padding(.top, 8)
-                } else if let nextLyric = getNextLyric() {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("即将到来")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text(nextLyric.content)
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .opacity(0.7)
-                    }
-                    .padding(.top, 8)
-                }
-                
-                Spacer()
-            }
-            
-            if appData.totalMeasures > 0 {
-                Text("\(appData.currentMeasure) / \(appData.totalMeasures)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Material.thin, in: RoundedRectangle(cornerRadius: 6))
-            }
-        }
-        .padding()
-        .frame(height: 120)
-    }
 }
 
 struct TimingBeatView: View {
     let index: Int
-    let appData: AppData
-    let keyboardHandler: KeyboardHandler
+    @ObservedObject var appData: AppData
+    @ObservedObject var keyboardHandler: KeyboardHandler
     let calculateBeatForIndex: (Int) -> Int
     let getContentForBeat: (Int) -> String
     let getChordNameForBeat: (Int) -> String?
@@ -195,15 +193,12 @@ struct TimingBeatView: View {
     var body: some View {
         let beatForIndex = calculateBeatForIndex(index)
         let content = getContentForBeat(beatForIndex)
-        let isCurrentBeat = index == 2 // 第3个位置是当前拍（提前一拍提醒）
+        let isCurrentBeat = index == 2
         
-        // 根据播放模式确定高亮逻辑
         let shouldHighlight: Bool = {
             if appData.playingMode == .assisted {
-                // 辅助模式：只有当用户按下正确按键时才高亮
                 return isCurrentBeat && content != "·" && appData.currentActivePositionTriggered
             } else if appData.playingMode == .automatic {
-                // 自动模式：当前拍自动高亮（模拟按键按下效果）
                 return isCurrentBeat && content != "·"
             }
             return false
@@ -222,7 +217,7 @@ struct BeatLabel: View {
     let beat: Int
     let isCurrentBeat: Bool
     let content: String
-    let shouldHighlightForAction: Bool // 是否需要强调提示用户按键
+    let shouldHighlightForAction: Bool
     
     init(beat: Int, isCurrentBeat: Bool, content: String, shouldHighlightForAction: Bool = false) {
         self.beat = beat

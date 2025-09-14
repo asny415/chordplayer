@@ -75,7 +75,8 @@ struct ChordPlayerApp: App {
                 .environmentObject(keyboardHandler)
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        .defaultSize(width: 600, height: 250)
+        .windowResizability(.contentMinSize)
         
         Window("曲谱编辑器", id: "sheet-music-editor") {
             SheetMusicEditorWindow()
