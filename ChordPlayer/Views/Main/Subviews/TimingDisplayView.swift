@@ -21,22 +21,33 @@ struct TimingDisplayView: View {
         }
     }
     
-    private func getUpcomingLyrics() -> [Lyric] {
-        let allLyrics = appData.performanceConfig.lyrics.sorted { $0.timeRanges.first?.startBeat ?? 0 < $1.timeRanges.first?.startBeat ?? 0 }
-        let previewBeat = currentTotalBeat + 2 // Start previewing 2 beats ahead
+    private struct LyricInstance: Identifiable, Equatable {
+        let id: UUID
+        let content: String
+        let timeRange: LyricTimeRange
+        let originalLyricId: UUID
+    }
+    
+    private func getUpcomingLyrics() -> [LyricInstance] {
+        let allLyricInstances = appData.performanceConfig.lyrics.flatMap { lyric -> [LyricInstance] in
+            lyric.timeRanges.map { timeRange in
+                LyricInstance(id: timeRange.id, content: lyric.content, timeRange: timeRange, originalLyricId: lyric.id)
+            }
+        }.sorted { $0.timeRange.startBeat < $1.timeRange.startBeat }
+        
+        let searchHorizonBeat = currentTotalBeat + (2 * beatsPerMeasure) // Search for lyrics up to 2 measures ahead
+        let imminentDisplayBeat = currentTotalBeat + 2 // A lyric is imminent if its start beat is within 2 beats
 
         // Find the primary lyric: the one that is currently active or the next one to be active.
-        guard let primaryLyricIndex = allLyrics.firstIndex(where: { lyric in
-            lyric.timeRanges.contains { $0.endBeat >= previewBeat }
-        }) else {
+        guard let primaryLyricIndex = allLyricInstances.firstIndex(where: { $0.timeRange.endBeat >= currentTotalBeat }) else {
             return [] // No more lyrics
         }
         
-        let primaryLyric = allLyrics[primaryLyricIndex]
+        let primaryLyric = allLyricInstances[primaryLyricIndex]
         var results = [primaryLyric]
         
         // Check if the primary lyric should be on the first line or second
-        let isPrimaryLyricImminent = primaryLyric.timeRanges.contains { $0.startBeat <= previewBeat }
+        let isPrimaryLyricImminent = primaryLyric.timeRange.startBeat <= imminentDisplayBeat
         
         var lastLyric = primaryLyric
         var currentIndex = primaryLyricIndex
@@ -46,9 +57,9 @@ struct TimingDisplayView: View {
         let maxLyrics = isPrimaryLyricImminent ? 3 : 2
 
         while results.count < maxLyrics {
-            if currentIndex + 1 < allLyrics.count {
-                let nextLyric = allLyrics[currentIndex + 1]
-                if (nextLyric.timeRanges.first?.startBeat ?? 0) - (lastLyric.timeRanges.first?.endBeat ?? 0) < beatsPerMeasure {
+            if currentIndex + 1 < allLyricInstances.count {
+                let nextLyric = allLyricInstances[currentIndex + 1]
+                if nextLyric.timeRange.startBeat - lastLyric.timeRange.endBeat < (2 * beatsPerMeasure) { // Check if next lyric is within 2 measures
                     results.append(nextLyric)
                     lastLyric = nextLyric
                     currentIndex += 1
@@ -63,7 +74,7 @@ struct TimingDisplayView: View {
         // If the primary lyric is not imminent, it should be on the second line.
         // We prepend a placeholder to push it down.
         if !isPrimaryLyricImminent {
-            results.insert(Lyric(content: "", timeRanges: []), at: 0)
+            results.insert(LyricInstance(id: UUID(), content: "", timeRange: LyricTimeRange(startBeat: 0, endBeat: 0), originalLyricId: UUID()), at: 0)
         }
 
         return Array(results.prefix(3))
@@ -102,20 +113,16 @@ struct TimingDisplayView: View {
                 // Lyrics display
                 VStack(spacing: 10) {
                     let upcomingLyrics = getUpcomingLyrics()
-                    ForEach(upcomingLyrics.indices, id: \.self) { index in
-                        let lyric = upcomingLyrics[index]
+                    ForEach(Array(upcomingLyrics.enumerated()), id: \.element.id) { index, lyric in
                         Text(lyric.content)
                             .font(fontForLyric(at: index, isPlaceholder: lyric.content.isEmpty))
                             .foregroundColor(colorForLyric(at: index))
                             .fontWeight(fontWeightForLyric(at: index))
                             .multilineTextAlignment(.center)
-                            .id(lyric.id)
-                            .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .move(edge: .top).combined(with: .opacity)))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-                .animation(.easeInOut, value: getUpcomingLyrics().map { $0.id })
 
                 // Bottom measure counter
                 if appData.totalMeasures > 0 {
