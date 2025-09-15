@@ -7,7 +7,6 @@ class PresetManager: ObservableObject {
     @Published var presets: [PresetInfo] = []
     @Published var currentPreset: Preset?
     
-    private let unnamedPresetId = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
     private let presetsDirectory: URL
     private var presetsListURL: URL {
         return presetsDirectory.appendingPathComponent("presets.json")
@@ -23,12 +22,11 @@ class PresetManager: ObservableObject {
         
         try? FileManager.default.createDirectory(at: presetsDirectory, withIntermediateDirectories: true)
         
-        migrateIfNeeded(in: baseDirectory)
-        
         loadPresetsList()
         
         if presets.isEmpty {
-            let defaultPreset = createDefaultPreset()
+            print("[PresetManager] No presets found. Creating a default one.")
+            let defaultPreset = Preset.createNew(name: "Default Preset")
             presets.append(defaultPreset.toInfo())
             savePresetToFile(defaultPreset)
             savePresetsList()
@@ -36,73 +34,73 @@ class PresetManager: ObservableObject {
         
         if let firstPresetInfo = presets.first {
             loadPreset(firstPresetInfo)
+        } else {
+            print("[PresetManager] CRITICAL: Failed to load or create an initial preset.")
         }
         
-        print("[PresetManager] Initialized with \(presets.count) presets. Current: \(currentPreset?.name ?? "None")")
-    }
-    
-    var currentPresetOrUnnamed: Preset {
-        return currentPreset ?? createDefaultPreset(isUnnamed: true)
-    }
-    
-    func isUnnamedPreset(_ preset: Preset) -> Bool {
-        return preset.id == unnamedPresetId
+        print("[PresetManager] Initialized. Current preset: \(currentPreset?.name ?? "None")")
     }
     
     func loadPreset(_ presetInfo: PresetInfo) {
         let fileURL = presetFileURL(for: presetInfo.id)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
         do {
             let data = try Data(contentsOf: fileURL)
-            let preset = try JSONDecoder().decode(Preset.self, from: data)
+            let preset = try decoder.decode(Preset.self, from: data)
             self.currentPreset = preset
             print("[PresetManager] ✅ Loaded preset: \(preset.name)")
         } catch {
-            print("[PresetManager] ❌ Failed to load preset file for \(presetInfo.name): \(error)")
+            print("[PresetManager] ❌ Failed to load or decode preset file for \(presetInfo.name): \(error). This might be an old format.")
+            // Handle failure: e.g., remove from list and load another
+            presets.removeAll { $0.id == presetInfo.id }
+            savePresetsList()
+            if let nextPreset = presets.first {
+                loadPreset(nextPreset)
+            } else {
+                currentPreset = nil // Or create a new default one
+            }
         }
     }
     
-    func createNewPreset(name: String, description: String? = nil, performanceConfig: PerformanceConfig, appConfig: AppConfig) -> Preset? {
-        if presets.contains(where: { $0.name.lowercased() == name.lowercased() }) {
-            print("[PresetManager] ❌ Preset with name '\(name)' already exists")
-            return nil
-        }
+    func createNewPreset(name: String) -> Preset {
+        let newName = getUniquePresetName(name)
+        let newPreset = Preset.createNew(name: newName)
         
-        let newPreset = Preset(name: name, description: description, performanceConfig: performanceConfig, appConfig: appConfig)
-        presets.append(newPreset.toInfo())
+        presets.insert(newPreset.toInfo(), at: 0)
         currentPreset = newPreset
         
         savePresetsList()
         saveCurrentPresetToFile()
         
-        print("[PresetManager] ✅ Created preset: \(name)")
+        print("[PresetManager] ✅ Created preset: \(newName)")
         return newPreset
     }
     
-    func updateCurrentPreset(performanceConfig: PerformanceConfig, appConfig: AppConfig) {
-        guard var preset = currentPreset else { return }
+    func updateCurrentPreset(_ preset: Preset) {
+        guard let presetId = currentPreset?.id, preset.id == presetId else { return }
         
-        preset.performanceConfig = performanceConfig
-        preset.appConfig = appConfig
-        preset.updatedAt = Date()
+        var updatedPreset = preset
+        updatedPreset.updatedAt = Date()
+        self.currentPreset = updatedPreset
         
-        if let index = presets.firstIndex(where: { $0.id == preset.id }) {
-            presets[index].updatedAt = preset.updatedAt
+        if let index = presets.firstIndex(where: { $0.id == presetId }) {
+            presets[index].name = updatedPreset.name
+            presets[index].updatedAt = updatedPreset.updatedAt
         }
         
-        currentPreset = preset
         scheduleAutoSave()
     }
     
     func deletePreset(_ presetInfo: PresetInfo) {
-        guard presetInfo.id != unnamedPresetId else { return }
-        
         presets.removeAll { $0.id == presetInfo.id }
         
         let fileURL = presetFileURL(for: presetInfo.id)
         try? FileManager.default.removeItem(at: fileURL)
         
         if presets.isEmpty {
-            let defaultPreset = createDefaultPreset()
+            let defaultPreset = Preset.createNew(name: "Default Preset")
             presets.append(defaultPreset.toInfo())
             savePresetToFile(defaultPreset)
         }
@@ -120,21 +118,23 @@ class PresetManager: ObservableObject {
     
     func renamePreset(_ presetInfo: PresetInfo, newName: String) {
         guard let index = presets.firstIndex(where: { $0.id == presetInfo.id }) else { return }
-        if presets.contains(where: { $0.id != presetInfo.id && $0.name.lowercased() == newName.lowercased() }) { return }
         
-        presets[index].name = newName
+        let finalName = getUniquePresetName(newName, ignoring: presetInfo.id)
+        presets[index].name = finalName
         presets[index].updatedAt = Date()
         
         if var presetToRename = currentPreset, presetToRename.id == presetInfo.id {
-            presetToRename.name = newName
+            presetToRename.name = finalName
             presetToRename.updatedAt = Date()
             currentPreset = presetToRename
             saveCurrentPresetToFile()
-        } else if let presetToRename = loadFullPreset(for: presetInfo.id) {
-            var mutablePreset = presetToRename
-            mutablePreset.name = newName
-            mutablePreset.updatedAt = Date()
-            savePresetToFile(mutablePreset)
+        } else {
+            // Load the preset, rename it, and save it back
+            if var presetToRename = loadFullPreset(for: presetInfo.id) {
+                presetToRename.name = finalName
+                presetToRename.updatedAt = Date()
+                savePresetToFile(presetToRename)
+            }
         }
         
         savePresetsList()
@@ -144,81 +144,7 @@ class PresetManager: ObservableObject {
         autoSaveTimer?.invalidate()
         autoSaveTimer = Timer.scheduledTimer(withTimeInterval: autoSaveDelay, repeats: false) { [weak self] _ in
             self?.saveCurrentPresetToFile()
-            self?.savePresetsList()
         }
-    }
-    
-    private func createDefaultPreset(isUnnamed: Bool = false) -> Preset {
-        let defaultConfig = PerformanceConfig(
-            tempo: 120,
-            timeSignature: "4/4",
-            key: "C",
-            quantize: QuantizationMode.measure.rawValue,
-            chords: [],
-            selectedDrumPatterns: [],
-            selectedPlayingPatterns: [],
-            lyrics: [],
-            activeDrumPatternId: "",
-            activePlayingPatternId: ""
-        )
-        let defaultAppConfig = AppConfig(midiPortName: "IAC Driver Bus 1", note: 60, velocity: 64, duration: 4000, channel: 0)
-        
-        let preset = Preset(
-            id: isUnnamed ? unnamedPresetId : UUID(),
-            name: isUnnamed ? String(localized: "preset_manager_unnamed_preset_name") : "Default Preset",
-            description: isUnnamed ? String(localized: "preset_manager_unnamed_preset_description") : nil,
-            performanceConfig: defaultConfig,
-            appConfig: defaultAppConfig
-        )
-        return preset
-    }
-    
-    func setShortcut(_ shortcut: Shortcut?, forChord chord: String) {
-        guard var preset = currentPreset else { return }
-        
-        if let index = preset.performanceConfig.chords.firstIndex(where: { $0.name == chord }) {
-            preset.performanceConfig.chords[index].shortcut = shortcut?.stringValue
-            preset.updatedAt = Date()
-            currentPreset = preset
-            
-            if let index = presets.firstIndex(where: { $0.id == preset.id }) {
-                presets[index].updatedAt = preset.updatedAt
-            }
-            
-            scheduleAutoSave()
-        }
-    }
-
-    /// Detects all potential conflicts for a given shortcut in the current context.
-    func detectConflicts(for shortcut: Shortcut, of chordName: String, in config: PerformanceConfig) -> [ShortcutConflict] {
-        var conflicts: [ShortcutConflict] = []
-
-        // 1. Conflict with another chord's main shortcut
-        if config.chords.contains(where: { $0.name != chordName && $0.shortcut == shortcut.stringValue }) {
-            conflicts.append(.defaultChordShortcut)
-        }
-
-        // 2. Conflict with another chord's pattern association
-        for otherChord in config.chords {
-            if otherChord.name != chordName, otherChord.patternAssociations.keys.contains(shortcut) {
-                conflicts.append(.otherAssociation(chordName: otherChord.name))
-            }
-        }
-
-        // 2.5. Conflict with current chord's existing pattern associations
-        if let currentChord = config.chords.first(where: { $0.name == chordName }) {
-            if currentChord.patternAssociations.keys.contains(shortcut) {
-                conflicts.append(.sameChordAssociation)
-            }
-        }
-
-        // 3. Conflict with numeric keys for pattern switching
-        if let number = Int(shortcut.key), number > 0, number < 10,
-           !shortcut.modifiersShift && !shortcut.modifiersCommand && !shortcut.modifiersControl && !shortcut.modifiersOption {
-            conflicts.append(.numericKey)
-        }
-
-        return conflicts
     }
     
     // MARK: - File storage helpers
@@ -232,9 +158,11 @@ class PresetManager: ObservableObject {
             self.presets = []
             return
         }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
         do {
             let data = try Data(contentsOf: presetsListURL)
-            let infos = try JSONDecoder().decode([PresetInfo].self, from: data)
+            let infos = try decoder.decode([PresetInfo].self, from: data)
             self.presets = infos.sorted(by: { $0.updatedAt > $1.updatedAt })
         } catch {
             print("[PresetManager] ❌ Failed to load presets list: \(error).")
@@ -243,8 +171,11 @@ class PresetManager: ObservableObject {
     }
     
     func savePresetsList() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = .prettyPrinted
         do {
-            let data = try JSONEncoder().encode(presets)
+            let data = try encoder.encode(presets)
             try data.write(to: presetsListURL, options: .atomic)
         } catch {
             print("[PresetManager] ❌ Failed to save presets list: \(error)")
@@ -258,9 +189,13 @@ class PresetManager: ObservableObject {
     
     private func savePresetToFile(_ preset: Preset) {
         let url = presetFileURL(for: preset.id)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = .prettyPrinted
         do {
-            let data = try JSONEncoder().encode(preset)
+            let data = try encoder.encode(preset)
             try data.write(to: url, options: .atomic)
+            print("[PresetManager] 💾 Saved preset \(preset.name) to \(url.lastPathComponent)")
         } catch {
             print("[PresetManager] ❌ Failed to save preset \(preset.name): \(error)")
         }
@@ -269,58 +204,24 @@ class PresetManager: ObservableObject {
     private func loadFullPreset(for id: UUID) -> Preset? {
         let fileURL = presetFileURL(for: id)
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
         do {
             let data = try Data(contentsOf: fileURL)
-            return try JSONDecoder().decode(Preset.self, from: data)
+            return try decoder.decode(Preset.self, from: data)
         } catch {
             print("[PresetManager] ⚠️ Could not load full preset for id \(id): \(error)")
             return nil
         }
     }
     
-    private func migrateIfNeeded(in baseDirectory: URL) {
-        // Migration from single file v2
-        let combinedV2 = baseDirectory.appendingPathComponent("presets_v2.json")
-        if FileManager.default.fileExists(atPath: combinedV2.path) {
-            do {
-                let data = try Data(contentsOf: combinedV2)
-                let combinedPresets = try JSONDecoder().decode([Preset].self, from: data)
-                var infos: [PresetInfo] = []
-                for preset in combinedPresets {
-                    savePresetToFile(preset)
-                    infos.append(preset.toInfo())
-                }
-                self.presets = infos
-                savePresetsList()
-                try FileManager.default.removeItem(at: combinedV2)
-                print("[PresetManager] 🔁 Migrated \(combinedPresets.count) presets from presets_v2.json.")
-                return // Exit after this migration
-            } catch {
-                print("[PresetManager] ⚠️ Migration from v2 failed: \(error)")
-            }
+    private func getUniquePresetName(_ name: String, ignoring idToIgnore: UUID? = nil) -> String {
+        var newName = name
+        var counter = 1
+        while presets.contains(where: { $0.name.lowercased() == newName.lowercased() && $0.id != idToIgnore }) {
+            counter += 1
+            newName = "\(name) \(counter)"
         }
-        
-        // Migration from individual files to presets.json + individual files
-        if !FileManager.default.fileExists(atPath: presetsListURL.path) {
-            do {
-                let files = try FileManager.default.contentsOfDirectory(at: presetsDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
-                var loadedPresets: [Preset] = []
-                for file in files where file.pathExtension.lowercased() == "json" {
-                    if let preset = loadFullPreset(for: UUID(uuidString: file.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "preset_", with: "")) ?? UUID()) {
-                        loadedPresets.append(preset)
-                    }
-                }
-                
-                if !loadedPresets.isEmpty {
-                    self.presets = loadedPresets.map { $0.toInfo() }
-                    savePresetsList()
-                    print("[PresetManager] 🔁 Migrated \(loadedPresets.count) individual preset files to new list format.")
-                }
-            } catch {
-                print("[PresetManager] ⚠️ Migration from individual files failed: \(error)")
-            }
-        }
+        return newName
     }
 }
-
-

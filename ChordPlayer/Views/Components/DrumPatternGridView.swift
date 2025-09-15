@@ -1,80 +1,35 @@
-
 import SwiftUI
 
 struct DrumPatternGridView: View {
     let pattern: DrumPattern
-    let timeSignature: String
     let activeColor: Color
     let inactiveColor: Color
 
-    private let grid: [[Bool]]
-    private let totalSteps: Int
-
-    private enum DrumInstrument: Int, CaseIterable {
-        case kick = 36
-        case snare = 38
-        case hihat = 42
-        
-        var color: Color {
-            switch self {
-            case .kick: return .red
-            case .snare: return .yellow
-            case .hihat: return .cyan
-            }
-        }
-    }
-
-    init(pattern: DrumPattern, timeSignature: String, activeColor: Color, inactiveColor: Color) {
-        self.pattern = pattern
-        self.timeSignature = timeSignature
-        self.activeColor = activeColor
-        self.inactiveColor = inactiveColor
-
-        let (beats, beatType) = MusicTheory.parseTimeSignature(timeSignature)
-        self.totalSteps = (beats * 4) / (beatType / 4) // e.g. 4/4 -> 16 steps, 3/4 -> 12 steps
-
-        var gridData = Array(repeating: Array(repeating: false, count: totalSteps), count: DrumInstrument.allCases.count)
-        var absoluteTime: Double = 0.0
-
-        for event in pattern.pattern {
-            if let delayFraction = MusicTheory.parseDelay(delayString: event.delay) {
-                absoluteTime += delayFraction
-                
-                let timeStep = Int(round(absoluteTime * 16.0)) // A whole note contains 16 sixteenth notes
-
-                if timeStep < totalSteps {
-                    for note in event.notes {
-                        if let instrument = DrumInstrument(rawValue: note) {
-                            let instrumentIndex = DrumInstrument.allCases.firstIndex(of: instrument)!
-                            gridData[instrumentIndex][timeStep] = true
-                        }
-                    }
-                }
-            }
-        }
-        self.grid = gridData
+    // A simple color mapping for instruments.
+    private func colorForInstrument(at index: Int) -> Color {
+        let colors: [Color] = [.red, .yellow, .cyan, .green, .orange, .purple]
+        return colors[index % colors.count]
     }
 
     var body: some View {
         Canvas { context, size in
-            let stepWidth = size.width / CGFloat(totalSteps)
-            let instrumentHeight = size.height / CGFloat(DrumInstrument.allCases.count)
+            guard !pattern.patternGrid.isEmpty, !pattern.patternGrid[0].isEmpty else { return }
+            
+            let instrumentCount = pattern.instruments.count
+            let stepCount = pattern.steps
+            
+            let stepWidth = size.width / CGFloat(stepCount)
+            let instrumentHeight = size.height / CGFloat(instrumentCount)
 
             // Draw grid lines
-            // Draw vertical line at x=0
-            var initialPath = Path()
-            initialPath.move(to: CGPoint(x: 0, y: 0))
-            initialPath.addLine(to: CGPoint(x: 0, y: size.height))
-            context.stroke(initialPath, with: .color(inactiveColor.opacity(0.2)))
-
-            for i in 1..<totalSteps {
+            for i in 1..<stepCount {
                 let x = CGFloat(i) * stepWidth
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: size.height))
                 context.stroke(path, with: .color(inactiveColor.opacity(0.2)))
             }
-            for i in 1..<DrumInstrument.allCases.count {
+            for i in 1..<instrumentCount {
                 let y = CGFloat(i) * instrumentHeight
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
@@ -83,14 +38,14 @@ struct DrumPatternGridView: View {
             }
 
             // Draw notes
-            for (instIndex, instrumentRow) in grid.enumerated() {
+            for (instIndex, instrumentRow) in pattern.patternGrid.enumerated() {
                 for (stepIndex, hasNote) in instrumentRow.enumerated() {
                     if hasNote {
                         let x = CGFloat(stepIndex) * stepWidth
                         let y = CGFloat(instIndex) * instrumentHeight
                         let rect = CGRect(x: x, y: y, width: stepWidth, height: instrumentHeight).insetBy(dx: 1, dy: 1)
-                        let instrument = DrumInstrument.allCases[instIndex]
-                        context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .color(instrument.color.opacity(0.8)))
+                        let instrumentColor = colorForInstrument(at: instIndex)
+                        context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .color(instrumentColor.opacity(0.8)))
                     }
                 }
             }

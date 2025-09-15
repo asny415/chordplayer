@@ -1,56 +1,29 @@
-
 import SwiftUI
 import CoreMIDI
 
 struct ContentView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
-    @EnvironmentObject var chordPlayer: ChordPlayer
-    @EnvironmentObject var midiManager: MidiManager
-    @EnvironmentObject var drumPlayer: DrumPlayer
-
-    @Binding var showCustomChordCreatorFromMenu: Bool
-    @Binding var showCustomChordManagerFromMenu: Bool
-    @Binding var showDrumPatternCreatorFromMenu: Bool
-    @Binding var showCustomDrumPatternManagerFromMenu: Bool
-    @Binding var showPlayingPatternCreatorFromMenu: Bool
-    @Binding var showCustomPlayingPatternManagerFromMenu: Bool
-    
 
     var body: some View {
         NavigationSplitView {
             PresetSidebar()
                 .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 400)
         } detail: {
+            // TODO: This view needs to be refactored to use the new data model
             PresetWorkspaceView()
         }
         .preferredColorScheme(.dark)
         .frame(minWidth: 900, minHeight: 600)
         .onAppear(perform: setupInitialState)
-        .sheet(isPresented: $showCustomChordCreatorFromMenu) {
-            CustomChordCreatorView()
-        }
-        .sheet(isPresented: $showCustomChordManagerFromMenu) {
-            CustomChordLibraryView()
-        }
-        .sheet(isPresented: $showDrumPatternCreatorFromMenu) {
-            AddDrumPatternSheetView()
-        }
-        .sheet(isPresented: $showCustomDrumPatternManagerFromMenu) {
-            CustomDrumPatternLibraryView()
-        }
-        .sheet(isPresented: $showPlayingPatternCreatorFromMenu) {
-            PlayingPatternEditorView(globalTimeSignature: appData.performanceConfig.timeSignature)
-        }
-        .sheet(isPresented: $showCustomPlayingPatternManagerFromMenu) {
-            CustomPlayingPatternLibraryView()
-        }
-        
+        // All .sheet modifiers for custom libraries are removed as they are now obsolete.
+        // The functionality will be integrated into the PresetWorkspaceView.
     }
 
     private func setupInitialState() {
         DispatchQueue.main.async {
-            keyboardHandler.updateWithNewConfig(appData.performanceConfig)
+            // TODO: keyboardHandler needs to be updated to work with the new Preset model
+            // keyboardHandler.updateWithNewConfig(appData.preset)
         }
     }
 }
@@ -63,7 +36,7 @@ private struct PresetSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             List(selection: .constant(presetManager.currentPreset?.id)) {
-                Section(header: Text("content_view_presets_section_header")) {
+                Section(header: Text("Presets")) { // Using literal string for now
                     ForEach(presetManager.presets) { presetInfo in
                         PresetRow(
                             presetInfo: presetInfo,
@@ -85,12 +58,14 @@ private struct PresetSidebar: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: {                        
-                        let newPresetName = String(localized: "content_view_new_preset_prefix") + " \(Date().formatted(.dateTime.month().day().hour().minute().second()))"
-                        if let newPreset = appData.createNewPreset(name: newPresetName) {
-                            editingPresetId = newPreset.id
+                        let newPresetName = "New Preset \(Date().formatted(.dateTime.month().day().hour().minute().second()))"
+                        appData.createNewPreset(name: newPresetName)
+                        // The new preset is automatically loaded, we can grab its ID for editing.
+                        if let newPresetId = presetManager.currentPreset?.id {
+                            editingPresetId = newPresetId
                         }
                     }) {
-                        Label("content_view_new_preset_button", systemImage: "plus.circle")
+                        Label("New Preset", systemImage: "plus.circle")
                     }
                 }
             }
@@ -98,17 +73,22 @@ private struct PresetSidebar: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
-                let current = presetManager.currentPresetOrUnnamed
-                let isUnnamed = presetManager.isUnnamedPreset(current)
-
-                Text("content_view_current_preset_label")
+                Text("Current Preset")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                HStack {
-                    Image(systemName: isUnnamed ? "circle.dotted" : "checkmark.circle.fill")
-                        .foregroundColor(isUnnamed ? .orange : .green)
-                    Text(current.name).bold()
+                if let current = presetManager.currentPreset {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text(current.name).bold()
+                    }
+                } else {
+                    HStack {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundColor(.yellow)
+                        Text("No Preset Loaded").bold()
+                    }
                 }
             }
             .padding()
@@ -135,7 +115,7 @@ private struct PresetRow: View {
                 .foregroundColor(.accentColor)
             VStack(alignment: .leading) {
                 if isEditing {
-                    TextField("content_view_preset_name_placeholder", text: $newName, onCommit: {
+                    TextField("Preset Name", text: $newName, onCommit: {
                         onRename(newName)
                         isNameFieldFocused = false
                     })
@@ -149,9 +129,10 @@ private struct PresetRow: View {
                     Text(presetInfo.name)
                         .fontWeight(isCurrent ? .bold : .regular)
                 }
-                if let desc = presetInfo.description, !desc.isEmpty {
-                    Text(desc).font(.caption).foregroundColor(.secondary)
-                }
+                // Description was removed from PresetInfo, so this is commented out
+                // if let desc = presetInfo.description, !desc.isEmpty {
+                //     Text(desc).font(.caption).foregroundColor(.secondary)
+                // }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -162,14 +143,14 @@ private struct PresetRow: View {
             Button(role: .destructive) {
                 showingDeleteConfirmation = true
             } label: {
-                Label("content_view_delete_preset_context_menu", systemImage: "trash")
+                Label("Delete Preset", systemImage: "trash")
             }
         }
-        .alert("content_view_delete_preset_alert_title", isPresented: $showingDeleteConfirmation) {
-            Button("content_view_cancel_button", role: .cancel) { }
-            Button("content_view_delete_button", role: .destructive) { presetManager.deletePreset(presetInfo) }
+        .alert("Delete Preset", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) { presetManager.deletePreset(presetInfo) }
         } message: {
-            Text(String(format: "content_view_delete_preset_confirmation_message", presetInfo.name))
+            Text("Are you sure you want to delete \"\(presetInfo.name)\"? This action cannot be undone.")
         }
     }
 }

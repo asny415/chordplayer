@@ -15,180 +15,101 @@ class ChordPlayer: ObservableObject {
         self.appData = appData
     }
 
-    func playChord(chordName: String, pattern: GuitarPattern, tempo: Double = 120.0, key: String = "C", capo: Int = 0, velocity: UInt8 = 100, duration: TimeInterval = 0.5, quantizationMode: QuantizationMode = .none, drumClockInfo: (isPlaying: Bool, startTime: Double, loopDuration: Double, nextMeasureTime: Double, nextHalfMeasureTime: Double)? = nil) {
-        guard let chordDefinition = appData.chordLibrary?[chordName] else {
-            print("[ChordPlayer] Chord definition for \(chordName) not found.")
-            return
-        }
+    func previewPattern(_ pattern: GuitarPattern) {
+        // Stop any currently playing notes before starting a preview.
+        panic()
 
-        var transposeOffset = 0
-        if let idx = appData.KEY_CYCLE.firstIndex(of: key) {
-            transposeOffset = idx
-        }
+        // Create a generic chord and preset for previewing.
+        let previewChord = Chord(name: "C", frets: [-1, 3, 2, 0, 1, 0], fingers: [])
+        let previewPreset = Preset.createNew(name: "PreviewPreset") // BPM defaults to 120
 
-        var midiNotes: [Int] = Array(repeating: -1, count: 6)
-        for (i, fretVal) in chordDefinition.enumerated() {
-            switch fretVal {
-            case .int(let fretInt):
-                if fretInt >= 0 { // Consider 'x' or negative as muted
-                    midiNotes[i] = MusicTheory.standardGuitarTuning[i] + fretInt + transposeOffset + capo
-                }
-            case .string:
-                midiNotes[i] = -1
+        // Use the main playing logic for the preview.
+        playChord(chord: previewChord, pattern: pattern, preset: previewPreset)
+    }
+
+    /// Plays a chord using a given pattern, based on the new data models.
+    func playChord(chord: Chord, pattern: GuitarPattern, preset: Preset, velocity: UInt8 = 100, duration: TimeInterval = 0.5) {
+        
+        // 1. Calculate the MIDI notes for the given chord definition
+        var midiNotesForChord: [Int] = Array(repeating: -1, count: 6)
+        for (stringIndex, fret) in chord.frets.enumerated() {
+            if fret >= 0 { // -1 means muted string
+                // TODO: Re-implement transposition based on preset key
+                midiNotesForChord[stringIndex] = MusicTheory.standardGuitarTuning[stringIndex] + fret
             }
         }
 
-        let wholeNoteSeconds = (60.0 / tempo) * 4.0
-        var schedulingStartUptimeMs: Double
-        let currentUptime = ProcessInfo.processInfo.systemUptime * 1000.0
+        // 2. Calculate timing based on tempo
+        let wholeNoteSeconds = (60.0 / Double(preset.bpm)) * 4.0
+        let singleStepDurationSeconds = wholeNoteSeconds / Double(pattern.steps)
+        let schedulingStartUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
 
-        if quantizationMode != .none, let clock = drumClockInfo, clock.isPlaying, clock.loopDuration > 0 {
-            var nextQuantizationTime: Double
-
-            switch quantizationMode {
-            case .measure:
-                nextQuantizationTime = clock.nextMeasureTime
-            case .halfMeasure:
-                nextQuantizationTime = clock.nextHalfMeasureTime
-            case .none:
-                // This case should not be hit if quantizationMode is not .none, but as a fallback:
-                nextQuantizationTime = currentUptime
-            }
-
-            // This check is still valuable to prevent manual triggers that are excessively early.
-            // For automated playback that is 1 beat early, this check should now pass reliably
-            // because nextQuantizationTime is calculated authoritatively by the DrumPlayer.
-            let timeToNextQuantization = nextQuantizationTime - currentUptime
-            
-            // We still need quantizationUnitDuration for the window calculation
-            let quantizationUnitDuration = (quantizationMode == .measure) ? clock.loopDuration : clock.loopDuration / 2.0
-            let quantizationWindow = quantizationUnitDuration * 3 / 4.0
-
-            if timeToNextQuantization > quantizationWindow {
-                print("[ChordPlayer] Discarding chord playback: outside quantization window. Time to next: \(timeToNextQuantization)ms, window: \(quantizationWindow)ms")
-                return
-            }
-            
-            schedulingStartUptimeMs = nextQuantizationTime
-
-        } else {
-            schedulingStartUptimeMs = currentUptime
-        }
-
-        let timeDifference = schedulingStartUptimeMs - currentUptime
-        if (timeDifference < 0) {
-            print("[ChordPlayer] Warning: Scheduling chord \(chordName) in the past by \(-timeDifference) ms. This may cause audio glitches.")
-        }
-
-        // Schedule the UI update to be perfectly in sync with the audio
+        // 3. Schedule UI update to be in sync with audio
         scheduledUIUpdateWorkItem?.cancel()
-        let delayMs = max(0, schedulingStartUptimeMs - currentUptime)
         let workItem = DispatchWorkItem { [weak self] in
-            self?.appData.currentlyPlayingChordName = chordName
-            self?.appData.currentlyPlayingPatternName = pattern.name
+            self?.appData.currentlyPlayingChordName = chord.name
+            // TODO: Update this if we add a pattern name display
+            // self?.appData.currentlyPlayingPatternName = pattern.name
         }
         scheduledUIUpdateWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(round(delayMs))), execute: workItem)
+        DispatchQueue.main.async(execute: workItem)
 
-        // Stop notes on strings that will be silent in the new chord.
+        // 4. Stop notes on strings that will be silent in the new chord.
+        stopSilentStrings(newChordMidiNotes: midiNotesForChord)
+
+        // 5. Iterate over the pattern grid and schedule notes
+        for step in 0..<pattern.steps {
+            var notesToScheduleInStep: [(note: UInt8, stringIndex: Int)] = []
+            
+            for stringIndex in 0..<pattern.strings {
+                // Check if the pattern has a note at this step and string
+                if pattern.patternGrid[stringIndex][step] {
+                    let midiNote = midiNotesForChord[stringIndex]
+                    if midiNote != -1 {
+                        notesToScheduleInStep.append((note: UInt8(midiNote), stringIndex: stringIndex))
+                    }
+                }
+            }
+            
+            if !notesToScheduleInStep.isEmpty {
+                let adaptiveVelocity = calculateAdaptiveVelocity(baseVelocity: velocity, noteCount: notesToScheduleInStep.count)
+                let eventTimeMs = schedulingStartUptimeMs + (Double(step) * singleStepDurationSeconds * 1000.0)
+                
+                for item in notesToScheduleInStep {
+                    scheduleNote(note: item.note, stringIndex: item.stringIndex, velocity: adaptiveVelocity, startTimeMs: eventTimeMs, durationSeconds: duration)
+                }
+            }
+        }
+    }
+    
+    private func scheduleNote(note: UInt8, stringIndex: Int, velocity: UInt8, startTimeMs: Double, durationSeconds: TimeInterval) {
+        // If a note is already playing on this string, cancel its scheduled note-off and send an immediate NoteOff.
+        if let previousNote = self.stringNotes[stringIndex] {
+            if let scheduledOffId = self.playingNotes[previousNote] {
+                self.midiManager.cancelScheduledEvent(id: scheduledOffId)
+                self.playingNotes.removeValue(forKey: previousNote)
+            }
+            self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: UInt8(appData.preset?.midiChannel ?? 0))
+        }
+
+        self.midiManager.scheduleNoteOn(note: note, velocity: velocity, channel: UInt8(appData.preset?.midiChannel ?? 0), scheduledUptimeMs: startTimeMs)
+        self.stringNotes[stringIndex] = note
+
+        let scheduledNoteOffUptimeMs = startTimeMs + (durationSeconds * 1000.0)
+        let offId = self.midiManager.scheduleNoteOff(note: note, velocity: 0, channel: UInt8(appData.preset?.midiChannel ?? 0), scheduledUptimeMs: scheduledNoteOffUptimeMs)
+        
+        self.playingNotes[note] = offId
+    }
+    
+    private func stopSilentStrings(newChordMidiNotes: [Int]) {
         for (stringIndex, note) in stringNotes {
-            if midiNotes[stringIndex] == -1 { // If the string is muted in the new chord
+            if newChordMidiNotes[stringIndex] == -1 { // If the string is muted in the new chord
                 if let scheduledOffId = playingNotes[note] {
                     midiManager.cancelScheduledEvent(id: scheduledOffId)
                     playingNotes.removeValue(forKey: note)
                 }
-                midiManager.sendNoteOff(note: note, velocity: 0, channel: 0)
+                midiManager.sendNoteOff(note: note, velocity: 0, channel: UInt8(appData.preset?.midiChannel ?? 0))
                 stringNotes.removeValue(forKey: stringIndex)
-            }
-        }
-
-        for event in pattern.pattern {
-            guard let delayFraction = MusicTheory.parseDelay(delayString: event.delay) else {
-                print("[ChordPlayer] Could not parse delay string: \(event.delay)")
-                continue
-            }
-            let eventBaseTimeMs = schedulingStartUptimeMs + (delayFraction * wholeNoteSeconds * 1000.0)
-
-            var notesToSchedule: [(note: UInt8, stringIndex: Int)] = []
-
-            // Find root note info for resolving .chordRoot notes
-            var rootInfo: (stringIndex: Int, midiNote: Int)?
-            for (index, note) in midiNotes.enumerated() {
-                if note != -1 {
-                    rootInfo = (stringIndex: index, midiNote: note)
-                    break
-                }
-            }
-
-            for noteValue in event.notes {
-                var resolvedNote: (note: Int, stringIndex: Int)?
-
-                switch noteValue {
-                case .chordString(let stringNumber):
-                    // stringNumber is 1-6, convert to index 0-5
-                    let stringIndex = 6 - stringNumber
-                    if stringIndex >= 0 && stringIndex < midiNotes.count && midiNotes[stringIndex] != -1 {
-                        resolvedNote = (note: midiNotes[stringIndex], stringIndex: stringIndex)
-                    }
-
-                case .chordRoot(let symbol):
-                    guard let unwrappedRootInfo = rootInfo else { continue }
-                    if symbol.starts(with: "ROOT") {
-                        let numPart = symbol.replacingOccurrences(of: "ROOT", with: "").replacingOccurrences(of: "-", with: "")
-                        var offset = 0
-                        if !numPart.isEmpty, let num = Int(numPart) {
-                            offset = num
-                        }
-                        let targetStringIndex = unwrappedRootInfo.stringIndex + offset
-                        if targetStringIndex >= 0 && targetStringIndex < midiNotes.count, midiNotes[targetStringIndex] != -1 {
-                            resolvedNote = (note: midiNotes[targetStringIndex], stringIndex: targetStringIndex)
-                        }
-                    }
-                
-                case .specificFret(let string, let fret):
-                    // string is 1-6, convert to index 0-5
-                    let stringIndex = 6 - string
-                    if stringIndex >= 0 && stringIndex < MusicTheory.standardGuitarTuning.count {
-                        let baseNote = MusicTheory.standardGuitarTuning[stringIndex]
-                        // Apply same transpose and capo as the rest of the chord for consistency
-                        let finalNote = baseNote + fret + transposeOffset + capo
-                        resolvedNote = (note: finalNote, stringIndex: stringIndex)
-                    }
-                }
-                
-                if let note = resolvedNote {
-                    notesToSchedule.append((note: UInt8(note.note), stringIndex: note.stringIndex))
-                }
-            }
-
-            // Calculate adaptive velocity based on the number of notes being played simultaneously
-            let adaptiveVelocity = calculateAdaptiveVelocity(baseVelocity: velocity, noteCount: notesToSchedule.count)
-            
-            for (i, item) in notesToSchedule.enumerated() {
-                var strumOffsetMs: Double = 0
-                if let delta = event.delta {
-                    strumOffsetMs = delta * Double(i)
-                }
-
-                let scheduledNoteOnUptimeMs = eventBaseTimeMs + strumOffsetMs
-                
-                // If a note is already playing on this string, cancel its scheduled note-off and send an immediate NoteOff.
-                if let previousNote = self.stringNotes[item.stringIndex] {
-                    if let scheduledOffId = self.playingNotes[previousNote] {
-                        self.midiManager.cancelScheduledEvent(id: scheduledOffId)
-                        self.playingNotes.removeValue(forKey: previousNote)
-                    }
-                    // Send an immediate NoteOff for the previous note to ensure re-triggering.
-                    self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: 0)
-                }
-
-                self.midiManager.scheduleNoteOn(note: item.note, velocity: adaptiveVelocity, channel: 0, scheduledUptimeMs: scheduledNoteOnUptimeMs)
-                self.stringNotes[item.stringIndex] = item.note
-
-                let scheduledNoteOffUptimeMs = scheduledNoteOnUptimeMs + (duration * 1000.0)
-                let offId = self.midiManager.scheduleNoteOff(note: item.note, velocity: 0, channel: 0, scheduledUptimeMs: scheduledNoteOffUptimeMs)
-                
-                self.playingNotes[item.note] = offId
             }
         }
     }
@@ -200,81 +121,17 @@ class ChordPlayer: ObservableObject {
         stringNotes.removeAll()
     }
     
-    /// Calculates adaptive velocity based on the number of notes being played simultaneously
-    /// to prevent volume buildup when multiple notes are played together
     private func calculateAdaptiveVelocity(baseVelocity: UInt8, noteCount: Int) -> UInt8 {
-        guard noteCount > 1 else {
-            // Single note: use full velocity
-            return baseVelocity
-        }
-        
-        // Apply velocity reduction based on note count to prevent volume buildup
-        // Formula: adaptiveVelocity = baseVelocity * (1.0 / sqrt(noteCount)) * scalingFactor
-        let scalingFactor: Double = 1.2 // Slight boost to maintain presence
+        guard noteCount > 1 else { return baseVelocity }
+        let scalingFactor: Double = 1.2
         let reductionFactor = 1.0 / sqrt(Double(noteCount))
         let adaptiveVelocity = Double(baseVelocity) * reductionFactor * scalingFactor
-        
-        // Ensure velocity stays within valid MIDI range (1-127)
         let clampedVelocity = max(1, min(127, Int(round(adaptiveVelocity))))
-        
         return UInt8(clampedVelocity)
     }
-    
-    func playChordDirectly(chordDefinition: [StringOrInt], key: String = "C", capo: Int = 0, velocity: UInt8 = 100, duration: TimeInterval = 2.0) {
-        let currentUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
-        var transposeOffset = 0
-        if let idx = appData.KEY_CYCLE.firstIndex(of: key) {
-            transposeOffset = idx
-        }
+}
 
-        var midiNotes: [Int] = Array(repeating: -1, count: 6)
-        for (i, fretVal) in chordDefinition.enumerated() {
-            switch fretVal {
-            case .int(let fretInt):
-                if fretInt >= 0 {
-                    midiNotes[i] = MusicTheory.standardGuitarTuning[i] + fretInt + transposeOffset + capo
-                }
-            case .string:
-                midiNotes[i] = -1
-            }
-        }
-
-        // Count active notes to calculate adaptive velocity
-        let activeNotes = midiNotes.filter { $0 != -1 }
-        let adaptiveVelocity = calculateAdaptiveVelocity(baseVelocity: velocity, noteCount: activeNotes.count)
-        
-        // Iterate through all 6 strings
-        for stringIndex in 0..<6 {
-            let newNote = midiNotes[stringIndex]
-
-            // If a note is already playing on this string, cancel its scheduled note-off.
-            if let previousNote = self.stringNotes[stringIndex] {
-                if let scheduledOffId = self.playingNotes[previousNote] {
-                    self.midiManager.cancelScheduledEvent(id: scheduledOffId)
-                    self.playingNotes.removeValue(forKey: previousNote)
-                }
-                // We send an immediate note-off for the previous note to ensure it stops now,
-                // as the new chord might not play on this string.
-                if newNote == -1 {
-                    self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: 0)
-                    self.stringNotes.removeValue(forKey: stringIndex)
-                }
-            }
-
-            // If there's a new note to play on this string
-            if newNote != -1 {
-                let noteToPlay = UInt8(newNote)
-                
-                // Schedule the new note with adaptive velocity
-                self.midiManager.scheduleNoteOn(note: noteToPlay, velocity: adaptiveVelocity, channel: 0, scheduledUptimeMs: currentUptimeMs)
-                self.stringNotes[stringIndex] = noteToPlay
-
-                // Schedule the corresponding note-off
-                let scheduledNoteOffUptimeMs = currentUptimeMs + (duration * 1000.0)
-                let offId = self.midiManager.scheduleNoteOff(note: noteToPlay, velocity: 0, channel: 0, scheduledUptimeMs: scheduledNoteOffUptimeMs)
-                
-                self.playingNotes[noteToPlay] = offId
-            }
-        }
-    }
+// TODO: Move this to a more appropriate location
+class MusicTheory {
+    static let standardGuitarTuning = [64, 59, 55, 50, 45, 40] // EADGBe
 }

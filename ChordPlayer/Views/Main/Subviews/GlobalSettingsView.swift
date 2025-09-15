@@ -1,98 +1,79 @@
-
 import SwiftUI
-
-// MARK: - Main Views
 
 struct GlobalSettingsView: View {
     @EnvironmentObject var appData: AppData
-    @EnvironmentObject var drumPlayer: DrumPlayer
     
+    // Define constants for cycles locally
+    private let KEY_CYCLE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    private let TIME_SIGNATURE_OPTIONS = [TimeSignature(beatsPerMeasure: 4, beatUnit: 4), 
+                                          TimeSignature(beatsPerMeasure: 3, beatUnit: 4), 
+                                          TimeSignature(beatsPerMeasure: 6, beatUnit: 8)]
+
     var body: some View {
-        HStack(spacing: 12) {
-            // Key selector with shortcut badge (- / =)
-            ZStack(alignment: .topTrailing) {
-                DraggableValueCard(
-                    label: "调性",
-                    selection: $appData.performanceConfig.key,
-                    options: appData.KEY_CYCLE
-                )
-                .frame(maxWidth: .infinity)
+        if appData.preset != nil {
+            let tempoBinding = Binding<Double>(
+                get: { appData.preset?.bpm ?? 120.0 },
+                set: { newValue in
+                    appData.preset?.bpm = newValue
+                    appData.saveChanges()
+                }
+            )
+            
+            let quantizeBinding = Binding<QuantizationMode>(
+                get: { appData.preset?.quantize ?? .none },
+                set: { newValue in
+                    appData.preset?.quantize = newValue
+                    appData.saveChanges()
+                }
+            )
+            
+            // Note: Key is not part of the new Preset model yet. This is a placeholder.
+            // To re-enable, add `var key: String` to the `Preset` model in DataModels.swift
+            let keyBinding = Binding<String>(
+                get: { "C" }, // Placeholder
+                set: { _ in /* Do nothing for now */ }
+            )
 
-                Text("-/=")
-                    .font(.caption2).bold()
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                    .offset(x: -8, y: 8)
-            }
+            let timeSignatureBinding = Binding<TimeSignature>(
+                get: { appData.preset?.timeSignature ?? TimeSignature() },
+                set: { newValue in
+                    appData.preset?.timeSignature = newValue
+                    appData.saveChanges()
+                }
+            )
 
-            // Time signature selector with shortcut badge (T)
-            ZStack(alignment: .topTrailing) {
-                DraggableValueCard(
-                    label: "拍号",
-                    selection: $appData.performanceConfig.timeSignature,
-                    options: appData.TIME_SIGNATURE_CYCLE
-                )
-                .frame(maxWidth: .infinity)
+            HStack(spacing: 12) {
+                // Key selector placeholder
+                DraggableValueCard(label: "Key", selection: keyBinding, options: KEY_CYCLE)
+                    .frame(maxWidth: .infinity)
+                    .disabled(true) // Disabled until properly implemented
 
-                Text("T")
-                    .font(.caption2).bold()
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                    .offset(x: -8, y: 8)
-            }
-
-            // Tempo card with arrow badge (↑/↓)
-            ZStack(alignment: .topTrailing) {
-                TempoDashboardCard(tempo: $appData.performanceConfig.tempo)
+                // Time signature selector
+                DraggableValueCard(label: "Time Sig", selection: timeSignatureBinding, options: TIME_SIGNATURE_OPTIONS)
                     .frame(maxWidth: .infinity)
 
-                Text("↑/↓")
-                    .font(.caption2).bold()
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                    .offset(x: -8, y: 8)
-            }
+                // Tempo card
+                TempoDashboardCard(tempo: tempoBinding)
+                    .frame(maxWidth: .infinity)
 
-            // Quantize selector with badge (Q)
-            ZStack(alignment: .topTrailing) {
-                DraggableValueCard(
-                    label: "量化",
-                    selection: Binding<QuantizationMode>(
-                        get: { QuantizationMode(rawValue: appData.performanceConfig.quantize ?? "NONE") ?? .none },
-                        set: { appData.performanceConfig.quantize = $0.rawValue }
-                    ),
-                    options: QuantizationMode.allCases
-                )
-                .frame(maxWidth: .infinity)
+                // Quantize selector
+                DraggableValueCard(label: "Quantize", selection: quantizeBinding, options: QuantizationMode.allCases)
+                    .frame(maxWidth: .infinity)
 
-                Text("Q")
-                    .font(.caption2).bold()
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                    .offset(x: -8, y: 8)
-            }
-
-            ZStack(alignment: .topTrailing) {
+                // Drum Machine Card
                 DrumMachineStatusCard()
                     .frame(maxWidth: .infinity)
-
-                Text("P")
-                    .font(.caption2).bold()
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                    .offset(x: -8, y: 8)
             }
+            .padding(.vertical, 4)
+        } else {
+            Text("No preset loaded. Please select or create a preset.")
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(.vertical, 4)
     }
 }
 
-// MARK: - Custom Control Views
+// MARK: - Custom Control Views (some might need minor updates)
 
 struct DashboardCardView: View {
     let label: String
@@ -130,7 +111,7 @@ struct TempoDashboardCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            DashboardCardView(label: "速度", value: "\(Int(round(tempo)))", unit: "BPM")
+            DashboardCardView(label: "Tempo", value: "\(Int(round(tempo)))", unit: "BPM")
             
             Image(systemName: "arrow.left.and.right")
                 .font(.caption2)
@@ -140,9 +121,7 @@ struct TempoDashboardCard: View {
         .gesture(
             DragGesture(minimumDistance: 1)
                 .onChanged { value in
-                    if self.startTempo == nil {
-                        self.startTempo = self.tempo
-                    }
+                    if self.startTempo == nil { self.startTempo = self.tempo }
                     let dragAmount = value.translation.width
                     let newTempo = self.startTempo! + Double(dragAmount / 4.0)
                     self.tempo = max(40, min(240, newTempo))
@@ -175,46 +154,32 @@ struct DraggableValueCard<T: Equatable & CustomStringConvertible>: View {
             DragGesture(minimumDistance: 1)
                 .onChanged { value in
                     guard let currentIndex = options.firstIndex(of: selection) else { return }
-                    if self.startIndex == nil {
-                        self.startIndex = currentIndex
-                    }
+                    if self.startIndex == nil { self.startIndex = currentIndex }
                     
                     let dragAmount = value.translation.width
-                    let indexOffset = Int(round(dragAmount / 30.0)) // Drag sensitivity
+                    let indexOffset = Int(round(dragAmount / 30.0))
                     
                     let newIndex = self.startIndex! + indexOffset
                     let clampedIndex = max(0, min(options.count - 1, newIndex))
                     
-                    self.selection = options[clampedIndex]
+                    if options[clampedIndex] != selection {
+                        self.selection = options[clampedIndex]
+                    }
                 }
-                .onEnded { _ in
-                    self.startIndex = nil
-                }
+                .onEnded { _ in self.startIndex = nil }
         )
     }
 }
 
 struct PlayingModeBadgeView: View {
-    let playingMode: String
+    let playingMode: PlayingMode
     
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(Array(playingMode.enumerated()), id: \.offset) { index, char in
-                Text(String(char))
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 24, height: 24)
-                    .background(
-                        Circle().fill(Color.secondary.opacity(0.15))
-                    )
-                
-                if index < playingMode.count - 1 {
-                    Text("|")
-                        .font(.system(size: 14, weight: .light))
-                        .foregroundColor(.secondary.opacity(0.5))
-                }
-            }
-        }
+        Text(playingMode.shortDisplay)
+            .font(.system(size: 14, weight: .bold, design: .monospaced))
+            .foregroundColor(.secondary)
+            .frame(width: 24, height: 24)
+            .background(Circle().fill(Color.secondary.opacity(0.15)))
     }
 }
 
@@ -224,14 +189,14 @@ struct DrumMachineStatusCard: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Text("演奏".uppercased())
+            Text("Drums".uppercased())
                 .font(.caption)
                 .foregroundColor(.secondary)
 
             HStack(alignment: .center, spacing: 10) {
-                PlayingModeBadgeView(playingMode: appData.playingMode.shortDisplay)
+                PlayingModeBadgeView(playingMode: appData.playingMode)
                 
-                Text(drumPlayer.isPlaying ? "运行中" : "停止")
+                Text(drumPlayer.isPlaying ? "Playing" : "Stopped")
                     .font(.system(.title, design: .rounded).weight(.bold))
             }
             .foregroundColor(drumPlayer.isPlaying ? .green : .primary)
@@ -243,7 +208,7 @@ struct DrumMachineStatusCard: View {
             if drumPlayer.isPlaying {
                 drumPlayer.stop()
             } else {
-                drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
+                drumPlayer.playActivePattern()
             }
         }
         .overlay(
@@ -253,6 +218,7 @@ struct DrumMachineStatusCard: View {
     }
 }
 
-extension QuantizationMode: CustomStringConvertible {
-    public var description: String { self.displayName }
+// Make TimeSignature conform to CustomStringConvertible for the DraggableValueCard
+extension TimeSignature: CustomStringConvertible {
+    public var description: String { "\(beatsPerMeasure)/\(beatUnit)" }
 }

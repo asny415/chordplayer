@@ -1,160 +1,105 @@
-
 import SwiftUI
 
 struct DrumPatternsView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var drumPlayer: DrumPlayer
-    @EnvironmentObject var customDrumPatternManager: CustomDrumPatternManager
 
-    @State private var showAddDrumPatternSheet: Bool = false
-    @State private var isHoveringGroup: Bool = false
+    @State private var showDrumPatternEditor: Bool = false
+    @State private var editingPattern: DrumPattern? = nil
+    @State private var newPattern = DrumPattern(name: "New Drum Beat", patternGrid: Array(repeating: Array(repeating: false, count: 16), count: 3), steps: 16, instruments: ["Kick", "Snare", "Hi-Hat"])
 
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
-                Text("鼓点模式").font(.headline)
+                Text("Drum Patterns").font(.headline)
                 Spacer()
-
-                // Add Pattern to Workspace Button
-                Button(action: { showAddDrumPatternSheet = true }) {
+                Button(action: {
+                    editingPattern = nil
+                    let defaultGrid = Array(repeating: Array(repeating: false, count: 16), count: 3)
+                    newPattern = DrumPattern(name: "New Drum Beat", patternGrid: defaultGrid, steps: 16, instruments: ["Kick", "Snare", "Hi-Hat"])
+                    showDrumPatternEditor = true
+                }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
                         .foregroundColor(.accentColor)
-                        .opacity(isHoveringGroup ? 1.0 : 0.4)
                 }
                 .buttonStyle(.plain)
-                .help("从库添加鼓点到工作区")
+                .help("Create a new drum pattern")
             }
-            if appData.performanceConfig.selectedDrumPatterns.isEmpty {
-                HStack {
-                    Spacer()
-                    VStack(spacing: 6) {
-                        Text("当前没有鼓点模式。")
-                            .font(.subheadline).foregroundColor(.secondary)
-                        Text("点击右上角“+”添加鼓点模式，或使用快捷键 ⌘1/⌘2... 进行切换")
-                            .font(.caption).foregroundColor(.secondary)
-                    }
-                    Spacer()
-                }
-                .frame(height: 80)
-            } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
-                    ForEach(Array(appData.performanceConfig.selectedDrumPatterns.enumerated()), id: \.element) { index, patternId in
-                        if let details = findPatternDetails(for: patternId) {
-                            let isActive = appData.performanceConfig.activeDrumPatternId == patternId
-                            Button(action: {
-                                appData.performanceConfig.activeDrumPatternId = patternId
-                                drumPlayer.playPattern(tempo: appData.performanceConfig.tempo)
-                            }) {
-                                ZStack(alignment: .topTrailing) {
-                                    DrumPatternCardView(
-                                        index: index,
-                                        pattern: details.pattern,
-                                        category: details.category,
-                                        timeSignature: appData.performanceConfig.timeSignature,
-                                        isActive: isActive
-                                    )
 
-                                    if index < 9 {
-                                        Text("⌘\(index + 1)")
-                                            .font(.caption2).bold()
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 6).padding(.vertical, 3)
-                                            .background(Color.gray.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
-                                            .offset(x: -8, y: 8)
-                                    }
-                                }
+            if let preset = appData.preset, !preset.drumPatterns.isEmpty {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
+                    ForEach(preset.drumPatterns) { pattern in
+                        let isActive = appData.preset?.activeDrumPatternId == pattern.id
+                        Button(action: {
+                            appData.preset?.activeDrumPatternId = pattern.id
+                            appData.saveChanges()
+                            drumPlayer.playActivePattern()
+                        }) {
+                            DrumPatternCardView(pattern: pattern, isActive: isActive)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Edit") {
+                                editingPattern = pattern
+                                showDrumPatternEditor = true
                             }
-                            .buttonStyle(.plain)
-                            .animation(.easeInOut(duration: 0.15), value: appData.performanceConfig.activeDrumPatternId)
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    appData.removeDrumPattern(patternId: patternId)
-                                } label: {
-                                    Label("移除鼓点", systemImage: "trash")
+                            Button("Delete", role: .destructive) {
+                                if let index = appData.preset?.drumPatterns.firstIndex(where: { $0.id == pattern.id }) {
+                                    appData.removeDrumPattern(at: IndexSet(integer: index))
                                 }
                             }
                         }
                     }
                 }
+            } else {
+                Text("No drum patterns. Click + to create one.")
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: 80, alignment: .center)
             }
         }
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHoveringGroup = hovering
-            }
-        }
-        .sheet(isPresented: $showAddDrumPatternSheet) {
-            SelectDrumPatternsSheet(initialSelection: appData.performanceConfig.selectedDrumPatterns, onDone: { selectedIDs in
-                appData.performanceConfig.selectedDrumPatterns = selectedIDs
-                
-                // Check if the current active pattern is still valid.
-                // If not, set the first available pattern as active.
-                let currentActiveId = appData.performanceConfig.activeDrumPatternId
-                let isActiveIdValid = currentActiveId != nil && selectedIDs.contains(currentActiveId!)
-                
-                if !isActiveIdValid {
-                    appData.performanceConfig.activeDrumPatternId = selectedIDs.first
+        .sheet(isPresented: $showDrumPatternEditor) {
+            let isNew = editingPattern == nil
+            let patternToEdit = editingPattern ?? newPattern
+            
+            let binding = Binding<DrumPattern>(
+                get: { self.editingPattern ?? self.newPattern },
+                set: { pattern in
+                    if self.editingPattern != nil {
+                        self.editingPattern = pattern
+                    } else {
+                        self.newPattern = pattern
+                    }
                 }
-                
-                showAddDrumPatternSheet = false
+            )
+
+            DrumPatternEditorView(pattern: binding, isNew: isNew, onSave: { savedPattern in
+                if let index = appData.preset?.drumPatterns.firstIndex(where: { $0.id == savedPattern.id }) {
+                    appData.preset?.drumPatterns[index] = savedPattern
+                } else {
+                    appData.addDrumPattern(savedPattern)
+                }
+                appData.saveChanges()
+                showDrumPatternEditor = false
+            }, onCancel: {
+                showDrumPatternEditor = false
             })
-            .environmentObject(appData)
-            .environmentObject(customDrumPatternManager)
         }
-    }
-
-    private func findPatternDetails(for patternId: String) -> (pattern: DrumPattern, category: String)? {
-        // Also check custom patterns
-        for (_, patterns) in customDrumPatternManager.customDrumPatterns {
-            if let pattern = patterns[patternId] {
-                return (pattern, "自定义")
-            }
-        }
-
-        if let library = appData.drumPatternLibrary {
-            for (category, patterns) in library {
-                if let pattern = patterns[patternId] {
-                    return (pattern, category)
-                }
-            }
-        }
-        return nil
     }
 }
 
 struct DrumPatternCardView: View {
-    let index: Int
     let pattern: DrumPattern
-    let category: String
-    let timeSignature: String
     let isActive: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            DrumPatternGridView(
-                pattern: pattern,
-                timeSignature: timeSignature,
-                activeColor: isActive ? .accentColor : .primary,
-                inactiveColor: .secondary
-            )
-            .opacity(isActive ? 0.9 : 0.6)
-            .padding(.trailing, 35)
+            DrumPatternGridView(pattern: pattern, activeColor: .primary, inactiveColor: .secondary)
+                .opacity(isActive ? 0.9 : 0.6)
 
-            HStack {
-                Text(pattern.displayName)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Spacer()
-            }
-
-            HStack {
-                Text(category)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
+            Text(pattern.name)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
         }
         .foregroundColor(.primary)
         .padding(8)
