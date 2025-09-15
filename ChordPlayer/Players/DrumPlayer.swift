@@ -7,16 +7,21 @@ class DrumPlayer: ObservableObject {
 
     @Published private(set) var isPlaying: Bool = false
     @Published private(set) var isPreviewing: Bool = false
-    
+    @Published private(set) var currentBeat: Int = 0
+
     private enum PlaybackState { case stopped, playing }
     private var playbackState: PlaybackState = .stopped
-    
-    private var measureScheduler: DispatchWorkItem?
+
+    private var beatScheduler: DispatchWorkItem?
     private var beatDurationMs: Double = 0
     private var measureDurationMs: Double = 0
-    private var startTimeMs: Double = 0
-    
+    var startTimeMs: Double = 0
+    private var currentMeasureIndex: Int = 0
+    private(set) var lastBeatTime: Double = 0
+
     private var previewTimer: Timer?
+
+    let beatSubject = PassthroughSubject<Int, Never>()
 
     init(midiManager: MidiManager, appData: AppData) {
         self.midiManager = midiManager
@@ -59,7 +64,7 @@ class DrumPlayer: ObservableObject {
         self.isPlaying = true
         
         print("[DrumPlayer] Playback started for pattern: \(pattern.name)")
-        scheduleMeasure(measureIndex: 0, schedule: schedule, measureStartUptimeMs: self.startTimeMs)
+        scheduleBeat(beatIndex: 0, schedule: schedule, measureDurationMs: measureDurationMs)
     }
     
     func previewPattern(_ pattern: DrumPattern, bpm: Double) {
@@ -89,23 +94,37 @@ class DrumPlayer: ObservableObject {
         }
     }
 
-    private func scheduleMeasure(measureIndex: Int, schedule: [(timestampMs: Double, notes: [Int])], measureStartUptimeMs: Double) {
+    private func scheduleBeat(beatIndex: Int, schedule: [(timestampMs: Double, notes: [Int])], measureDurationMs: Double) {
+        let measureIndex = beatIndex / appData.preset!.timeSignature.beatsPerMeasure
+        let beatInMeasure = beatIndex % appData.preset!.timeSignature.beatsPerMeasure
+
+        self.lastBeatTime = ProcessInfo.processInfo.systemUptime * 1000.0
+
+        DispatchQueue.main.async {
+            self.currentBeat = beatInMeasure + 1
+        }
+        beatSubject.send(beatInMeasure + 1)
+
+        let measureStartUptimeMs = self.startTimeMs + (Double(measureIndex) * measureDurationMs)
+
         for event in schedule {
-            let scheduledOnUptimeMs = measureStartUptimeMs + event.timestampMs
-            scheduleMidiEvent(notes: event.notes, at: scheduledOnUptimeMs)
+            if floor(event.timestampMs / beatDurationMs) == Double(beatInMeasure) {
+                let scheduledOnUptimeMs = measureStartUptimeMs + event.timestampMs
+                scheduleMidiEvent(notes: event.notes, at: scheduledOnUptimeMs)
+            }
         }
 
-        let nextMeasureIndex = measureIndex + 1
-        let nextMeasureStartUptimeMs = self.startTimeMs + (Double(nextMeasureIndex) * self.measureDurationMs)
+        let nextBeatIndex = beatIndex + 1
+        let nextBeatStartUptimeMs = self.startTimeMs + (Double(nextBeatIndex) * self.beatDurationMs)
         let nowMs = ProcessInfo.processInfo.systemUptime * 1000.0
-        let delayUntilNextMeasureMs = max(0, nextMeasureStartUptimeMs - nowMs)
+        let delayUntilNextBeatMs = max(0, nextBeatStartUptimeMs - nowMs)
 
         let work = DispatchWorkItem { [weak self] in
             guard let self = self, self.playbackState == .playing else { return }
-            self.scheduleMeasure(measureIndex: nextMeasureIndex, schedule: schedule, measureStartUptimeMs: nextMeasureStartUptimeMs)
+            self.scheduleBeat(beatIndex: nextBeatIndex, schedule: schedule, measureDurationMs: measureDurationMs)
         }
-        measureScheduler = work
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + delayUntilNextMeasureMs / 1000.0, execute: work)
+        beatScheduler = work
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + delayUntilNextBeatMs / 1000.0, execute: work)
     }
 
     public func stop() {
@@ -116,8 +135,8 @@ class DrumPlayer: ObservableObject {
         self.isPlaying = false
         self.isPreviewing = false
         
-        measureScheduler?.cancel()
-        measureScheduler = nil
+        beatScheduler?.cancel()
+        beatScheduler = nil
         previewTimer?.invalidate()
         previewTimer = nil
 

@@ -122,7 +122,7 @@ struct ChordProgressionView: View {
     private func playChord(_ chord: Chord) {
         guard let preset = appData.preset, let activePatternId = preset.activePlayingPatternId else { return }
         if let activePattern = preset.playingPatterns.first(where: { $0.id == activePatternId }) {
-            chordPlayer.playChord(chord: chord, pattern: activePattern, preset: preset)
+            chordPlayer.playChord(chord: chord, pattern: activePattern, preset: preset, quantization: preset.quantize)
         }
     }
 }

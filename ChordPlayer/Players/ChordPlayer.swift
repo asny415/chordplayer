@@ -5,88 +5,130 @@ class ChordPlayer: ObservableObject {
     private let schedulingQueue = DispatchQueue(label: "com.guitastudio.guitarScheduler", qos: .userInitiated)
     private var midiManager: MidiManager
     private var appData: AppData
+    private var drumPlayer: DrumPlayer
+
+    private let notesLock = NSRecursiveLock()
 
     private var playingNotes: [UInt8: UUID] = [:] // Maps MIDI Note -> Scheduled Note-Off Task ID
     private var stringNotes: [Int: UInt8] = [:] // Maps String Index (0-5) -> MIDI Note
-    private var scheduledUIUpdateWorkItem: DispatchWorkItem?
+    private var cancellables = Set<AnyCancellable>()
 
-    init(midiManager: MidiManager, appData: AppData) {
+    init(midiManager: MidiManager, appData: AppData, drumPlayer: DrumPlayer) {
         self.midiManager = midiManager
         self.appData = appData
+        self.drumPlayer = drumPlayer
+
+        drumPlayer.beatSubject
+            .sink { [weak self] beat in
+                // We can use this to trigger events on the beat
+            }
+            .store(in: &cancellables)
     }
 
     func previewPattern(_ pattern: GuitarPattern) {
         panic()
         let previewChord = Chord(name: "C", frets: [-1, 3, 2, 0, 1, 0], fingers: [])
         let previewPreset = Preset.createNew(name: "PreviewPreset")
-        playChord(chord: previewChord, pattern: pattern, preset: previewPreset)
+        playChord(chord: previewChord, pattern: pattern, preset: previewPreset, quantization: .none)
     }
 
-    func playChord(chord: Chord, pattern: GuitarPattern, preset: Preset, velocity: UInt8 = 100, duration: TimeInterval = 0.5) {
-        var midiNotesForChord: [Int] = Array(repeating: -1, count: 6)
-        // User provides frets from low E (6) to high E (1). We need to reverse it for our tuning array which is high E to low E.
-        let fretsForPlayback = Array(chord.frets.reversed())
-        for (stringIndex, fret) in fretsForPlayback.enumerated() {
-            if fret >= 0 {
-                midiNotesForChord[stringIndex] = MusicTheory.standardGuitarTuning[stringIndex] + fret
-            }
-        }
+    func playChord(chord: Chord, pattern: GuitarPattern, preset: Preset, quantization: QuantizationMode, velocity: UInt8 = 100, duration: TimeInterval = 0.5) {
+        let schedulingStartUptimeMs = nextQuantizationTime(for: quantization)
+        let delay = (schedulingStartUptimeMs - ProcessInfo.processInfo.systemUptime * 1000.0) / 1000.0
 
-        let wholeNoteSeconds = (60.0 / Double(preset.bpm)) * 4.0
-        let stepsPerWholeNote = pattern.resolution == .sixteenth ? 16.0 : 8.0
-        let singleStepDurationSeconds = wholeNoteSeconds / stepsPerWholeNote
-        let schedulingStartUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
+        schedulingQueue.asyncAfter(deadline: .now() + (delay > 0 ? delay : 0)) { [weak self] in
+            guard let self = self else { return }
 
-        updateCurrentlyPlayingUI(chordName: chord.name)
-        stopSilentStrings(newChordMidiNotes: midiNotesForChord)
-
-        for (stepIndex, step) in pattern.steps.enumerated() {
-            guard !step.activeNotes.isEmpty else { continue }
-            
-            let stepStartTimeMs = schedulingStartUptimeMs + (Double(stepIndex) * singleStepDurationSeconds * 1000.0)
-            let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
-                guard midiNotesForChord[stringIndex] != -1 else { return nil }
-                return (note: UInt8(midiNotesForChord[stringIndex]), stringIndex: stringIndex)
+            var midiNotesForChord: [Int] = Array(repeating: -1, count: 6)
+            let fretsForPlayback = Array(chord.frets.reversed())
+            for (stringIndex, fret) in fretsForPlayback.enumerated() {
+                if fret >= 0 {
+                    midiNotesForChord[stringIndex] = MusicTheory.standardGuitarTuning[stringIndex] + fret
+                }
             }
 
-            guard !activeNotesInStep.isEmpty else { continue }
-            
-            let adaptiveVelocity = calculateAdaptiveVelocity(baseVelocity: velocity, noteCount: activeNotesInStep.count)
+            let wholeNoteSeconds = (60.0 / Double(preset.bpm)) * 4.0
+            let stepsPerWholeNote = pattern.resolution == .sixteenth ? 16.0 : 8.0
+            let singleStepDurationSeconds = wholeNoteSeconds / stepsPerWholeNote
 
-            switch step.type {
-            case .rest:
-                break // Do nothing
+            DispatchQueue.main.async {
+                self.updateCurrentlyPlayingUI(chordName: chord.name)
+                self.stopSilentStrings(newChordMidiNotes: midiNotesForChord)
+            }
 
-            case .arpeggio:
-                let arpeggioStepDuration = singleStepDurationSeconds / Double(activeNotesInStep.count)
-                // Sort by string index for consistent playback (e.g., high to low)
-                let sortedNotes = activeNotesInStep.sorted { $0.stringIndex > $1.stringIndex }
-                for (noteIndex, noteItem) in sortedNotes.enumerated() {
-                    let noteStartTimeMs = stepStartTimeMs + (Double(noteIndex) * arpeggioStepDuration * 1000.0)
-                    scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: velocity, startTimeMs: noteStartTimeMs, durationSeconds: duration)
+            for (stepIndex, step) in pattern.steps.enumerated() {
+                guard !step.activeNotes.isEmpty else { continue }
+
+                let stepStartTimeOffsetMs = Double(stepIndex) * singleStepDurationSeconds * 1000.0
+                let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
+                    guard midiNotesForChord[stringIndex] != -1 else { return nil }
+                    return (note: UInt8(midiNotesForChord[stringIndex]), stringIndex: stringIndex)
                 }
 
-            case .strum:
-                let strumDelay = strumDelayInSeconds(for: step.strumSpeed)
-                let sortedNotes = activeNotesInStep.sorted { step.strumDirection == .down ? $0.stringIndex > $1.stringIndex : $0.stringIndex < $1.stringIndex }
-                
-                for (noteIndex, noteItem) in sortedNotes.enumerated() {
-                    let noteStartTimeMs = stepStartTimeMs + (Double(noteIndex) * strumDelay * 1000.0)
-                    scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: adaptiveVelocity, startTimeMs: noteStartTimeMs, durationSeconds: duration)
+                guard !activeNotesInStep.isEmpty else { continue }
+
+                let adaptiveVelocity = self.calculateAdaptiveVelocity(baseVelocity: velocity, noteCount: activeNotesInStep.count)
+
+                switch step.type {
+                case .rest:
+                    break
+                case .arpeggio:
+                    let arpeggioStepDuration = singleStepDurationSeconds / Double(activeNotesInStep.count)
+                    let sortedNotes = activeNotesInStep.sorted { $0.stringIndex > $1.stringIndex }
+                    for (noteIndex, noteItem) in sortedNotes.enumerated() {
+                        let noteStartTimeOffsetMs = Double(noteIndex) * arpeggioStepDuration * 1000.0
+                        self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: velocity, startTimeMs: schedulingStartUptimeMs + stepStartTimeOffsetMs + noteStartTimeOffsetMs, durationSeconds: duration)
+                    }
+                case .strum:
+                    let strumDelay = self.strumDelayInSeconds(for: step.strumSpeed)
+                    let sortedNotes = activeNotesInStep.sorted { step.strumDirection == .down ? $0.stringIndex > $1.stringIndex : $0.stringIndex < $1.stringIndex }
+                    for (noteIndex, noteItem) in sortedNotes.enumerated() {
+                        let noteStartTimeOffsetMs = Double(noteIndex) * strumDelay * 1000.0
+                        self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: adaptiveVelocity, startTimeMs: schedulingStartUptimeMs + stepStartTimeOffsetMs + noteStartTimeOffsetMs, durationSeconds: duration)
+                    }
                 }
             }
         }
     }
     
+    private func nextQuantizationTime(for mode: QuantizationMode) -> Double {
+        let now = ProcessInfo.processInfo.systemUptime * 1000.0
+        if !drumPlayer.isPlaying || mode == .none {
+            return now
+        }
+
+        let beatDurationMs = (60.0 / (appData.preset?.bpm ?? 120.0)) * 1000.0
+        let beatsPerMeasure = appData.preset?.timeSignature.beatsPerMeasure ?? 4
+        let measureDurationMs = beatDurationMs * Double(beatsPerMeasure)
+        let halfMeasureDurationMs = measureDurationMs / 2.0
+
+        let currentBeatInMeasure = drumPlayer.currentBeat
+        let currentMeasureIndex = floor((now - drumPlayer.startTimeMs) / measureDurationMs)
+        let currentMeasureStartTime = drumPlayer.startTimeMs + (currentMeasureIndex * measureDurationMs)
+
+        switch mode {
+        case .measure:
+            return currentMeasureStartTime + measureDurationMs
+        case .halfMeasure:
+            let halfMeasures = floor((now - currentMeasureStartTime) / halfMeasureDurationMs)
+            return currentMeasureStartTime + (halfMeasures + 1) * halfMeasureDurationMs
+        case .none:
+            return now
+        }
+    }
+
     private func strumDelayInSeconds(for speed: StrumSpeed) -> TimeInterval {
         switch speed {
-        case .fast: return 0.01 // 10ms
-        case .medium: return 0.025 // 25ms
-        case .slow: return 0.05 // 50ms
+        case .fast: return 0.01
+        case .medium: return 0.025
+        case .slow: return 0.05
         }
     }
 
     private func scheduleNote(note: UInt8, stringIndex: Int, velocity: UInt8, startTimeMs: Double, durationSeconds: TimeInterval) {
+        notesLock.lock()
+        defer { notesLock.unlock() }
+
         if let previousNote = self.stringNotes[stringIndex] {
             if let scheduledOffId = self.playingNotes[previousNote] {
                 self.midiManager.cancelScheduledEvent(id: scheduledOffId)
@@ -105,6 +147,9 @@ class ChordPlayer: ObservableObject {
     }
     
     private func stopSilentStrings(newChordMidiNotes: [Int]) {
+        notesLock.lock()
+        defer { notesLock.unlock() }
+
         for (stringIndex, note) in stringNotes {
             if newChordMidiNotes[stringIndex] == -1 {
                 if let scheduledOffId = playingNotes[note] {
@@ -118,15 +163,15 @@ class ChordPlayer: ObservableObject {
     }
     
     private func updateCurrentlyPlayingUI(chordName: String) {
-        scheduledUIUpdateWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.appData.currentlyPlayingChordName = chordName
+        DispatchQueue.main.async {
+            self.appData.currentlyPlayingChordName = chordName
         }
-        scheduledUIUpdateWorkItem = workItem
-        DispatchQueue.main.async(execute: workItem)
     }
 
     func panic() {
+        notesLock.lock()
+        defer { notesLock.unlock() }
+
         midiManager.sendPanic()
         midiManager.cancelAllPendingScheduledEvents()
         playingNotes.removeAll()

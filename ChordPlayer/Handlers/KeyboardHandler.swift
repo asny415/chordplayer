@@ -71,6 +71,11 @@ class KeyboardHandler: ObservableObject {
     private func playChord(chordName: String, withPatternId patternIdOverride: UUID? = nil) {
         guard let preset = appData.preset else { return }
         
+        guard let chordToPlay = preset.chords.first(where: { $0.name == chordName }) else {
+            print("Error: Could not find chord with name \(chordName)")
+            return
+        }
+
         let patternIdToPlay = patternIdOverride ?? preset.activePlayingPatternId
         
         guard let playingPatternId = patternIdToPlay,
@@ -79,14 +84,12 @@ class KeyboardHandler: ObservableObject {
             return
         }
         
-        // TODO: Refactor chordPlayer.playChord to accept the new models
-        /*
         chordPlayer.playChord(
-            chordName: chordName,
-            pattern: patternToPlay, // This will be a new GuitarPattern type
-            preset: preset
+            chord: chordToPlay,
+            pattern: patternToPlay,
+            preset: preset,
+            quantization: preset.quantize
         )
-        */
         
         print("Playing chord \(chordName) with pattern \(patternToPlay.name)")
 
