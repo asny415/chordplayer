@@ -236,11 +236,20 @@ struct PlayingPatternEditorView: View {
                                             .contentShape(Rectangle())
                                             .onTapGesture { toggleCell(string: stringIndex, col: col) }
                                             .contextMenu {
-                                                Button("设置为 ROOT") { markers[stringIndex][col] = "ROOT" }
-                                                Button("设置为 固定弦") { markers[stringIndex][col] = "FIXED:\(stringIndex+1)" }
+                                                Button("设置为 ROOT") { 
+                                                    markers[stringIndex][col] = "ROOT"
+                                                    grid[stringIndex][col] = true
+                                                }
+                                                Button("设置为 固定弦") { 
+                                                    markers[stringIndex][col] = "FIXED:\(stringIndex+1)"
+                                                    grid[stringIndex][col] = true
+                                                }
                                                 Button("设置指定品格...") { showSetFretAlert(for: stringIndex, column: col) }
                                                 Divider()
-                                                Button("清除标记", role: .destructive) { markers[stringIndex][col] = nil }
+                                                Button("清除标记", role: .destructive) { 
+                                                    markers[stringIndex][col] = nil
+                                                    grid[stringIndex][col] = false
+                                                }
                                             }
 
                                         if let m = markers[stringIndex][col] {
