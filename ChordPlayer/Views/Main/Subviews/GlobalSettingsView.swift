@@ -27,11 +27,12 @@ struct GlobalSettingsView: View {
                 }
             )
             
-            // Note: Key is not part of the new Preset model yet. This is a placeholder.
-            // To re-enable, add `var key: String` to the `Preset` model in DataModels.swift
             let keyBinding = Binding<String>(
-                get: { "C" }, // Placeholder
-                set: { _ in /* Do nothing for now */ }
+                get: { appData.preset?.key ?? "C" },
+                set: { newValue in
+                    appData.preset?.key = newValue
+                    appData.saveChanges()
+                }
             )
 
             let timeSignatureBinding = Binding<TimeSignature>(
@@ -43,10 +44,8 @@ struct GlobalSettingsView: View {
             )
 
             HStack(spacing: 12) {
-                // Key selector placeholder
                 DraggableValueCard(label: "Key", selection: keyBinding, options: KEY_CYCLE)
                     .frame(maxWidth: .infinity)
-                    .disabled(true) // Disabled until properly implemented
 
                 // Time signature selector
                 DraggableValueCard(label: "Time Sig", selection: timeSignatureBinding, options: TIME_SIGNATURE_OPTIONS)

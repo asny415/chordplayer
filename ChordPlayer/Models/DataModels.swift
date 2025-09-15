@@ -246,6 +246,7 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
     var timeSignature: TimeSignature
     var chordProgression: [String] // An array of chord names, e.g., ["Am", "G", "C"]
     var quantize: QuantizationMode = .none
+    var key: String = "C"
 
     // Data Libraries (owned by the preset)
     var chords: [Chord]
@@ -262,6 +263,7 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
          updatedAt: Date = Date(),
          bpm: Double = 120.0,
          timeSignature: TimeSignature = TimeSignature(),
+         key: String = "C",
          chordProgression: [String] = [],
          chords: [Chord] = [],
          playingPatterns: [GuitarPattern] = [],
@@ -274,6 +276,7 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
         self.updatedAt = updatedAt
         self.bpm = bpm
         self.timeSignature = timeSignature
+        self.key = key
         self.chordProgression = chordProgression
         self.chords = chords
         self.playingPatterns = playingPatterns

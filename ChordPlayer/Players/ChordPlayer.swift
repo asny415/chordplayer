@@ -39,11 +39,13 @@ class ChordPlayer: ObservableObject {
         schedulingQueue.asyncAfter(deadline: .now() + (delay > 0 ? delay : 0)) { [weak self] in
             guard let self = self else { return }
 
+            let transpositionOffset = MusicTheory.KEY_CYCLE.firstIndex(of: preset.key) ?? 0
+
             var midiNotesForChord: [Int] = Array(repeating: -1, count: 6)
             let fretsForPlayback = Array(chord.frets.reversed())
             for (stringIndex, fret) in fretsForPlayback.enumerated() {
                 if fret >= 0 {
-                    midiNotesForChord[stringIndex] = MusicTheory.standardGuitarTuning[stringIndex] + fret
+                    midiNotesForChord[stringIndex] = MusicTheory.standardGuitarTuning[stringIndex] + fret + transpositionOffset
                 }
             }
 
@@ -190,4 +192,5 @@ class ChordPlayer: ObservableObject {
 
 class MusicTheory {
     static let standardGuitarTuning = [64, 59, 55, 50, 45, 40] // EADGBe (index 0 is high E)
+    static let KEY_CYCLE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 }
