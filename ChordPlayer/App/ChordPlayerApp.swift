@@ -9,8 +9,8 @@ struct ChordPlayerApp: App {
     @StateObject private var keyboardHandler: KeyboardHandler
 
     init() {
-        let initialAppData = AppData()
         let initialMidiManager = MidiManager()
+        let initialAppData = AppData(midiManager: initialMidiManager)
         // TODO: Refactor these initializers to remove dependencies on old managers
         let initialChordPlayer = ChordPlayer(midiManager: initialMidiManager, appData: initialAppData)
         let initialDrumPlayer = DrumPlayer(midiManager: initialMidiManager, appData: initialAppData)
@@ -36,6 +36,11 @@ struct ChordPlayerApp: App {
                 .environmentObject(PresetManager.shared)
         }
         
+        Settings {
+            PreferencesView()
+                .environmentObject(appData)
+                .environmentObject(midiManager)
+        }
         
         Window("演奏助手", id: "timing-display") {
             // TODO: This view needs to be updated or might be obsolete

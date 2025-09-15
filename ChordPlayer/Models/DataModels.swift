@@ -58,10 +58,6 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
     // Currently active patterns
     var activePlayingPatternId: UUID?
     var activeDrumPatternId: UUID?
-    
-    // MIDI settings previously in AppConfig
-    var midiPortName: String
-    var midiChannel: Int
 
     init(id: UUID = UUID(),
          name: String,
@@ -74,9 +70,7 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
          playingPatterns: [GuitarPattern] = [],
          drumPatterns: [DrumPattern] = [],
          activePlayingPatternId: UUID? = nil,
-         activeDrumPatternId: UUID? = nil,
-         midiPortName: String = "IAC Driver Bus 1",
-         midiChannel: Int = 0) {
+         activeDrumPatternId: UUID? = nil) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
@@ -89,8 +83,6 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
         self.drumPatterns = drumPatterns
         self.activePlayingPatternId = activePlayingPatternId
         self.activeDrumPatternId = activeDrumPatternId
-        self.midiPortName = midiPortName
-        self.midiChannel = midiChannel
     }
     
     static func createNew(name: String = "New Preset") -> Preset {

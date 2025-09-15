@@ -89,14 +89,14 @@ class ChordPlayer: ObservableObject {
                 self.midiManager.cancelScheduledEvent(id: scheduledOffId)
                 self.playingNotes.removeValue(forKey: previousNote)
             }
-            self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: UInt8(appData.preset?.midiChannel ?? 0))
+            self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: UInt8(appData.chordMidiChannel - 1))
         }
 
-        self.midiManager.scheduleNoteOn(note: note, velocity: velocity, channel: UInt8(appData.preset?.midiChannel ?? 0), scheduledUptimeMs: startTimeMs)
+        self.midiManager.scheduleNoteOn(note: note, velocity: velocity, channel: UInt8(appData.chordMidiChannel - 1), scheduledUptimeMs: startTimeMs)
         self.stringNotes[stringIndex] = note
 
         let scheduledNoteOffUptimeMs = startTimeMs + (durationSeconds * 1000.0)
-        let offId = self.midiManager.scheduleNoteOff(note: note, velocity: 0, channel: UInt8(appData.preset?.midiChannel ?? 0), scheduledUptimeMs: scheduledNoteOffUptimeMs)
+        let offId = self.midiManager.scheduleNoteOff(note: note, velocity: 0, channel: UInt8(appData.chordMidiChannel - 1), scheduledUptimeMs: scheduledNoteOffUptimeMs)
         
         self.playingNotes[note] = offId
     }
@@ -108,7 +108,7 @@ class ChordPlayer: ObservableObject {
                     midiManager.cancelScheduledEvent(id: scheduledOffId)
                     playingNotes.removeValue(forKey: note)
                 }
-                midiManager.sendNoteOff(note: note, velocity: 0, channel: UInt8(appData.preset?.midiChannel ?? 0))
+                midiManager.sendNoteOff(note: note, velocity: 0, channel: UInt8(appData.chordMidiChannel - 1))
                 stringNotes.removeValue(forKey: stringIndex)
             }
         }

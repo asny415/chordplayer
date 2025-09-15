@@ -24,7 +24,7 @@ class DrumPlayer: ObservableObject {
     }
 
     func playNote(midiNote: Int) {
-        let channel: UInt8 = 9
+        let channel = UInt8(appData.drumMidiChannel - 1)
         midiManager.sendNoteOn(note: UInt8(midiNote), velocity: 100, channel: channel)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             self.midiManager.sendNoteOff(note: UInt8(midiNote), velocity: 0, channel: channel)
@@ -147,7 +147,7 @@ class DrumPlayer: ObservableObject {
     }
     
     private func scheduleMidiEvent(notes: [Int], at timeMs: Double, velocity: UInt8 = 100, durationMs: Double = 100) {
-        let channel: UInt8 = 9
+        let channel = UInt8(appData.drumMidiChannel - 1)
         for note in notes {
             midiManager.scheduleNoteOn(note: UInt8(note), velocity: velocity, channel: channel, scheduledUptimeMs: timeMs)
             midiManager.scheduleNoteOff(note: UInt8(note), velocity: 0, channel: channel, scheduledUptimeMs: timeMs + durationMs)
