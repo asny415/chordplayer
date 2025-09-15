@@ -100,6 +100,37 @@ struct GuitarPattern: Codable, Identifiable, Hashable, Equatable {
     static func createNew(name: String, length: Int, resolution: NoteResolution) -> GuitarPattern {
         return GuitarPattern(name: name, resolution: resolution, length: length)
     }
+    
+    func generateAutomaticName() -> String {
+        let resolutionStr = (resolution == .sixteenth) ? "16th" : "8th"
+        let lengthStr = "\(length)s"
+        
+        let activeSteps = steps.filter { !$0.activeNotes.isEmpty }
+        guard !activeSteps.isEmpty else {
+            return "\(resolutionStr) \(lengthStr) Silent"
+        }
+        
+        let strumCount = activeSteps.filter { $0.type == .strum }.count
+        let arpCount = activeSteps.filter { $0.type == .arpeggio }.count
+        
+        let typeStr: String
+        if strumCount > arpCount * 2 {
+            typeStr = "Strum"
+        } else if arpCount > strumCount * 2 {
+            typeStr = "Arp"
+        } else {
+            typeStr = "Hybrid"
+        }
+        
+        let rhythmIndices = steps.enumerated()
+            .filter { !$0.element.activeNotes.isEmpty }
+            .map { $0.offset + 1 }
+            .prefix(4)
+        
+        let rhythmStr = rhythmIndices.map(String.init).joined(separator: "-")
+        
+        return "\(resolutionStr) \(lengthStr) \(typeStr) (\(rhythmStr))"
+    }
 }
 
 struct DrumPattern: Codable, Identifiable, Hashable, Equatable {

@@ -3,10 +3,7 @@ import SwiftUI
 struct PlayingPatternsView: View {
     @EnvironmentObject var appData: AppData
 
-    @State private var showPlayingPatternEditor: Bool = false
-    @State private var editingPattern: GuitarPattern? = nil
-    // The initial value doesn't matter as it's overwritten before use.
-    @State private var newPattern: GuitarPattern = .createNew(name: "New Pattern", length: 16, resolution: .sixteenth)
+    @State private var patternToEdit: GuitarPattern? = nil
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -14,15 +11,11 @@ struct PlayingPatternsView: View {
                 Text("Playing Patterns").font(.headline)
                 Spacer()
                 Button(action: {
-                    editingPattern = nil
-                    
-                    // Calculate default length based on current time signature
+                    // Create a new pattern and set it as the item to be edited.
                     let timeSignature = appData.preset?.timeSignature ?? TimeSignature()
                     let defaultResolution = NoteResolution.sixteenth
                     let length = calculateDefaultLength(timeSignature: timeSignature, resolution: defaultResolution)
-                    
-                    newPattern = GuitarPattern.createNew(name: "New Pattern", length: length, resolution: defaultResolution)
-                    showPlayingPatternEditor = true
+                    self.patternToEdit = GuitarPattern.createNew(name: "New Pattern", length: length, resolution: defaultResolution)
                 }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
@@ -45,8 +38,7 @@ struct PlayingPatternsView: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Button("Edit") {
-                                editingPattern = pattern
-                                showPlayingPatternEditor = true
+                                self.patternToEdit = pattern
                             }
                             Button("Delete", role: .destructive) {
                                 if let index = appData.preset?.playingPatterns.firstIndex(where: { $0.id == pattern.id }) {
@@ -62,30 +54,20 @@ struct PlayingPatternsView: View {
                     .frame(maxWidth: .infinity, maxHeight: 80, alignment: .center)
             }
         }
-        .sheet(isPresented: $showPlayingPatternEditor) {
-            let isNew = editingPattern == nil
+        .sheet(item: $patternToEdit) { pattern in
+            // Determine if the pattern is new by checking if it already exists in the preset.
+            let isNew = !(appData.preset?.playingPatterns.contains(where: { $0.id == pattern.id }) ?? false)
             
-            let binding = Binding<GuitarPattern>(
-                get: { self.editingPattern ?? self.newPattern },
-                set: { pattern in
-                    if self.editingPattern != nil {
-                        self.editingPattern = pattern
-                    } else {
-                        self.newPattern = pattern
-                    }
-                }
-            )
-
-            PlayingPatternEditorView(pattern: binding, isNew: isNew, onSave: { savedPattern in
+            PlayingPatternEditorSheetView(patternToEdit: pattern, isNew: isNew, onSave: { savedPattern in
                 if let index = appData.preset?.playingPatterns.firstIndex(where: { $0.id == savedPattern.id }) {
                     appData.preset?.playingPatterns[index] = savedPattern
                 } else {
                     appData.addPlayingPattern(savedPattern)
                 }
                 appData.saveChanges()
-                showPlayingPatternEditor = false
+                self.patternToEdit = nil // Dismiss the sheet
             }, onCancel: {
-                showPlayingPatternEditor = false
+                self.patternToEdit = nil // Dismiss the sheet
             })
         }
     }
@@ -124,5 +106,25 @@ struct PlayingPatternCardView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(isActive ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isActive ? 2.5 : 1)
         )
+    }
+}
+
+// MARK: - Editor Sheet Wrapper View
+
+private struct PlayingPatternEditorSheetView: View {
+    @State private var pattern: GuitarPattern
+    private let isNew: Bool
+    private let onSave: (GuitarPattern) -> Void
+    private let onCancel: () -> Void
+
+    init(patternToEdit: GuitarPattern, isNew: Bool, onSave: @escaping (GuitarPattern) -> Void, onCancel: @escaping () -> Void) {
+        self._pattern = State(initialValue: patternToEdit)
+        self.isNew = isNew
+        self.onSave = onSave
+        self.onCancel = onCancel
+    }
+
+    var body: some View {
+        PlayingPatternEditorView(pattern: $pattern, isNew: isNew, onSave: onSave, onCancel: onCancel)
     }
 }

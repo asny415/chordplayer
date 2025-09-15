@@ -37,12 +37,17 @@ struct PlayingPatternEditorView: View {
 
     private var headerView: some View {
         HStack {
-            Text(isNew ? "Create Playing Pattern" : "Edit Playing Pattern")
+            Text(isNew ? "Create Playing Pattern" : "Edit: \(pattern.name)")
                 .font(.title).fontWeight(.bold)
             Spacer()
-            TextField("Pattern Name", text: $pattern.name)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .frame(maxWidth: 250)
+            HStack {
+                TextField("Pattern Name", text: $pattern.name)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                Button("Auto") {
+                    pattern.name = pattern.generateAutomaticName()
+                }
+            }
+            .frame(maxWidth: 300)
         }
     }
 
@@ -72,8 +77,9 @@ struct PlayingPatternEditorView: View {
         HStack(spacing: 0) {
             // String labels on the left
             VStack(alignment: .trailing, spacing: 4) {
-                ForEach((1...6).reversed(), id: \.self) { i in
-                    Text("EADGBe"[i-1])
+                let labels = ["e", "B", "G", "D", "A", "E"]
+                ForEach(0..<6) { i in
+                    Text(labels[i])
                         .font(.system(.subheadline, design: .monospaced))
                         .frame(height: 35, alignment: .center)
                 }
@@ -88,7 +94,7 @@ struct PlayingPatternEditorView: View {
                         VStack(spacing: 2) {
                             StepHeaderView(step: $pattern.steps[index], index: index, popoverStepIndex: $popoverStepIndex)
                             
-                            ForEach((0...5).reversed(), id: \.self) { stringIndex in
+                            ForEach(0..<6, id: \.self) { stringIndex in
                                 gridCell(stepIndex: index, stringIndex: stringIndex)
                             }
                         }
@@ -124,7 +130,13 @@ struct PlayingPatternEditorView: View {
         HStack {
             Button("Cancel", role: .cancel, action: onCancel)
             Spacer()
-            Button("Save", action: { onSave(pattern) }).buttonStyle(.borderedProminent)
+            Button("Save", action: {
+                // Auto-name only if it's a new pattern with the default name.
+                if isNew && pattern.name == "New Pattern" {
+                    pattern.name = pattern.generateAutomaticName()
+                }
+                onSave(pattern)
+            }).buttonStyle(.borderedProminent)
         }
     }
 }

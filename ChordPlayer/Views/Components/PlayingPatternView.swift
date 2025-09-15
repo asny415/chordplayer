@@ -42,8 +42,8 @@ struct PlayingPatternView: View {
                     break // Draw nothing
                 
                 case .arpeggio:
-                    // Draw a circle for each active note
-                    for stringIndex in step.activeNotes {
+                    // Draw a circle for each active note, sorted for consistent display
+                    for stringIndex in step.activeNotes.sorted() {
                         let y = stringSpacing / 2 + CGFloat(stringIndex) * stringSpacing
                         let circlePath = Path(ellipseIn: CGRect(x: x - stringSpacing * 0.2, y: y - stringSpacing * 0.2, width: stringSpacing * 0.4, height: stringSpacing * 0.4))
                         context.fill(circlePath, with: .color(color))
