@@ -60,49 +60,6 @@ struct ChordProgressionView: View {
                 }
             }
 
-            Divider()
-
-            // Part 2: The actual chord progression
-            VStack(alignment: .leading) {
-                Text("Chord Progression").font(.headline)
-                
-                if let preset = appData.preset, !preset.chordProgression.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: true) {
-                        HStack {
-                            ForEach(Array(preset.chordProgression.enumerated()), id: \.offset) { index, chordName in
-                                Text(chordName)
-                                    .font(.title2.weight(.semibold))
-                                    .padding()
-                                    .background(Material.regular, in: RoundedRectangle(cornerRadius: 8))
-                                    .frame(width: 100, height: 60)
-                                    .contextMenu {
-                                        Button("Remove from Progression", role: .destructive) {
-                                            appData.preset?.chordProgression.remove(at: index)
-                                            appData.saveChanges()
-                                        }
-                                    }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .onDrop(of: [UTType.text], isTargeted: nil) { providers in
-                        providers.first?.loadObject(ofClass: NSString.self) { (item, error) in
-                            if let chordName = item as? String {
-                                DispatchQueue.main.async {
-                                    appData.preset?.chordProgression.append(chordName)
-                                    appData.saveChanges()
-                                }
-                            }
-                        }
-                        return true
-                    }
-                } else {
-                    Text("Drag chords from the library above to build a progression.")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 60, alignment: .center)
-                        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                }
-            }
         }
         .sheet(isPresented: $showChordEditor) {
             ChordEditorView(chord: $chordToEdit, isNew: self.isNewChord, onSave: { savedChord in
