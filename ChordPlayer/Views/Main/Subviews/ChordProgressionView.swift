@@ -3,9 +3,10 @@ import UniformTypeIdentifiers
 
 struct ChordProgressionView: View {
     @EnvironmentObject var appData: AppData
-    @State private var showChordEditor = false
-    @State private var editingChord: Chord? = nil
-    @State private var newChord = Chord(name: "", frets: Array(repeating: -1, count: 6), fingers: Array(repeating: 0, count: 6))
+    
+    @State private var chordToEdit: Chord = .init(name: "", frets: Array(repeating: -1, count: 6), fingers: Array(repeating: 0, count: 6))
+    @State private var isNewChord: Bool = false
+    @State private var showChordEditor: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -15,9 +16,9 @@ struct ChordProgressionView: View {
                     Text("Preset Chord Library").font(.headline)
                     Spacer()
                     Button(action: {
-                        editingChord = nil
-                        newChord = Chord(name: "New Chord", frets: Array(repeating: 0, count: 6), fingers: Array(repeating: 0, count: 6))
-                        showChordEditor = true
+                        self.isNewChord = true
+                        self.chordToEdit = Chord(name: "New Chord", frets: Array(repeating: 0, count: 6), fingers: Array(repeating: 0, count: 6))
+                        self.showChordEditor = true
                     }) {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
@@ -34,8 +35,9 @@ struct ChordProgressionView: View {
                                 .onDrag { NSItemProvider(object: chord.name as NSString) }
                                 .contextMenu {
                                     Button("Edit") {
-                                        editingChord = chord
-                                        showChordEditor = true
+                                        self.isNewChord = false
+                                        self.chordToEdit = chord
+                                        self.showChordEditor = true
                                     }
                                     Button("Delete", role: .destructive) {
                                         if let index = appData.preset?.chords.firstIndex(where: { $0.id == chord.id }) {
@@ -97,21 +99,7 @@ struct ChordProgressionView: View {
             }
         }
         .sheet(isPresented: $showChordEditor) {
-            let isNew = editingChord == nil
-            let chordToEdit = editingChord ?? newChord
-            
-            let binding = Binding<Chord>(
-                get: { self.editingChord ?? self.newChord },
-                set: { chord in
-                    if self.editingChord != nil {
-                        self.editingChord = chord
-                    } else {
-                        self.newChord = chord
-                    }
-                }
-            )
-
-            ChordEditorView(chord: binding, isNew: isNew, onSave: { savedChord in
+            ChordEditorView(chord: $chordToEdit, isNew: self.isNewChord, onSave: { savedChord in
                 if let index = appData.preset?.chords.firstIndex(where: { $0.id == savedChord.id }) {
                     appData.preset?.chords[index] = savedChord
                 } else {

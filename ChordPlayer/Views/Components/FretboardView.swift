@@ -153,7 +153,7 @@ struct FretboardView: View {
     private func playNote(string: Int, fret: Int) {
         guard fret >= 0 else { return } // Don't play muted notes
         
-        let midiNote = standardGuitarTuning[string] + fret
+        let midiNote = standardGuitarTuning[stringCount - 1 - string] + fret
         guard midiNote > 0 else { return }
         
         midiManager.sendNoteOn(note: UInt8(midiNote), velocity: 100, channel: 0)
