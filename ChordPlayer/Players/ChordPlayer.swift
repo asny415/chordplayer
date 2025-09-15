@@ -62,7 +62,7 @@ class ChordPlayer: ObservableObject {
             
             // We still need quantizationUnitDuration for the window calculation
             let quantizationUnitDuration = (quantizationMode == .measure) ? clock.loopDuration : clock.loopDuration / 2.0
-            let quantizationWindow = quantizationUnitDuration / 2.0
+            let quantizationWindow = quantizationUnitDuration * 3 / 4.0
 
             if timeToNextQuantization > quantizationWindow {
                 print("[ChordPlayer] Discarding chord playback: outside quantization window. Time to next: \(timeToNextQuantization)ms, window: \(quantizationWindow)ms")
