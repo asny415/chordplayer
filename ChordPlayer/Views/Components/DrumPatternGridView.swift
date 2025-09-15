@@ -16,7 +16,7 @@ struct DrumPatternGridView: View {
             guard !pattern.patternGrid.isEmpty, !pattern.patternGrid[0].isEmpty else { return }
             
             let instrumentCount = pattern.instruments.count
-            let stepCount = pattern.steps
+            let stepCount = pattern.length
             
             let stepWidth = size.width / CGFloat(stepCount)
             let instrumentHeight = size.height / CGFloat(instrumentCount)

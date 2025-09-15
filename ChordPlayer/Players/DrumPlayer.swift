@@ -69,7 +69,7 @@ class DrumPlayer: ObservableObject {
         }
 
         isPreviewing = true
-        let stepDuration = 60.0 / bpm / Double(pattern.steps / 4) // Assuming 16th notes per bar
+        let stepDuration = 60.0 / bpm / Double(pattern.length / 4) // Assuming 16th notes per bar
         var currentStep = 0
 
         previewTimer = Timer.scheduledTimer(withTimeInterval: stepDuration, repeats: true) { [weak self] timer in
@@ -80,12 +80,12 @@ class DrumPlayer: ObservableObject {
 
             for (instrumentIndex, instrumentRow) in pattern.patternGrid.enumerated() {
                 if instrumentRow[currentStep] {
-                    let midiNote = 36 + instrumentIndex // Basic mapping
+                    let midiNote = pattern.midiNotes[instrumentIndex]
                     self.scheduleMidiEvent(notes: [midiNote], at: ProcessInfo.processInfo.systemUptime * 1000.0, durationMs: 100)
                 }
             }
 
-            currentStep = (currentStep + 1) % pattern.steps
+            currentStep = (currentStep + 1) % pattern.length
         }
     }
 
@@ -127,13 +127,13 @@ class DrumPlayer: ObservableObject {
     
     private func buildSchedule(from pattern: DrumPattern, measureDurationMs: Double) -> [(timestampMs: Double, notes: [Int])] {
         var newSchedule: [(timestampMs: Double, notes: [Int])] = []
-        let stepDurationMs = measureDurationMs / Double(pattern.steps)
+        let stepDurationMs = measureDurationMs / Double(pattern.length)
 
-        for step in 0..<pattern.steps {
+        for step in 0..<pattern.length {
             var notesForStep: [Int] = []
             for instrumentIndex in 0..<pattern.instruments.count {
                 if pattern.patternGrid[instrumentIndex][step] {
-                    let midiNote = 36 + instrumentIndex
+                    let midiNote = pattern.midiNotes[instrumentIndex]
                     notesForStep.append(midiNote)
                 }
             }

@@ -1,12 +1,17 @@
 import SwiftUI
 
+// A context object to manage which sheet to show and what data to pass to it.
+fileprivate struct SheetContext: Identifiable {
+    var id: String { pattern.id.uuidString }
+    var pattern: DrumPattern
+    let isNew: Bool
+}
+
 struct DrumPatternsView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var drumPlayer: DrumPlayer
 
-    @State private var showDrumPatternEditor: Bool = false
-    @State private var editingPattern: DrumPattern? = nil
-    @State private var newPattern = DrumPattern(name: "New Drum Beat", patternGrid: Array(repeating: Array(repeating: false, count: 16), count: 3), steps: 16, instruments: ["Kick", "Snare", "Hi-Hat"])
+    @State private var sheetContext: SheetContext?
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -14,10 +19,8 @@ struct DrumPatternsView: View {
                 Text("Drum Patterns").font(.headline)
                 Spacer()
                 Button(action: {
-                    editingPattern = nil
-                    let defaultGrid = Array(repeating: Array(repeating: false, count: 16), count: 3)
-                    newPattern = DrumPattern(name: "New Drum Beat", patternGrid: defaultGrid, steps: 16, instruments: ["Kick", "Snare", "Hi-Hat"])
-                    showDrumPatternEditor = true
+                    let newPattern = DrumPattern(name: "New Beat", resolution: .sixteenth, length: 16, instruments: ["Kick", "Snare", "Hi-Hat", "Cymbal", "Tom"], midiNotes: [36, 38, 42, 49, 45])
+                    sheetContext = SheetContext(pattern: newPattern, isNew: true)
                 }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
@@ -41,8 +44,7 @@ struct DrumPatternsView: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Button("Edit") {
-                                editingPattern = pattern
-                                showDrumPatternEditor = true
+                                sheetContext = SheetContext(pattern: pattern, isNew: false)
                             }
                             Button("Delete", role: .destructive) {
                                 if let index = appData.preset?.drumPatterns.firstIndex(where: { $0.id == pattern.id }) {
@@ -58,33 +60,44 @@ struct DrumPatternsView: View {
                     .frame(maxWidth: .infinity, maxHeight: 80, alignment: .center)
             }
         }
-        .sheet(isPresented: $showDrumPatternEditor) {
-            let isNew = editingPattern == nil
-            let patternToEdit = editingPattern ?? newPattern
-            
-            let binding = Binding<DrumPattern>(
-                get: { self.editingPattern ?? self.newPattern },
-                set: { pattern in
-                    if self.editingPattern != nil {
-                        self.editingPattern = pattern
-                    } else {
-                        self.newPattern = pattern
-                    }
-                }
-            )
-
-            DrumPatternEditorView(pattern: binding, isNew: isNew, onSave: { savedPattern in
-                if let index = appData.preset?.drumPatterns.firstIndex(where: { $0.id == savedPattern.id }) {
-                    appData.preset?.drumPatterns[index] = savedPattern
+        .sheet(item: $sheetContext) { context in
+            DrumPatternSheetWrapper(context: context, onSave: { finalPattern in
+                if let index = appData.preset?.drumPatterns.firstIndex(where: { $0.id == finalPattern.id }) {
+                    appData.preset?.drumPatterns[index] = finalPattern
                 } else {
-                    appData.addDrumPattern(savedPattern)
+                    appData.addDrumPattern(finalPattern)
                 }
                 appData.saveChanges()
-                showDrumPatternEditor = false
+                sheetContext = nil
             }, onCancel: {
-                showDrumPatternEditor = false
+                sheetContext = nil
             })
         }
+    }
+}
+
+// This wrapper view holds the state for the editor, ensuring a clean data flow for the sheet.
+private struct DrumPatternSheetWrapper: View {
+    let context: SheetContext
+    let onSave: (DrumPattern) -> Void
+    let onCancel: () -> Void
+
+    @State private var patternInEditor: DrumPattern
+
+    init(context: SheetContext, onSave: @escaping (DrumPattern) -> Void, onCancel: @escaping () -> Void) {
+        self.context = context
+        self.onSave = onSave
+        self.onCancel = onCancel
+        self._patternInEditor = State(initialValue: context.pattern)
+    }
+
+    var body: some View {
+        DrumPatternEditorView(
+            pattern: $patternInEditor,
+            isNew: context.isNew,
+            onSave: { savedPattern in onSave(savedPattern) },
+            onCancel: onCancel
+        )
     }
 }
 

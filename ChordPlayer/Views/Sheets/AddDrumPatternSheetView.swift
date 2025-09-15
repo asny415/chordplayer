@@ -46,9 +46,23 @@ struct DrumPatternEditorView: View {
 
     private var toolbarView: some View {
         HStack(spacing: 20) {
-            // TODO: Add controls for time signature and steps if dynamicism is needed
-            Text("Instruments: \(pattern.instruments.joined(separator: ", "))").font(.headline)
+            VStack(alignment: .leading) {
+                Picker("Resolution", selection: $pattern.resolution) {
+                    ForEach(NoteResolution.allCases) { resolution in
+                        Text(resolution.rawValue).tag(resolution)
+                    }
+                }
+                .pickerStyle(SegmentedPickerStyle())
+            }
+
+            VStack(alignment: .leading) {
+                Stepper(value: $pattern.length, in: 4...64, step: 4) { 
+                    Text("Length: \(pattern.length) steps")
+                }
+            }
+            
             Spacer()
+            
             HStack {
                 Text("Preview BPM:")
                 Stepper(value: $bpm, in: 40...240, step: 1) { Text("\(Int(bpm))") }
@@ -66,18 +80,18 @@ struct DrumPatternEditorView: View {
             .frame(width: 80)
             
             GeometryReader { geometry in
-                let stepWidth = max(10, (geometry.size.width - CGFloat(pattern.steps - 1) * 2) / CGFloat(pattern.steps))
+                let stepWidth = max(10, (geometry.size.width - CGFloat(pattern.length - 1) * 2) / CGFloat(pattern.length))
                 ScrollView(.horizontal) {
                     HStack(spacing: 2) {
-                        let stepsPerBeat = 4 // Assuming 4/4
-                        ForEach(0..<pattern.steps, id: \.self) { col in
+                        let stepsPerBeat = pattern.resolution == .sixteenth ? 4 : 2
+                        ForEach(0..<pattern.length, id: \.self) { col in
                             VStack(spacing: 2) {
                                 ForEach(0..<pattern.instruments.count, id: \.self) { row in
                                     gridCell(row: row, col: col, size: stepWidth)
                                 }
                             }
                             .background((col / stepsPerBeat) % 2 == 0 ? Color.clear : Color.secondary.opacity(0.1))
-                            if (col + 1) % stepsPerBeat == 0 && col < pattern.steps - 1 {
+                            if (col + 1) % stepsPerBeat == 0 && col < pattern.length - 1 {
                                 Divider()
                             }
                         }
@@ -95,7 +109,7 @@ struct DrumPatternEditorView: View {
             .onTapGesture {
                 pattern.patternGrid[row][col].toggle()
                 if pattern.patternGrid[row][col] {
-                    let midiNote = 36 + row // Basic mapping
+                    let midiNote = pattern.midiNotes[row]
                     drumPlayer.playNote(midiNote: midiNote)
                 }
             }

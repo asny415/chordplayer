@@ -136,10 +136,96 @@ struct GuitarPattern: Codable, Identifiable, Hashable, Equatable {
 struct DrumPattern: Codable, Identifiable, Hashable, Equatable {
     var id = UUID()
     var name: String
+    var resolution: NoteResolution
+    var instruments: [String]
+    var midiNotes: [Int]
+
     // Rows are instruments, columns are steps.
     var patternGrid: [[Bool]]
-    var steps: Int
-    var instruments: [String] // e.g., ["Kick", "Snare", "Hi-hat"]
+
+    var length: Int {
+        didSet {
+            guard length != oldValue else { return }
+            // Adjust the number of columns (steps) in the grid for each instrument
+            for i in 0..<patternGrid.count {
+                let currentCount = patternGrid[i].count
+                if length > currentCount {
+                    patternGrid[i].append(contentsOf: Array(repeating: false, count: length - currentCount))
+                } else if length < currentCount {
+                    patternGrid[i] = Array(patternGrid[i].prefix(length))
+                }
+            }
+        }
+    }
+
+    init(id: UUID = UUID(), name: String, resolution: NoteResolution, length: Int, instruments: [String], midiNotes: [Int]) {
+        self.id = id
+        self.name = name
+        self.resolution = resolution
+        self.length = length
+        self.instruments = instruments
+        self.midiNotes = midiNotes
+        self.patternGrid = Array(repeating: Array(repeating: false, count: length), count: instruments.count)
+    }
+
+    // Custom decoder to handle older data formats
+    enum CodingKeys: String, CodingKey {
+        case id, name, resolution, instruments, patternGrid, length, midiNotes, steps
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        resolution = try container.decodeIfPresent(NoteResolution.self, forKey: .resolution) ?? .sixteenth
+        
+        // Handle legacy `steps` property
+        if let steps = try container.decodeIfPresent(Int.self, forKey: .steps) {
+            length = steps
+        } else {
+            length = try container.decode(Int.self, forKey: .length)
+        }
+        
+        instruments = try container.decodeIfPresent([String].self, forKey: .instruments) ?? ["Kick", "Snare", "Hi-hat"]
+        patternGrid = try container.decode([[Bool]].self, forKey: .patternGrid)
+
+        // Handle midiNotes, providing defaults if missing
+        let defaultNotes = [36, 38, 42, 46, 49, 51]
+        var decodedNotes = try container.decodeIfPresent([Int].self, forKey: .midiNotes) ?? []
+        
+        // Ensure midiNotes count matches instruments count
+        if decodedNotes.count < instruments.count {
+            for i in decodedNotes.count..<instruments.count {
+                decodedNotes.append(defaultNotes[i % defaultNotes.count])
+            }
+        } else if decodedNotes.count > instruments.count {
+            decodedNotes = Array(decodedNotes.prefix(instruments.count))
+        }
+        midiNotes = decodedNotes
+
+        // Data integrity check
+        if patternGrid.count != instruments.count || (patternGrid.first?.count ?? 0) != length {
+            var correctedGrid = Array(repeating: Array(repeating: false, count: length), count: instruments.count)
+            for i in 0..<min(patternGrid.count, instruments.count) {
+                let row = patternGrid[i]
+                for j in 0..<min(row.count, length) {
+                    correctedGrid[i][j] = row[j]
+                }
+            }
+            self.patternGrid = correctedGrid
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(resolution, forKey: .resolution)
+        try container.encode(instruments, forKey: .instruments)
+        try container.encode(midiNotes, forKey: .midiNotes)
+        try container.encode(patternGrid, forKey: .patternGrid)
+        try container.encode(length, forKey: .length)
+    }
 }
 
 struct TimeSignature: Codable, Hashable, Equatable {
