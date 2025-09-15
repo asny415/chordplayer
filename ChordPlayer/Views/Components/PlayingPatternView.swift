@@ -6,11 +6,10 @@ struct PlayingPatternView: View {
 
     var body: some View {
         Canvas { context, size in
-            guard !pattern.patternGrid.isEmpty, !pattern.patternGrid[0].isEmpty else { return }
-            
-            let stringCount = pattern.strings
-            let stepCount = pattern.steps
-            
+            let stringCount = 6
+            let stepCount = pattern.length
+            guard stepCount > 0 else { return }
+
             let stepWidth = size.width / CGFloat(stepCount)
             let stringSpacing = size.height / CGFloat(stringCount)
 
@@ -22,12 +21,11 @@ struct PlayingPatternView: View {
                 path.addLine(to: CGPoint(x: size.width, y: y))
                 context.stroke(path, with: .color(color.opacity(0.3)))
             }
-            
-            // Draw beat lines (assuming 4 beats for now)
-            // TODO: Use time signature from preset for accurate beat lines
-            let beats = 4
-            let stepsPerBeat = stepCount / beats
-            for i in 1..<beats {
+
+            // Draw beat lines
+            let stepsPerBeat = pattern.resolution == .sixteenth ? 4 : 2
+            let beatCount = stepCount / stepsPerBeat
+            for i in 1..<beatCount {
                 let x = CGFloat(i * stepsPerBeat) * stepWidth
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: 0))
@@ -35,35 +33,46 @@ struct PlayingPatternView: View {
                 context.stroke(path, with: .color(color.opacity(0.5)))
             }
 
-            // Draw events (notes)
-            for (stringIndex, stringRow) in pattern.patternGrid.enumerated() {
-                for (stepIndex, hasNote) in stringRow.enumerated() {
-                    if hasNote {
-                        let x = CGFloat(stepIndex) * stepWidth + stepWidth / 2
+            // Draw events based on the new PatternStep structure
+            for (stepIndex, step) in pattern.steps.enumerated() {
+                let x = CGFloat(stepIndex) * stepWidth + stepWidth / 2
+                
+                switch step.type {
+                case .rest:
+                    break // Draw nothing
+                
+                case .arpeggio:
+                    // Draw a circle for each active note
+                    for stringIndex in step.activeNotes {
                         let y = stringSpacing / 2 + CGFloat(stringIndex) * stringSpacing
-                        let pick = createPickPath(center: CGPoint(x: x, y: y), size: stringSpacing * 0.8)
-                        context.fill(pick, with: .color(color))
+                        let circlePath = Path(ellipseIn: CGRect(x: x - stringSpacing * 0.2, y: y - stringSpacing * 0.2, width: stringSpacing * 0.4, height: stringSpacing * 0.4))
+                        context.fill(circlePath, with: .color(color))
                     }
+                
+                case .strum:
+                    // Draw a single arrow for the whole step
+                    let arrowPath = createArrowPath(center: CGPoint(x: x, y: size.height / 2), height: size.height * 0.7, direction: step.strumDirection)
+                    context.stroke(arrowPath, with: .color(color), lineWidth: 1.5)
                 }
             }
         }
     }
 
-    private func createPickPath(center: CGPoint, size: CGFloat) -> Path {
+    private func createArrowPath(center: CGPoint, height: CGFloat, direction: StrumDirection) -> Path {
         var path = Path()
-        let width = size
-        let height = size
-        let topPoint = CGPoint(x: center.x, y: center.y - height / 2)
-        let leftPoint = CGPoint(x: center.x - width / 2, y: center.y)
-        let rightPoint = CGPoint(x: center.x + width / 2, y: center.y)
-        let bottomPoint = CGPoint(x: center.x, y: center.y + height / 2)
+        let arrowHeight = height
+        let arrowWidth = arrowHeight * 0.4
+        
+        let yStart = direction == .down ? center.y - arrowHeight / 2 : center.y + arrowHeight / 2
+        let yEnd = direction == .down ? center.y + arrowHeight / 2 : center.y - arrowHeight / 2
 
-        path.move(to: topPoint)
-        path.addQuadCurve(to: leftPoint, control: CGPoint(x: center.x - width * 0.4, y: center.y - height * 0.4))
-        path.addQuadCurve(to: bottomPoint, control: CGPoint(x: center.x - width * 0.1, y: center.y + height * 0.4))
-        path.addQuadCurve(to: rightPoint, control: CGPoint(x: center.x + width * 0.1, y: center.y + height * 0.4))
-        path.addQuadCurve(to: topPoint, control: CGPoint(x: center.x + width * 0.4, y: center.y - height * 0.4))
-        path.closeSubpath()
+        path.move(to: CGPoint(x: center.x, y: yStart))
+        path.addLine(to: CGPoint(x: center.x, y: yEnd))
+        
+        path.move(to: CGPoint(x: center.x - arrowWidth / 2, y: yEnd + (direction == .down ? -arrowWidth / 2 : arrowWidth / 2)))
+        path.addLine(to: CGPoint(x: center.x, y: yEnd))
+        path.addLine(to: CGPoint(x: center.x + arrowWidth / 2, y: yEnd + (direction == .down ? -arrowWidth / 2 : arrowWidth / 2)))
+        
         return path
     }
 }

@@ -5,7 +5,8 @@ struct PlayingPatternsView: View {
 
     @State private var showPlayingPatternEditor: Bool = false
     @State private var editingPattern: GuitarPattern? = nil
-    @State private var newPattern = GuitarPattern(name: "New Pattern", patternGrid: Array(repeating: Array(repeating: false, count: 16), count: 6), steps: 16, strings: 6)
+    // The initial value doesn't matter as it's overwritten before use.
+    @State private var newPattern: GuitarPattern = .createNew(name: "New Pattern", length: 16, resolution: .sixteenth)
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -14,8 +15,13 @@ struct PlayingPatternsView: View {
                 Spacer()
                 Button(action: {
                     editingPattern = nil
-                    let defaultGrid = Array(repeating: Array(repeating: false, count: 16), count: 6)
-                    newPattern = GuitarPattern(name: "New Pattern", patternGrid: defaultGrid, steps: 16, strings: 6)
+                    
+                    // Calculate default length based on current time signature
+                    let timeSignature = appData.preset?.timeSignature ?? TimeSignature()
+                    let defaultResolution = NoteResolution.sixteenth
+                    let length = calculateDefaultLength(timeSignature: timeSignature, resolution: defaultResolution)
+                    
+                    newPattern = GuitarPattern.createNew(name: "New Pattern", length: length, resolution: defaultResolution)
                     showPlayingPatternEditor = true
                 }) {
                     Image(systemName: "plus.circle.fill")
@@ -81,6 +87,18 @@ struct PlayingPatternsView: View {
             }, onCancel: {
                 showPlayingPatternEditor = false
             })
+        }
+    }
+    
+    private func calculateDefaultLength(timeSignature: TimeSignature, resolution: NoteResolution) -> Int {
+        let beatsPerMeasure = Double(timeSignature.beatsPerMeasure)
+        let beatUnit = Double(timeSignature.beatUnit)
+        
+        switch resolution {
+        case .eighth:
+            return Int(beatsPerMeasure * (8.0 / beatUnit))
+        case .sixteenth:
+            return Int(beatsPerMeasure * (16.0 / beatUnit))
         }
     }
 }

@@ -12,14 +12,94 @@ struct Chord: Codable, Identifiable, Hashable, Equatable {
     var fingers: [Int]
 }
 
+// MARK: - Pattern Supporting Enums
+
+enum NoteResolution: String, Codable, CaseIterable, Identifiable {
+    case eighth = "8th Notes"
+    case sixteenth = "16th Notes"
+    var id: Self { self }
+}
+
+enum StepType: String, Codable, CaseIterable, Identifiable {
+    case rest = "Rest"
+    case arpeggio = "Arpeggio"
+    case strum = "Strum"
+    var id: Self { self }
+}
+
+enum StrumDirection: String, Codable, CaseIterable, Identifiable {
+    case down = "Down"
+    case up = "Up"
+    var id: Self { self }
+}
+
+enum StrumSpeed: String, Codable, CaseIterable, Identifiable {
+    case slow = "Slow"
+    case medium = "Medium"
+    case fast = "Fast"
+    var id: Self { self }
+}
+
+// MARK: - Pattern Step Model
+
+// Represents a single time step in a pattern (i.e., a column in the editor)
+struct PatternStep: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    // Which strings are active in this step (0-5)
+    var activeNotes: Set<Int> = []
+    // The performance type for this step
+    var type: StepType = .arpeggio
+    // Strum parameters (only used when type is .strum)
+    var strumDirection: StrumDirection = .down
+    var strumSpeed: StrumSpeed = .medium
+}
+
+// MARK: - Guitar Pattern Model
+
 struct GuitarPattern: Codable, Identifiable, Hashable, Equatable {
     var id = UUID()
     var name: String
-    // A 2D array of booleans representing a UI grid.
-    // This simplification makes editing easier but is less nuanced than the previous event-based system.
-    var patternGrid: [[Bool]]
-    var steps: Int
-    var strings: Int
+    
+    // Defines the time value of each step
+    var resolution: NoteResolution = .sixteenth
+    
+    // The sequence of steps that make up the pattern
+    var steps: [PatternStep] = []
+    
+    // The total number of steps in the pattern
+    var length: Int {
+        didSet {
+            guard length != oldValue else { return }
+            let currentCount = steps.count
+            if length > currentCount {
+                steps.append(contentsOf: Array(repeating: PatternStep(), count: length - currentCount))
+            } else if length < currentCount {
+                steps = Array(steps.prefix(length))
+            }
+        }
+    }
+    
+    init(id: UUID = UUID(), name: String, resolution: NoteResolution = .sixteenth, length: Int, steps: [PatternStep]? = nil) {
+        self.id = id
+        self.name = name
+        self.resolution = resolution
+        self.length = length
+        
+        if let providedSteps = steps, providedSteps.count == length {
+            self.steps = providedSteps
+        } else {
+            // Initialize with empty steps if none are provided or if counts mismatch
+            self.steps = Array(repeating: PatternStep(), count: length)
+        }
+    }
+    
+    // Add a custom decoder to handle the possibility of old data formats if necessary
+    // For now, we assume new data structure.
+    
+    // Default initializer for creating a new pattern
+    static func createNew(name: String, length: Int, resolution: NoteResolution) -> GuitarPattern {
+        return GuitarPattern(name: name, resolution: resolution, length: length)
+    }
 }
 
 struct DrumPattern: Codable, Identifiable, Hashable, Equatable {
