@@ -30,7 +30,7 @@ struct ChordProgressionView: View {
                 }
 
                 if let preset = appData.preset, !preset.chords.isEmpty {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 10) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 90))], spacing: 10) {
                         ForEach(preset.chords) { chord in
                             Button(action: {
                                 playChord(chord)
@@ -90,11 +90,11 @@ struct ChordCardView: View {
     var body: some View {
         VStack {
             Text(chord.name)
-                .font(.title3.weight(.medium))
+                .font(.headline)
             
             ChordDiagramView(chord: chord, color: .primary)
         }
-        .padding(8)
+        .padding(6)
         .background(Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.2), lineWidth: 1))
     }
