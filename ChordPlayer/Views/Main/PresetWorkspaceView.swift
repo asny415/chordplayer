@@ -18,13 +18,12 @@ struct PresetWorkspaceView: View {
                 }
 
                 GroupBox {
-                    PlayingPatternsView()
-                }
-
-                GroupBox {
                     ChordProgressionView()
                 }
 
+                GroupBox {
+                    PlayingPatternsView()
+                }
                 
             }
             .padding()
