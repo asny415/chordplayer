@@ -24,7 +24,9 @@ class ChordPlayer: ObservableObject {
 
     func playChord(chord: Chord, pattern: GuitarPattern, preset: Preset, velocity: UInt8 = 100, duration: TimeInterval = 0.5) {
         var midiNotesForChord: [Int] = Array(repeating: -1, count: 6)
-        for (stringIndex, fret) in chord.frets.enumerated() {
+        // User provides frets from low E (6) to high E (1). We need to reverse it for our tuning array which is high E to low E.
+        let fretsForPlayback = Array(chord.frets.reversed())
+        for (stringIndex, fret) in fretsForPlayback.enumerated() {
             if fret >= 0 {
                 midiNotesForChord[stringIndex] = MusicTheory.standardGuitarTuning[stringIndex] + fret
             }

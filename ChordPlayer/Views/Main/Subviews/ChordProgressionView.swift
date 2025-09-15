@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct ChordProgressionView: View {
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var chordPlayer: ChordPlayer
     
     @State private var chordToEdit: Chord = .init(name: "", frets: Array(repeating: -1, count: 6), fingers: Array(repeating: 0, count: 6))
     @State private var isNewChord: Bool = false
@@ -31,20 +32,25 @@ struct ChordProgressionView: View {
                 if let preset = appData.preset, !preset.chords.isEmpty {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 10) {
                         ForEach(preset.chords) { chord in
-                            ChordCardView(chord: chord)
-                                .onDrag { NSItemProvider(object: chord.name as NSString) }
-                                .contextMenu {
-                                    Button("Edit") {
-                                        self.isNewChord = false
-                                        self.chordToEdit = chord
-                                        self.showChordEditor = true
-                                    }
-                                    Button("Delete", role: .destructive) {
-                                        if let index = appData.preset?.chords.firstIndex(where: { $0.id == chord.id }) {
-                                            appData.removeChord(at: IndexSet(integer: index))
-                                        }
+                            Button(action: {
+                                playChord(chord)
+                            }) {
+                                ChordCardView(chord: chord)
+                            }
+                            .buttonStyle(.plain)
+                            .onDrag { NSItemProvider(object: chord.name as NSString) }
+                            .contextMenu {
+                                Button("Edit") {
+                                    self.isNewChord = false
+                                    self.chordToEdit = chord
+                                    self.showChordEditor = true
+                                }
+                                Button("Delete", role: .destructive) {
+                                    if let index = appData.preset?.chords.firstIndex(where: { $0.id == chord.id }) {
+                                        appData.removeChord(at: IndexSet(integer: index))
                                     }
                                 }
+                            }
                         }
                     }
                 } else {
@@ -110,6 +116,13 @@ struct ChordProgressionView: View {
             }, onCancel: {
                 showChordEditor = false
             })
+        }
+    }
+    
+    private func playChord(_ chord: Chord) {
+        guard let preset = appData.preset, let activePatternId = preset.activePlayingPatternId else { return }
+        if let activePattern = preset.playingPatterns.first(where: { $0.id == activePatternId }) {
+            chordPlayer.playChord(chord: chord, pattern: activePattern, preset: preset)
         }
     }
 }
