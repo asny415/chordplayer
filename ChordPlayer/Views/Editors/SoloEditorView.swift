@@ -55,10 +55,9 @@ struct SoloEditorView: View {
                     playbackPosition: playbackPosition,
                     beatWidth: beatWidth,
                     stringHeight: stringHeight,
-                    onNoteAdd: addNote,
                     onNoteSelect: selectNote,
                     onNoteDelete: deleteSelectedNotes,
-                    onDeselectAll: deselectAllNotes
+                    onBackgroundTap: handleBackgroundTap
                 )
                 .frame(
                     width: max(600, 40.0 + beatWidth * CGFloat(soloSegment.lengthInBeats) * zoomLevel),
@@ -110,59 +109,70 @@ struct SoloEditorView: View {
         let beatsToSeconds = 60.0 / bpm
         let playbackStartTimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
         
-        let notesSortedByTime = soloSegment.notes.sorted { $0.startTime < $1.startTime }
-        
-        var noteEvents: [(onTime: Double, offTime: Double, note: SoloNote)] = []
-        for i in 0..<notesSortedByTime.count {
-            let currentNote = notesSortedByTime[i]
-            var noteOffTime = soloSegment.lengthInBeats
+        let notesByString = Dictionary(grouping: soloSegment.notes, by: { $0.string })
+        var allNoteEvents: [(onTime: Double, offTime: Double, note: SoloNote)] = []
 
-            if let nextNoteOnSameString = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
-                noteOffTime = nextNoteOnSameString.startTime
+        for (_, notesOnString) in notesByString {
+            let sorted = notesOnString.sorted { $0.startTime < $1.startTime }
+            if sorted.isEmpty { continue }
+
+            var offTimeCache: [UUID: Double] = [:]
+
+            func getNoteOffTime(for noteIndex: Int) -> Double {
+                let note = sorted[noteIndex]
+                if let cachedOffTime = offTimeCache[note.id] { return cachedOffTime }
+                let nextNoteIndex = noteIndex + 1
+                var offTime = soloSegment.lengthInBeats
+                if nextNoteIndex < sorted.count {
+                    let nextNote = sorted[nextNoteIndex]
+                    if nextNote.technique == .hammer || nextNote.technique == .pullOff {
+                        offTime = getNoteOffTime(for: nextNoteIndex)
+                    } else {
+                        offTime = nextNote.startTime
+                    }
+                }
+                offTimeCache[note.id] = offTime
+                return offTime
             }
-            
-            noteEvents.append((onTime: currentNote.startTime, offTime: noteOffTime, note: currentNote))
+
+            for i in 0..<sorted.count {
+                let note = sorted[i]
+                allNoteEvents.append((onTime: note.startTime, offTime: getNoteOffTime(for: i), note: note))
+            }
         }
 
         var eventIDs: [UUID] = []
-        for event in noteEvents {
-            guard event.note.fret >= 0 else { continue } // Skip muted notes
+        for event in allNoteEvents {
+            guard event.note.fret >= 0 else { continue }
             let midiNoteNumber = midiNote(from: event.note.string, fret: event.note.fret)
             let velocity = UInt8(event.note.velocity)
-
             let noteOnTimeMs = playbackStartTimeMs + (event.onTime * beatsToSeconds * 1000.0)
             let noteOffTimeMs = playbackStartTimeMs + (event.offTime * beatsToSeconds * 1000.0)
 
             if noteOffTimeMs > noteOnTimeMs {
                 let onID = midiManager.scheduleNoteOn(note: midiNoteNumber, velocity: velocity, scheduledUptimeMs: noteOnTimeMs)
                 eventIDs.append(onID)
-
                 let offID = midiManager.scheduleNoteOff(note: midiNoteNumber, velocity: 0, scheduledUptimeMs: noteOffTimeMs)
                 eventIDs.append(offID)
             }
         }
         self.scheduledEventIDs = eventIDs
 
-        // Start UI timer for playback line
         self.playbackStartDate = Date()
         self.uiTimerCancellable = Timer.publish(every: 0.02, on: .main, in: .common).autoconnect().sink { _ in
             guard let startDate = self.playbackStartDate else { return }
             let elapsedSeconds = Date().timeIntervalSince(startDate)
             let beatsPerSecond = bpm / 60.0
             self.playbackPosition = elapsedSeconds * beatsPerSecond
-            
-            if self.playbackPosition > soloSegment.lengthInBeats {
-                stopPlayback()
-            }
+            if self.playbackPosition > soloSegment.lengthInBeats { stopPlayback() }
         }
     }
 
     private func stopPlayback() {
         isPlaying = false
         midiManager.cancelAllPendingScheduledEvents()
-        midiManager.sendPanic() // Immediately stop any sounding notes
+        midiManager.sendPanic()
         scheduledEventIDs.removeAll()
-        
         uiTimerCancellable?.cancel()
         playbackStartDate = nil
         playbackPosition = 0
@@ -174,6 +184,15 @@ struct SoloEditorView: View {
     }
 
     // MARK: - Note Editing Logic
+    private func handleBackgroundTap(at position: CGPoint) {
+        let stringIndex = Int(position.y / stringHeight)
+        if stringIndex >= 0 && stringIndex < 6 {
+            addNote(at: position)
+        } else {
+            selectedNotes.removeAll()
+        }
+    }
+    
     private func updateSelectedNote(change: (inout SoloNote) -> Void) {
         if selectedNotes.count == 1, let index = soloSegment.notes.firstIndex(where: { $0.id == selectedNotes.first! }) {
             change(&soloSegment.notes[index])
@@ -188,7 +207,6 @@ struct SoloEditorView: View {
         guard string >= 0 && string < 6 && time >= 0 && time <= soloSegment.lengthInBeats else { return }
         
         let alignedTime = snapToGrid(time)
-        
         let newNote = SoloNote(startTime: alignedTime, string: string, fret: currentFret, technique: currentTechnique)
         
         soloSegment.notes.append(newNote)
@@ -203,7 +221,6 @@ struct SoloEditorView: View {
         }
     }
     
-    private func deselectAllNotes() { selectedNotes.removeAll() }
     private func deleteSelectedNotes() {
         soloSegment.notes.removeAll { selectedNotes.contains($0.id) }
         selectedNotes.removeAll()
@@ -299,10 +316,9 @@ struct SoloTablatureView: View {
     let beatWidth: CGFloat
     let stringHeight: CGFloat
     
-    let onNoteAdd: (CGPoint) -> Void
     let onNoteSelect: (UUID, Bool) -> Void
     let onNoteDelete: () -> Void
-    let onDeselectAll: () -> Void
+    let onBackgroundTap: (CGPoint) -> Void
     
     private let stringNames = ["E", "B", "G", "D", "A", "E"]
     
@@ -327,8 +343,9 @@ struct SoloTablatureView: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { onNoteAdd($0) }
-        .onTapGesture(count: 1) { onDeselectAll() }
+        .onTapGesture { location in
+            onBackgroundTap(location)
+        }
     }
 }
 
