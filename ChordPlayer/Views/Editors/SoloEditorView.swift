@@ -109,62 +109,50 @@ struct SoloEditorView: View {
         let beatsToSeconds = 60.0 / bpm
         let playbackStartTimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
         
-        let notesByString = Dictionary(grouping: soloSegment.notes, by: { $0.string })
-        var allNoteEvents: [(onTime: Double, offTime: Double, note: SoloNote)] = []
+        let notesSortedByTime = soloSegment.notes.sorted { $0.startTime < $1.startTime }
+        
+        var noteEvents: [(onTime: Double, offTime: Double, note: SoloNote)] = []
+        for i in 0..<notesSortedByTime.count {
+            let currentNote = notesSortedByTime[i]
+            var noteOffTime = soloSegment.lengthInBeats
 
-        for (_, notesOnString) in notesByString {
-            let sorted = notesOnString.sorted { $0.startTime < $1.startTime }
-            if sorted.isEmpty { continue }
-
-            var offTimeCache: [UUID: Double] = [:]
-
-            func getNoteOffTime(for noteIndex: Int) -> Double {
-                let note = sorted[noteIndex]
-                if let cachedOffTime = offTimeCache[note.id] { return cachedOffTime }
-                let nextNoteIndex = noteIndex + 1
-                var offTime = soloSegment.lengthInBeats
-                if nextNoteIndex < sorted.count {
-                    let nextNote = sorted[nextNoteIndex]
-                    if nextNote.technique == .hammer || nextNote.technique == .pullOff {
-                        offTime = getNoteOffTime(for: nextNoteIndex)
-                    } else {
-                        offTime = nextNote.startTime
-                    }
-                }
-                offTimeCache[note.id] = offTime
-                return offTime
+            if let nextNoteOnSameString = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
+                noteOffTime = nextNoteOnSameString.startTime
             }
-
-            for i in 0..<sorted.count {
-                let note = sorted[i]
-                allNoteEvents.append((onTime: note.startTime, offTime: getNoteOffTime(for: i), note: note))
-            }
+            
+            noteEvents.append((onTime: currentNote.startTime, offTime: noteOffTime, note: currentNote))
         }
 
         var eventIDs: [UUID] = []
-        for event in allNoteEvents {
-            guard event.note.fret >= 0 else { continue }
+        for event in noteEvents {
+            guard event.note.fret >= 0 else { continue } // Skip muted notes
             let midiNoteNumber = midiNote(from: event.note.string, fret: event.note.fret)
             let velocity = UInt8(event.note.velocity)
+
             let noteOnTimeMs = playbackStartTimeMs + (event.onTime * beatsToSeconds * 1000.0)
             let noteOffTimeMs = playbackStartTimeMs + (event.offTime * beatsToSeconds * 1000.0)
 
             if noteOffTimeMs > noteOnTimeMs {
                 let onID = midiManager.scheduleNoteOn(note: midiNoteNumber, velocity: velocity, scheduledUptimeMs: noteOnTimeMs)
                 eventIDs.append(onID)
+
                 let offID = midiManager.scheduleNoteOff(note: midiNoteNumber, velocity: 0, scheduledUptimeMs: noteOffTimeMs)
                 eventIDs.append(offID)
             }
         }
         self.scheduledEventIDs = eventIDs
 
+        // Start UI timer for playback line
         self.playbackStartDate = Date()
         self.uiTimerCancellable = Timer.publish(every: 0.02, on: .main, in: .common).autoconnect().sink { _ in
             guard let startDate = self.playbackStartDate else { return }
             let elapsedSeconds = Date().timeIntervalSince(startDate)
             let beatsPerSecond = bpm / 60.0
             self.playbackPosition = elapsedSeconds * beatsPerSecond
-            if self.playbackPosition > soloSegment.lengthInBeats { stopPlayback() }
+            
+            if self.playbackPosition > soloSegment.lengthInBeats {
+                stopPlayback()
+            }
         }
     }
 
