@@ -15,8 +15,7 @@ struct SoloSegmentsView: View {
                 Button(action: {
                     let count = appData.preset?.soloSegments.count ?? 0
                     let newSegment = SoloSegment(name: "New Solo \(count + 1)", lengthInBeats: 4.0)
-                    appData.preset?.soloSegments.append(newSegment)
-                    appData.saveChanges() // Ensure the new segment is saved
+                    appData.addSoloSegment(newSegment)
                     self.segmentToEdit = newSegment
                 }) {
                     Image(systemName: "plus.circle.fill")
@@ -30,7 +29,7 @@ struct SoloSegmentsView: View {
             // Solo列表概览
             if let preset = appData.preset, !preset.soloSegments.isEmpty {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 200))], spacing: 12) {
-                    ForEach(preset.soloSegments) { segment in
+                    ForEach(Array(preset.soloSegments.enumerated()), id: \.element.id) { index, segment in
                         SoloSegmentCard(
                             segment: segment,
                             isActive: preset.activeSoloSegmentId == segment.id,
@@ -40,6 +39,9 @@ struct SoloSegmentsView: View {
                             },
                             onEdit: {
                                 self.segmentToEdit = segment
+                            },
+                            onDelete: {
+                                appData.removeSoloSegment(at: IndexSet(integer: index))
                             }
                         )
                     }
@@ -60,8 +62,7 @@ struct SoloSegmentsView: View {
                     
                     Button("Create First Solo") {
                         let newSegment = SoloSegment(name: "New Solo", lengthInBeats: 4.0)
-                        appData.preset?.soloSegments.append(newSegment)
-                        appData.saveChanges()
+                        appData.addSoloSegment(newSegment)
                         self.segmentToEdit = newSegment
                     }
                     .buttonStyle(.borderedProminent)
@@ -78,7 +79,10 @@ struct SoloSegmentCard: View {
     let isActive: Bool
     let onSelect: () -> Void
     let onEdit: () -> Void
+    let onDelete: () -> Void
     
+    @State private var showingDeleteConfirmation = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // 标题行
@@ -153,8 +157,14 @@ struct SoloSegmentCard: View {
             Button("Edit", action: onEdit)
             Divider()
             Button("Delete", role: .destructive) {
-                // TODO: 实现删除功能
+                showingDeleteConfirmation = true
             }
+        }
+        .alert("Delete \(segment.name)", isPresented: $showingDeleteConfirmation) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to delete this solo segment? This action cannot be undone.")
         }
     }
 }
