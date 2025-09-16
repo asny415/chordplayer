@@ -382,11 +382,17 @@ enum PlayingTechnique: String, Codable, CaseIterable, Identifiable {
     case slide = "Slide"
     case bend = "Bend"
     case vibrato = "Vibrato"
-    case harmonics = "Harmonics"
-    case mute = "Mute"
-    case palmMute = "Palm Mute"
-    
+
     var id: Self { self }
+
+    var chineseName: String {
+        switch self {
+        case .normal: return "普通"
+        case .slide: return "滑音"
+        case .bend: return "推弦"
+        case .vibrato: return "颤音"
+        }
+    }
     
     var symbol: String {
         switch self {
@@ -394,9 +400,6 @@ enum PlayingTechnique: String, Codable, CaseIterable, Identifiable {
         case .slide: return "/"
         case .bend: return "^"
         case .vibrato: return "~"
-        case .harmonics: return "◇"
-        case .mute: return "X"
-        case .palmMute: return "PM"
         }
     }
 }

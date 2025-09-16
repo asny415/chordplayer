@@ -254,7 +254,7 @@ struct SoloToolbar: View {
             HStack(spacing: 15) {
                 Picker("Technique", selection: $currentTechnique) {
                     ForEach(PlayingTechnique.allCases) { technique in
-                        Text(technique.symbol.isEmpty ? technique.rawValue : technique.symbol).tag(technique)
+                        Text(technique.chineseName).tag(technique)
                     }
                 }.frame(minWidth: 80).help("Playing Technique")
 
