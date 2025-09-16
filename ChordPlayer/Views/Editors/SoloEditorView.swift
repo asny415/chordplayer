@@ -89,6 +89,7 @@ struct SoloEditorView: View {
         }
         .onKeyDown { event in handleKeyDown(event) }
         .onDisappear(perform: stopPlayback)
+        .onChange(of: soloSegment) { notifyChanges() }
         .onChange(of: selectedNotes) {
             if selectedNotes.count == 1, let selectedNote = soloSegment.notes.first(where: { $0.id == selectedNotes.first! }) {
                 currentFret = selectedNote.fret
@@ -338,6 +339,10 @@ struct SoloEditorView: View {
     private func midiNote(from string: Int, fret: Int) -> UInt8 {
         guard string >= 0 && string < openStringMIDINotes.count else { return 0 }
         return openStringMIDINotes[string] + UInt8(fret)
+    }
+
+    private func notifyChanges() {
+        appData.updateSoloSegment(soloSegment)
     }
 
     // MARK: - Note Editing Logic
