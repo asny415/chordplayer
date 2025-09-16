@@ -30,6 +30,7 @@ struct SoloEditorView: View {
     private enum MusicalAction {
         case playNote(note: SoloNote, offTime: Double)
         case slide(from: SoloNote, to: SoloNote, offTime: Double)
+        case vibrato(note: SoloNote, offTime: Double)
     }
 
     var body: some View {
@@ -126,26 +127,27 @@ struct SoloEditorView: View {
                 continue
             }
 
-            // Find the natural end time for the current note
             var noteOffTime = soloSegment.lengthInBeats
             if let nextNoteOnSameString = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
                 noteOffTime = nextNoteOnSameString.startTime
             }
 
-            // Check for slide technique
             if currentNote.technique == .slide,
                let slideTargetNote = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
                 
                 consumedNoteIDs.insert(slideTargetNote.id)
                 
-                // The slide's sound continues until the next note on the same string *after* the slide target
                 var slideOffTime = soloSegment.lengthInBeats
                 if let targetIndex = notesSortedByTime.firstIndex(of: slideTargetNote), 
                    let nextNoteAfterSlide = notesSortedByTime.dropFirst(targetIndex + 1).first(where: { $0.string == currentNote.string }) {
                     slideOffTime = nextNoteAfterSlide.startTime
                 }
                 actions.append(.slide(from: currentNote, to: slideTargetNote, offTime: slideOffTime))
-            } else {
+
+            } else if currentNote.technique == .vibrato {
+                actions.append(.vibrato(note: currentNote, offTime: noteOffTime))
+
+            } else { // .normal, .bend, or a .slide at the end of a string
                 actions.append(.playNote(note: currentNote, offTime: noteOffTime))
             }
         }
@@ -179,20 +181,17 @@ struct SoloEditorView: View {
                 let noteOnTimeMs = playbackStartTimeMs + (fromNote.startTime * beatsToSeconds * 1000.0)
                 let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
 
-                // Schedule the initial Note On
                 let onID = midiManager.scheduleNoteOn(note: startMidiNote, velocity: velocity, scheduledUptimeMs: noteOnTimeMs)
                 eventIDs.append(onID)
 
-                // --- Pitch Bend Logic ---
                 let slideStartTimeBeats = fromNote.startTime
                 let slideEndTimeBeats = toNote.startTime
                 let slideDurationBeats = slideEndTimeBeats - slideStartTimeBeats
                 
                 if slideDurationBeats > 0 {
-                    let pitchBendSteps = max(2, Int(slideDurationBeats * beatsToSeconds * 50)) // ~50 steps per second of slide
+                    let pitchBendSteps = max(2, Int(slideDurationBeats * beatsToSeconds * 50))
                     let fretDifference = toNote.fret - fromNote.fret
                     
-                    // Assuming synth pitch bend range is +/- 12 semitones. 8191 / 12 = ~682.5 per semitone.
                     let pitchBendRangeSemitones = 12.0
                     let finalPitchBendValue = 8192 + Int(Double(fretDifference) * (8191.0 / pitchBendRangeSemitones))
 
@@ -207,11 +206,59 @@ struct SoloEditorView: View {
                     }
                 }
                 
-                // Schedule the final Note Off
                 let offID = midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, scheduledUptimeMs: noteOffTimeMs)
                 eventIDs.append(offID)
                 
-                // Schedule Pitch Bend Reset right after note off to ensure next notes are in tune
+                let resetID = midiManager.schedulePitchBend(value: 8192, scheduledUptimeMs: noteOffTimeMs + 1)
+                eventIDs.append(resetID)
+
+            case .vibrato(let note, let offTime):
+                guard note.fret >= 0 else { continue }
+            
+                let midiNoteNumber = midiNote(from: note.string, fret: note.fret)
+                let velocity = UInt8(note.velocity)
+                let noteOnTimeMs = playbackStartTimeMs + (note.startTime * beatsToSeconds * 1000.0)
+                let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
+
+                let onID = midiManager.scheduleNoteOn(note: midiNoteNumber, velocity: velocity, scheduledUptimeMs: noteOnTimeMs)
+                eventIDs.append(onID)
+
+                let vibratoStartTimeBeats = note.startTime
+                let vibratoDurationBeats = offTime - vibratoStartTimeBeats
+
+                if vibratoDurationBeats > 0.1 { // Only apply if note is long enough
+                    let vibratoRateHz = 5.5
+                    let vibratoIntensity = note.articulation?.vibratoIntensity ?? 0.5
+                    
+                    let maxBendSemitones = 0.4 // Vibrato depth in semitones
+                    let pitchBendRangeSemitones = 12.0
+                    let maxPitchBendAmount = (maxBendSemitones / pitchBendRangeSemitones) * 8191.0 * vibratoIntensity
+
+                    let vibratoDurationSeconds = vibratoDurationBeats * beatsToSeconds
+                    let totalCycles = vibratoDurationSeconds * vibratoRateHz
+                    let stepsPerCycle = 12.0
+                    let totalSteps = Int(totalCycles * stepsPerCycle)
+
+                    if totalSteps > 0 {
+                        for step in 0...totalSteps {
+                            let t_duration = Double(step) / Double(totalSteps)
+                            let t_angle = t_duration * totalCycles * 2.0 * .pi
+                            
+                            let sineValue = sin(t_angle)
+                            let pitchBendValue = 8192 + Int(sineValue * maxPitchBendAmount)
+
+                            let bendTimeBeats = vibratoStartTimeBeats + (t_duration * vibratoDurationBeats)
+                            let bendTimeMs = playbackStartTimeMs + (bendTimeBeats * beatsToSeconds * 1000.0)
+                            
+                            let bendID = midiManager.schedulePitchBend(value: UInt16(pitchBendValue), scheduledUptimeMs: bendTimeMs)
+                            eventIDs.append(bendID)
+                        }
+                    }
+                }
+
+                let offID = midiManager.scheduleNoteOff(note: midiNoteNumber, velocity: 0, scheduledUptimeMs: noteOffTimeMs)
+                eventIDs.append(offID)
+                
                 let resetID = midiManager.schedulePitchBend(value: 8192, scheduledUptimeMs: noteOffTimeMs + 1)
                 eventIDs.append(resetID)
             }
@@ -235,8 +282,6 @@ struct SoloEditorView: View {
     private func stopPlayback() {
         isPlaying = false
         midiManager.cancelAllPendingScheduledEvents()
-        // It's good practice to reset pitch bend on stop, just in case a note was cut off mid-bend.
-        // We send it immediately without scheduling.
         midiManager.sendPitchBend(value: 8192)
         midiManager.sendPanic()
         scheduledEventIDs.removeAll()
