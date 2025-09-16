@@ -24,6 +24,7 @@ struct SoloEditorView: View {
                 zoomLevel: $zoomLevel,
                 isPlaying: $isPlaying,
                 playbackPosition: $playbackPosition,
+                segmentLength: $soloSegment.lengthInBeats,
                 onPlay: playToggle,
                 onStop: stop
             )
@@ -50,7 +51,7 @@ struct SoloEditorView: View {
                     onDeselectAll: deselectAllNotes
                 )
                 .frame(
-                    width: max(600, beatWidth * CGFloat(soloSegment.lengthInBeats) * zoomLevel),
+                    width: max(600, 40.0 + beatWidth * CGFloat(soloSegment.lengthInBeats) * zoomLevel),
                     height: stringHeight * 6 + 100
                 )
             }
@@ -95,7 +96,7 @@ struct SoloEditorView: View {
     }
     
     private func addNote(at position: CGPoint) {
-        let stringLabelWidth: CGFloat = 30.0
+        let stringLabelWidth: CGFloat = 40.0
         let string = Int(position.y / stringHeight)
         let time = Double((position.x - stringLabelWidth) / beatWidth) / Double(zoomLevel)
         
@@ -173,7 +174,10 @@ struct SoloToolbar: View {
     @Binding var zoomLevel: CGFloat
     @Binding var isPlaying: Bool
     @Binding var playbackPosition: Double
+    @Binding var segmentLength: Double
     
+    @State private var showingSettings: Bool = false
+
     let onPlay: () -> Void
     let onStop: () -> Void
     
@@ -232,6 +236,15 @@ struct SoloToolbar: View {
                         .frame(width: 100)
                 }
                 .help("Zoom Level")
+            }
+            
+            // --- Group 4: Segment Settings ---
+            Button(action: { showingSettings = true }) {
+                Image(systemName: "gearshape.fill")
+            }
+            .buttonStyle(.bordered)
+            .popover(isPresented: $showingSettings, arrowEdge: .bottom) {
+                SegmentSettingsView(lengthInBeats: $segmentLength)
             }
         }
         .textFieldStyle(.roundedBorder)
@@ -299,7 +312,7 @@ struct SoloTablatureView: View {
             
             // 播放位置指示器
             if playbackPosition > 0 {
-                let stringLabelWidth: CGFloat = 30.0
+                let stringLabelWidth: CGFloat = 40.0
                 Rectangle()
                     .fill(Color.red)
                     .frame(width: 2)
@@ -325,7 +338,7 @@ struct SoloGridView: View {
     
     var body: some View {
         Canvas { context, size in
-            let stringLabelWidth: CGFloat = 30.0
+            let stringLabelWidth: CGFloat = 40.0
             let totalWidth = beatWidth * CGFloat(lengthInBeats) * zoomLevel
             let totalHeight = stringHeight * 6
             
@@ -359,7 +372,7 @@ struct SoloStringLineView: View {
     let zoomLevel: CGFloat
     
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 10) {
             // 弦名标签
             Text(stringName)
                 .font(.system(size: 14, weight: .medium))
@@ -404,12 +417,30 @@ struct SoloNoteView: View {
             }
         }
         .position(
-            x: 30 + CGFloat(note.startTime) * beatWidth * zoomLevel,
+            x: 40 + CGFloat(note.startTime) * beatWidth * zoomLevel,
             y: CGFloat(note.string) * stringHeight + stringHeight / 2
         )
         .onTapGesture {
             onSelect(false)
         }
+    }
+}
+
+struct SegmentSettingsView: View {
+    @Binding var lengthInBeats: Double
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Segment Properties")
+                .font(.headline)
+            
+            HStack {
+                Text("Length (beats):")
+                TextField("Length", value: $lengthInBeats, format: .number.precision(.fractionLength(1)))
+                    .frame(width: 60)
+            }
+        }
+        .padding()
     }
 }
 
