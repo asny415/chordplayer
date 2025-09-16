@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SoloSegmentsView: View {
     @EnvironmentObject var appData: AppData
-    @ObservedObject var soloEditorManager: SoloEditorWindowManager
+    @Binding var segmentToEdit: SoloSegment?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -12,15 +12,15 @@ struct SoloSegmentsView: View {
                 Spacer()
                 
                 Button(action: {
-                    soloEditorManager.openSoloEditor()
+                    let count = appData.preset?.soloSegments.count ?? 0
+                    let newSegment = SoloSegment(name: "New Solo \(count + 1)", lengthInBeats: 4.0)
+                    appData.preset?.soloSegments.append(newSegment)
+                    self.segmentToEdit = newSegment
                 }) {
-                    HStack {
-                        Image(systemName: "music.note")
-                        Text("Edit Solos")
-                    }
+                    Image(systemName: "plus")
                 }
-                .buttonStyle(.borderedProminent)
-                .help("Open solo editor in new window")
+                .buttonStyle(.bordered)
+                .help("Create a new solo segment")
             }
             
             // Solo列表概览
@@ -35,7 +35,7 @@ struct SoloSegmentsView: View {
                                 appData.saveChanges()
                             },
                             onEdit: {
-                                soloEditorManager.openSoloEditor()
+                                self.segmentToEdit = segment
                             }
                         )
                     }
@@ -55,7 +55,9 @@ struct SoloSegmentsView: View {
                         .multilineTextAlignment(.center)
                     
                     Button("Create First Solo") {
-                        soloEditorManager.openSoloEditor()
+                        let newSegment = SoloSegment(name: "New Solo", lengthInBeats: 4.0)
+                        appData.preset?.soloSegments.append(newSegment)
+                        self.segmentToEdit = newSegment
                     }
                     .buttonStyle(.borderedProminent)
                 }

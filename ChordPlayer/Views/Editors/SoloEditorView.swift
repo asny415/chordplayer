@@ -81,8 +81,9 @@ struct SoloEditorView: View {
     }
     
     private func addNote(at position: CGPoint) {
+        let stringLabelWidth: CGFloat = 30.0
         let string = Int(position.y / stringHeight)
-        let time = Double(position.x / beatWidth) / Double(zoomLevel)
+        let time = Double((position.x - stringLabelWidth) / beatWidth) / Double(zoomLevel)
         
         guard string >= 0 && string < 6 && time >= 0 && time <= soloSegment.lengthInBeats else { return }
         
@@ -277,7 +278,7 @@ struct SoloTablatureView: View {
     private let stringNames = ["E", "B", "G", "D", "A", "E"]
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             // 背景网格
             SoloGridView(
                 lengthInBeats: soloSegment.lengthInBeats,
@@ -286,6 +287,11 @@ struct SoloTablatureView: View {
                 stringHeight: stringHeight,
                 zoomLevel: zoomLevel
             )
+            .background(GeometryReader { geometry in
+                Color.clear.onAppear {
+                    print("Debug: SoloGridView frame in global: \(geometry.frame(in: .global))")
+                }
+            })
             
             // 弦线
             VStack(spacing: 0) {
@@ -300,6 +306,11 @@ struct SoloTablatureView: View {
                     )
                 }
             }
+            .background(GeometryReader { geometry in
+                Color.clear.onAppear {
+                    print("Debug: String Lines VStack frame in global: \(geometry.frame(in: .global))")
+                }
+            })
             
             // 音符
             ForEach(soloSegment.notes) { note in
@@ -317,10 +328,11 @@ struct SoloTablatureView: View {
             
             // 播放位置指示器
             if playbackPosition > 0 {
+                let stringLabelWidth: CGFloat = 30.0
                 Rectangle()
                     .fill(Color.red)
                     .frame(width: 2)
-                    .position(x: CGFloat(playbackPosition) * beatWidth * zoomLevel, y: stringHeight * 3)
+                    .position(x: stringLabelWidth + CGFloat(playbackPosition) * beatWidth * zoomLevel, y: stringHeight * 3)
             }
         }
         .contentShape(Rectangle())
@@ -339,13 +351,14 @@ struct SoloGridView: View {
     
     var body: some View {
         Canvas { context, size in
+            let stringLabelWidth: CGFloat = 30.0
             let totalWidth = beatWidth * CGFloat(lengthInBeats) * zoomLevel
             let totalHeight = stringHeight * 6
             
             // 垂直网格线
             var beat = 0.0
             while beat <= lengthInBeats {
-                let x = CGFloat(beat) * beatWidth * zoomLevel
+                let x = stringLabelWidth + CGFloat(beat) * beatWidth * zoomLevel
                 let isMainBeat = beat.truncatingRemainder(dividingBy: 1.0) == 0
                 
                 context.stroke(
