@@ -1,10 +1,10 @@
 import Foundation
 import Combine
 
-class SoloPlayer: ObservableObject {
+class SoloPlayer: ObservableObject, Quantizable {
     // Dependencies
     private var midiManager: MidiManager
-    private var appData: AppData
+    var appData: AppData
 
     // Playback State
     @Published var isPlaying: Bool = false
@@ -26,7 +26,7 @@ class SoloPlayer: ObservableObject {
     // MIDI note number for open strings, from high E (string 0) to low E (string 5)
     private let openStringMIDINotes: [UInt8] = [64, 59, 55, 50, 45, 40]
 
-    private var drumPlayer: DrumPlayer
+    var drumPlayer: DrumPlayer
 
     init(midiManager: MidiManager, appData: AppData, drumPlayer: DrumPlayer) {
         self.midiManager = midiManager
@@ -233,28 +233,5 @@ class SoloPlayer: ObservableObject {
         return openStringMIDINotes[string] + UInt8(fret)
     }
 
-    private func nextQuantizationTime(for mode: QuantizationMode) -> Double {
-        let now = ProcessInfo.processInfo.systemUptime * 1000.0
-        if !drumPlayer.isPlaying || mode == .none {
-            return now
-        }
-
-        let beatDurationMs = (60.0 / (appData.preset?.bpm ?? 120.0)) * 1000.0
-        let beatsPerMeasure = appData.preset?.timeSignature.beatsPerMeasure ?? 4
-        let measureDurationMs = beatDurationMs * Double(beatsPerMeasure)
-        let halfMeasureDurationMs = measureDurationMs / 2.0
-
-        let currentMeasureIndex = floor((now - drumPlayer.startTimeMs) / measureDurationMs)
-        let currentMeasureStartTime = drumPlayer.startTimeMs + (currentMeasureIndex * measureDurationMs)
-
-        switch mode {
-        case .measure:
-            return currentMeasureStartTime + measureDurationMs
-        case .halfMeasure:
-            let halfMeasures = floor((now - currentMeasureStartTime) / halfMeasureDurationMs)
-            return currentMeasureStartTime + (halfMeasures + 1) * halfMeasureDurationMs
-        case .none:
-            return now
-        }
-    }
+    
 }

@@ -1,11 +1,11 @@
 import Foundation
 import Combine
 
-class ChordPlayer: ObservableObject {
+class ChordPlayer: ObservableObject, Quantizable {
     private let schedulingQueue = DispatchQueue(label: "com.guitastudio.guitarScheduler", qos: .userInitiated)
     private var midiManager: MidiManager
-    private var appData: AppData
-    private var drumPlayer: DrumPlayer
+    var appData: AppData
+    var drumPlayer: DrumPlayer
 
     private let notesLock = NSRecursiveLock()
 
@@ -107,31 +107,7 @@ class ChordPlayer: ObservableObject {
         }
     }
     
-    private func nextQuantizationTime(for mode: QuantizationMode) -> Double {
-        let now = ProcessInfo.processInfo.systemUptime * 1000.0
-        if !drumPlayer.isPlaying || mode == .none {
-            return now
-        }
-
-        let beatDurationMs = (60.0 / (appData.preset?.bpm ?? 120.0)) * 1000.0
-        let beatsPerMeasure = appData.preset?.timeSignature.beatsPerMeasure ?? 4
-        let measureDurationMs = beatDurationMs * Double(beatsPerMeasure)
-        let halfMeasureDurationMs = measureDurationMs / 2.0
-
-        let currentBeatInMeasure = drumPlayer.currentBeat
-        let currentMeasureIndex = floor((now - drumPlayer.startTimeMs) / measureDurationMs)
-        let currentMeasureStartTime = drumPlayer.startTimeMs + (currentMeasureIndex * measureDurationMs)
-
-        switch mode {
-        case .measure:
-            return currentMeasureStartTime + measureDurationMs
-        case .halfMeasure:
-            let halfMeasures = floor((now - currentMeasureStartTime) / halfMeasureDurationMs)
-            return currentMeasureStartTime + (halfMeasures + 1) * halfMeasureDurationMs
-        case .none:
-            return now
-        }
-    }
+    
 
     private func strumDelayInSeconds(for speed: StrumSpeed) -> TimeInterval {
         switch speed {
