@@ -6,6 +6,7 @@ struct ChordPlayerApp: App {
     @StateObject private var midiManager: MidiManager
     @StateObject private var chordPlayer: ChordPlayer
     @StateObject private var drumPlayer: DrumPlayer
+    @StateObject private var soloPlayer: SoloPlayer
     @StateObject private var keyboardHandler: KeyboardHandler
 
     init() {
@@ -14,12 +15,14 @@ struct ChordPlayerApp: App {
         // TODO: Refactor these initializers to remove dependencies on old managers
         let initialDrumPlayer = DrumPlayer(midiManager: initialMidiManager, appData: initialAppData)
         let initialChordPlayer = ChordPlayer(midiManager: initialMidiManager, appData: initialAppData, drumPlayer: initialDrumPlayer)
+        let initialSoloPlayer = SoloPlayer(midiManager: initialMidiManager, appData: initialAppData)
         let initialKeyboardHandler = KeyboardHandler(midiManager: initialMidiManager, chordPlayer: initialChordPlayer, drumPlayer: initialDrumPlayer, appData: initialAppData)
 
         _appData = StateObject(wrappedValue: initialAppData)
         _midiManager = StateObject(wrappedValue: initialMidiManager)
         _chordPlayer = StateObject(wrappedValue: initialChordPlayer)
         _drumPlayer = StateObject(wrappedValue: initialDrumPlayer)
+        _soloPlayer = StateObject(wrappedValue: initialSoloPlayer)
         _keyboardHandler = StateObject(wrappedValue: initialKeyboardHandler)
 
         
@@ -34,6 +37,7 @@ struct ChordPlayerApp: App {
                 .environmentObject(midiManager)
                 .environmentObject(chordPlayer)
                 .environmentObject(drumPlayer)
+                .environmentObject(soloPlayer)
                 .environmentObject(keyboardHandler)
                 .environmentObject(PresetManager.shared)
         }

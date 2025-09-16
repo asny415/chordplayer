@@ -70,6 +70,7 @@ struct SoloSegmentsView: View {
 }
 
 struct SoloSegmentCard: View {
+    @EnvironmentObject var soloPlayer: SoloPlayer
     let segment: SoloSegment
     let isActive: Bool
     let onSelect: () -> Void
@@ -116,6 +117,9 @@ struct SoloSegmentCard: View {
             if !segment.notes.isEmpty {
                 SoloPreviewView(segment: segment)
                     .frame(height: 30)
+                    .onTapGesture {
+                        soloPlayer.play(segment: segment)
+                    }
             }
             
             // 操作按钮
