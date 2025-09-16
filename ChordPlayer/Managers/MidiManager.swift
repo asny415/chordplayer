@@ -27,15 +27,19 @@ class MidiManager: ObservableObject {
     private var outputPort = MIDIPortRef()
     // Serial high-priority queue for MIDI sends
     private let midiQueue = DispatchQueue(label: "com.guitastudio.midi", qos: .userInteractive)
-    // Pending scheduled events that have not yet been handed to CoreMIDI
+
+    private enum MIDIEventType {
+        case note(isNoteOn: Bool, note: UInt8, velocity: UInt8)
+        case pitchBend(value: UInt16)
+    }
+
     private struct PendingEvent {
         let id: UUID
-        let note: UInt8
-        let velocity: UInt8
+        let type: MIDIEventType
         let channel: UInt8
-        let isNoteOn: Bool
         let scheduledUptimeMs: Double
     }
+
     // map id -> PendingEvent (accessed only on midiQueue)
     private var pendingEvents: [UUID: PendingEvent] = [:]
     // lead time (ms) to hand events off to CoreMIDI - send when event within this window
@@ -93,25 +97,44 @@ class MidiManager: ObservableObject {
             pendingEvents.removeValue(forKey: ev.id)
             // compute mach timestamp
             let machTime = self.machTimeForScheduledUptimeMs(ev.scheduledUptimeMs)
+            
             var packet = MIDIPacket()
             packet.timeStamp = machTime
-            packet.length = 3
-            packet.data.0 = (ev.isNoteOn ? 0x90 : 0x80) | ev.channel
-            packet.data.1 = ev.note
-            packet.data.2 = ev.velocity
-            var packetList = MIDIPacketList(numPackets: 1, packet: packet)
+            var packetList: MIDIPacketList
+
+            switch ev.type {
+            case .note(let isNoteOn, let note, let velocity):
+                packet.length = 3
+                packet.data.0 = (isNoteOn ? 0x90 : 0x80) | ev.channel
+                packet.data.1 = note
+                packet.data.2 = velocity
+                packetList = MIDIPacketList(numPackets: 1, packet: packet)
+            case .pitchBend(let value):
+                packet.length = 3
+                packet.data.0 = 0xE0 | ev.channel // Pitch Bend message
+                packet.data.1 = UInt8(value & 0x7F) // LSB
+                packet.data.2 = UInt8((value >> 7) & 0x7F) // MSB
+                packetList = MIDIPacketList(numPackets: 1, packet: packet)
+            }
+
             if let destination = self.selectedOutput {
                 let status = MIDISend(self.outputPort, destination, &packetList)
                 if status != noErr {
-                    print("[MidiManager] ERROR sending MIDI message: \(status) for note \(ev.note) isNoteOn: \(ev.isNoteOn)")
+                    var errorString = "event on channel \(ev.channel)"
+                    if case .note(_, let note, _) = ev.type {
+                        errorString = "note \(note)"
+                    } else if case .pitchBend(_) = ev.type {
+                        errorString = "pitch bend"
+                    }
+                    print("[MidiManager] ERROR sending MIDI message: \(status) for \(errorString)")
                 }
             } else {
-                print("[MidiManager] No MIDI output selected, could not send note \(ev.note)")
+                if case .note(_, let note, _) = ev.type {
+                     print("[MidiManager] No MIDI output selected, could not send note \(note)")
+                }
             }
         }
     }
-
-    // removed duplicate deinit - cleanup done in single deinit above
 
     private func setupMidi() {
         var status = MIDIClientCreateWithBlock("ChordPlayer MIDI Client" as CFString, &client) { notification in
@@ -196,8 +219,6 @@ class MidiManager: ObservableObject {
         }
     }
 
-    // Convert scheduled uptime (ms, based on ProcessInfo.processInfo.systemUptime*1000)
-    // into a MIDITimeStamp (mach absolute time units) for time-stamped MIDI sends.
     private func machTimeForScheduledUptimeMs(_ scheduledUptimeMs: Double) -> UInt64 {
         // compute delta from now (uptime)
         let nowUptimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
@@ -218,14 +239,11 @@ class MidiManager: ObservableObject {
         return nowMach + deltaMach
     }
 
-    // Schedule a Note On at a specific uptime (ms). If scheduledUptimeMs is nil
-    // or in the past, the note is sent immediately.
-    // Schedule a Note On to be sent at scheduledUptimeMs (ms, uptime basis).
-    // Returns a UUID token which can be used to cancel before the scheduler hands it to CoreMIDI.
     @discardableResult
     func scheduleNoteOn(note: UInt8, velocity: UInt8, channel: UInt8 = 0, scheduledUptimeMs: Double) -> UUID {
         let id = UUID()
-        let ev = PendingEvent(id: id, note: note, velocity: velocity, channel: channel, isNoteOn: true, scheduledUptimeMs: scheduledUptimeMs)
+        let type: MIDIEventType = .note(isNoteOn: true, note: note, velocity: velocity)
+        let ev = PendingEvent(id: id, type: type, channel: channel, scheduledUptimeMs: scheduledUptimeMs)
         midiQueue.async { [weak self] in
             guard let self = self else { return }
             self.pendingEvents[id] = ev
@@ -236,10 +254,21 @@ class MidiManager: ObservableObject {
     @discardableResult
     func scheduleNoteOff(note: UInt8, velocity: UInt8, channel: UInt8 = 0, scheduledUptimeMs: Double) -> UUID {
         let id = UUID()
-        let ev = PendingEvent(id: id, note: note, velocity: velocity, channel: channel, isNoteOn: false, scheduledUptimeMs: scheduledUptimeMs)
+        let type: MIDIEventType = .note(isNoteOn: false, note: note, velocity: velocity)
+        let ev = PendingEvent(id: id, type: type, channel: channel, scheduledUptimeMs: scheduledUptimeMs)
         midiQueue.async { [weak self] in
             guard let self = self else { return }
             self.pendingEvents[id] = ev
+        }
+        return id
+    }
+    
+    @discardableResult
+    func schedulePitchBend(value: UInt16, channel: UInt8 = 0, scheduledUptimeMs: Double) -> UUID {
+        let id = UUID()
+        let ev = PendingEvent(id: id, type: .pitchBend(value: value), channel: channel, scheduledUptimeMs: scheduledUptimeMs)
+        midiQueue.async { [weak self] in
+            self?.pendingEvents[id] = ev
         }
         return id
     }
@@ -256,7 +285,23 @@ class MidiManager: ObservableObject {
         }
     }
 
-    
+    func sendPitchBend(value: UInt16, channel: UInt8 = 0) {
+        guard let destination = selectedOutput else { return }
+        midiQueue.async { [weak self] in
+            Thread.current.threadPriority = 1.0
+            var packet = MIDIPacket()
+            packet.timeStamp = 0 // Send immediately
+            packet.length = 3
+            packet.data.0 = 0xE0 | channel
+            packet.data.1 = UInt8(value & 0x7F)
+            packet.data.2 = UInt8((value >> 7) & 0x7F)
+            var packetList = MIDIPacketList(numPackets: 1, packet: packet)
+            let status = MIDISend(self?.outputPort ?? MIDIPortRef(), destination, &packetList)
+            if status != noErr {
+                // avoid frequent logging
+            }
+        }
+    }
 
     func sendNoteOff(note: UInt8, velocity: UInt8, channel: UInt8 = 0) {
         guard let destination = selectedOutput else { return }

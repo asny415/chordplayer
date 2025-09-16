@@ -26,6 +26,12 @@ struct SoloEditorView: View {
     // MIDI note number for open strings, from high E (string 0) to low E (string 5)
     private let openStringMIDINotes: [UInt8] = [64, 59, 55, 50, 45, 40]
 
+    // Musical action definition for playback
+    private enum MusicalAction {
+        case playNote(note: SoloNote, offTime: Double)
+        case slide(from: SoloNote, to: SoloNote, offTime: Double)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             SoloToolbar(
@@ -110,34 +116,104 @@ struct SoloEditorView: View {
         let playbackStartTimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
         
         let notesSortedByTime = soloSegment.notes.sorted { $0.startTime < $1.startTime }
-        
-        var noteEvents: [(onTime: Double, offTime: Double, note: SoloNote)] = []
+        var consumedNoteIDs = Set<UUID>()
+        var actions: [MusicalAction] = []
+
+        // 1. Pre-process notes to create musical actions
         for i in 0..<notesSortedByTime.count {
             let currentNote = notesSortedByTime[i]
-            var noteOffTime = soloSegment.lengthInBeats
+            if consumedNoteIDs.contains(currentNote.id) {
+                continue
+            }
 
+            // Find the natural end time for the current note
+            var noteOffTime = soloSegment.lengthInBeats
             if let nextNoteOnSameString = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
                 noteOffTime = nextNoteOnSameString.startTime
             }
-            
-            noteEvents.append((onTime: currentNote.startTime, offTime: noteOffTime, note: currentNote))
+
+            // Check for slide technique
+            if currentNote.technique == .slide,
+               let slideTargetNote = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
+                
+                consumedNoteIDs.insert(slideTargetNote.id)
+                
+                // The slide's sound continues until the next note on the same string *after* the slide target
+                var slideOffTime = soloSegment.lengthInBeats
+                if let targetIndex = notesSortedByTime.firstIndex(of: slideTargetNote), 
+                   let nextNoteAfterSlide = notesSortedByTime.dropFirst(targetIndex + 1).first(where: { $0.string == currentNote.string }) {
+                    slideOffTime = nextNoteAfterSlide.startTime
+                }
+                actions.append(.slide(from: currentNote, to: slideTargetNote, offTime: slideOffTime))
+            } else {
+                actions.append(.playNote(note: currentNote, offTime: noteOffTime))
+            }
         }
 
         var eventIDs: [UUID] = []
-        for event in noteEvents {
-            guard event.note.fret >= 0 else { continue } // Skip muted notes
-            let midiNoteNumber = midiNote(from: event.note.string, fret: event.note.fret)
-            let velocity = UInt8(event.note.velocity)
+        
+        // 2. Process actions and schedule MIDI events
+        for action in actions {
+            switch action {
+            case .playNote(let note, let offTime):
+                guard note.fret >= 0 else { continue } // Skip muted notes
+                let midiNoteNumber = midiNote(from: note.string, fret: note.fret)
+                let velocity = UInt8(note.velocity)
 
-            let noteOnTimeMs = playbackStartTimeMs + (event.onTime * beatsToSeconds * 1000.0)
-            let noteOffTimeMs = playbackStartTimeMs + (event.offTime * beatsToSeconds * 1000.0)
+                let noteOnTimeMs = playbackStartTimeMs + (note.startTime * beatsToSeconds * 1000.0)
+                let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
 
-            if noteOffTimeMs > noteOnTimeMs {
-                let onID = midiManager.scheduleNoteOn(note: midiNoteNumber, velocity: velocity, scheduledUptimeMs: noteOnTimeMs)
+                if noteOffTimeMs > noteOnTimeMs {
+                    let onID = midiManager.scheduleNoteOn(note: midiNoteNumber, velocity: velocity, scheduledUptimeMs: noteOnTimeMs)
+                    eventIDs.append(onID)
+
+                    let offID = midiManager.scheduleNoteOff(note: midiNoteNumber, velocity: 0, scheduledUptimeMs: noteOffTimeMs)
+                    eventIDs.append(offID)
+                }
+
+            case .slide(let fromNote, let toNote, let offTime):
+                guard fromNote.fret >= 0, toNote.fret >= 0 else { continue }
+                
+                let startMidiNote = midiNote(from: fromNote.string, fret: fromNote.fret)
+                let velocity = UInt8(fromNote.velocity)
+                let noteOnTimeMs = playbackStartTimeMs + (fromNote.startTime * beatsToSeconds * 1000.0)
+                let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
+
+                // Schedule the initial Note On
+                let onID = midiManager.scheduleNoteOn(note: startMidiNote, velocity: velocity, scheduledUptimeMs: noteOnTimeMs)
                 eventIDs.append(onID)
 
-                let offID = midiManager.scheduleNoteOff(note: midiNoteNumber, velocity: 0, scheduledUptimeMs: noteOffTimeMs)
+                // --- Pitch Bend Logic ---
+                let slideStartTimeBeats = fromNote.startTime
+                let slideEndTimeBeats = toNote.startTime
+                let slideDurationBeats = slideEndTimeBeats - slideStartTimeBeats
+                
+                if slideDurationBeats > 0 {
+                    let pitchBendSteps = max(2, Int(slideDurationBeats * beatsToSeconds * 50)) // ~50 steps per second of slide
+                    let fretDifference = toNote.fret - fromNote.fret
+                    
+                    // Assuming synth pitch bend range is +/- 12 semitones. 8191 / 12 = ~682.5 per semitone.
+                    let pitchBendRangeSemitones = 12.0
+                    let finalPitchBendValue = 8192 + Int(Double(fretDifference) * (8191.0 / pitchBendRangeSemitones))
+
+                    for step in 0...pitchBendSteps {
+                        let t = Double(step) / Double(pitchBendSteps)
+                        let intermediateTimeBeats = slideStartTimeBeats + (t * slideDurationBeats)
+                        let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
+                        
+                        let bendTimeMs = playbackStartTimeMs + (intermediateTimeBeats * beatsToSeconds * 1000.0)
+                        let bendID = midiManager.schedulePitchBend(value: UInt16(intermediatePitch), scheduledUptimeMs: bendTimeMs)
+                        eventIDs.append(bendID)
+                    }
+                }
+                
+                // Schedule the final Note Off
+                let offID = midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, scheduledUptimeMs: noteOffTimeMs)
                 eventIDs.append(offID)
+                
+                // Schedule Pitch Bend Reset right after note off to ensure next notes are in tune
+                let resetID = midiManager.schedulePitchBend(value: 8192, scheduledUptimeMs: noteOffTimeMs + 1)
+                eventIDs.append(resetID)
             }
         }
         self.scheduledEventIDs = eventIDs
@@ -159,6 +235,9 @@ struct SoloEditorView: View {
     private func stopPlayback() {
         isPlaying = false
         midiManager.cancelAllPendingScheduledEvents()
+        // It's good practice to reset pitch bend on stop, just in case a note was cut off mid-bend.
+        // We send it immediately without scheduling.
+        midiManager.sendPitchBend(value: 8192)
         midiManager.sendPanic()
         scheduledEventIDs.removeAll()
         uiTimerCancellable?.cancel()
