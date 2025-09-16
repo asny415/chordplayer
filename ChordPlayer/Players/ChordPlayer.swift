@@ -62,9 +62,23 @@ class ChordPlayer: ObservableObject {
                 guard !step.activeNotes.isEmpty else { continue }
 
                 let stepStartTimeOffsetMs = Double(stepIndex) * singleStepDurationSeconds * 1000.0
+
+                // NEW LOGIC: Check for fret overrides when determining active notes
                 let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
-                    guard midiNotesForChord[stringIndex] != -1 else { return nil }
-                    return (note: UInt8(midiNotesForChord[stringIndex]), stringIndex: stringIndex)
+                    var finalFret: Int
+                    if let overrideFret = step.fretOverrides[stringIndex] {
+                        finalFret = overrideFret
+                    } else {
+                        // Fallback to the chord's fret. The logic here seems to reverse the frets array.
+                        // We will maintain that pattern to avoid breaking other logic.
+                        let fretsForPlayback = Array(chord.frets.reversed())
+                        guard stringIndex < fretsForPlayback.count else { return nil }
+                        finalFret = fretsForPlayback[stringIndex]
+                    }
+
+                    guard finalFret >= 0 else { return nil }
+                    let noteValue = MusicTheory.standardGuitarTuning[stringIndex] + finalFret + transpositionOffset
+                    return (note: UInt8(noteValue), stringIndex: stringIndex)
                 }
 
                 guard !activeNotesInStep.isEmpty else { continue }

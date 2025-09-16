@@ -47,6 +47,8 @@ struct PatternStep: Codable, Identifiable, Hashable, Equatable {
     var id = UUID()
     // Which strings are active in this step (0-5)
     var activeNotes: Set<Int> = []
+    // Override fret for a specific string, mapping stringIndex to fret.
+    var fretOverrides: [Int: Int] = [:]
     // The performance type for this step
     var type: StepType = .arpeggio
     // Strum parameters (only used when type is .strum)
