@@ -17,9 +17,11 @@ struct SoloSegmentsView: View {
                     appData.preset?.soloSegments.append(newSegment)
                     self.segmentToEdit = newSegment
                 }) {
-                    Image(systemName: "plus")
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.accentColor)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
                 .help("Create a new solo segment")
             }
             

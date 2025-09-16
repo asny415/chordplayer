@@ -164,96 +164,82 @@ struct SoloToolbar: View {
     let onStop: () -> Void
     
     private let durations: [(String, Double)] = [
-        ("1/1", 1.0),
-        ("1/2", 0.5),
-        ("1/4", 0.25),
-        ("1/8", 0.125),
-        ("1/16", 0.0625)
+        ("1/1", 1.0), ("1/2", 0.5), ("1/4", 0.25), ("1/8", 0.125), ("1/16", 0.0625)
     ]
     
     var body: some View {
-        HStack {
-            // 播放控制
-            Group {
+        HStack(spacing: 20) {
+            // --- Group 1: Playback Controls ---
+            HStack {
                 Button(action: onPlay) {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                 }
-                .buttonStyle(.plain)
-                
                 Button(action: onStop) {
                     Image(systemName: "stop.fill")
                 }
-                .buttonStyle(.plain)
             }
-            
-            Divider()
-            
-            // 演奏技巧选择
-            HStack {
-                Text("Technique:")
-                Picker("", selection: $currentTechnique) {
-                    ForEach(PlayingTechnique.allCases) { technique in
-                        Text(technique.symbol.isEmpty ? technique.rawValue : technique.symbol)
-                            .tag(technique)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 100)
-            }
-            
-            Divider()
-            
-            // 品位和时值
-            HStack {
-                Text("Fret:")
-                TextField("", value: $currentFret, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 50)
-                
-                Text("Duration:")
-                Picker("", selection: $currentDuration) {
-                    ForEach(durations, id: \.1) { name, value in
-                        Text(name).tag(value)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 80)
-            }
-            
-            Divider()
-            
-            // 力度
-            HStack {
-                Text("Velocity:")
-                Slider(value: Binding(
-                    get: { Double(currentVelocity) },
-                    set: { currentVelocity = Int($0) }
-                ), in: 1...127)
-                .frame(width: 100)
-                Text("\(currentVelocity)")
-                    .frame(width: 30)
-            }
-            
-            Divider()
-            
-            // 网格和缩放
-            HStack {
-                Text("Grid:")
-                Picker("", selection: $gridSize) {
-                    ForEach(durations, id: \.1) { name, value in
-                        Text(name).tag(value)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 80)
-                
-                Text("Zoom:")
-                Slider(value: $zoomLevel, in: 0.5...3.0)
-                    .frame(width: 100)
-            }
-            
+            .buttonStyle(.bordered)
+
             Spacer()
+
+            // --- Group 2: Note Properties ---
+            HStack(spacing: 15) {
+                Picker("Technique", selection: $currentTechnique) {
+                    ForEach(PlayingTechnique.allCases) { technique in
+                        Text(technique.symbol.isEmpty ? technique.rawValue : technique.symbol).tag(technique)
+                    }
+                }
+                .frame(minWidth: 80)
+                .help("Playing Technique")
+
+                HStack(spacing: 4) {
+                    Image(systemName: "number")
+                    TextField("Fret", value: $currentFret, format: .number)
+                        .frame(width: 40)
+                }
+                .help("Fret Number")
+
+                Picker("Duration", selection: $currentDuration) {
+                    ForEach(durations, id: \.1) { name, value in
+                        Label(name, systemImage: "music.note").tag(value)
+                    }
+                }
+                .frame(minWidth: 80)
+                .help("Note Duration")
+
+                HStack(spacing: 4) {
+                    Image(systemName: "speaker.wave.2.fill")
+                    Slider(value: Binding(get: { Double(currentVelocity) }, set: { currentVelocity = Int($0) }), in: 1...127)
+                        .frame(width: 80)
+                    Text("\(currentVelocity)")
+                        .font(.system(.body, design: .monospaced))
+                        .frame(width: 30)
+                }
+                .help("Note Velocity")
+            }
+
+            Spacer()
+
+            // --- Group 3: Canvas Controls ---
+            HStack(spacing: 15) {
+                Picker("Grid", selection: $gridSize) {
+                    ForEach(durations, id: \.1) { name, value in
+                        Label(name, systemImage: "squareshape.split.2x2").tag(value)
+                    }
+                }
+                .frame(minWidth: 80)
+                .help("Grid Snap")
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                    Slider(value: $zoomLevel, in: 0.5...3.0)
+                        .frame(width: 100)
+                }
+                .help("Zoom Level")
+            }
         }
+        .textFieldStyle(.roundedBorder)
+        .pickerStyle(.menu)
     }
 }
 
