@@ -5,7 +5,6 @@ struct SoloEditorView: View {
     @State private var selectedNotes: Set<UUID> = []
     @State private var currentTechnique: PlayingTechnique = .normal
     @State private var currentFret: Int = 0
-    @State private var currentDuration: Double = 0.25 // 四分音符
     @State private var gridSize: Double = 0.25 // 四分音符网格
     @State private var zoomLevel: CGFloat = 1.0
     @State private var isPlaying: Bool = false
@@ -21,7 +20,6 @@ struct SoloEditorView: View {
             SoloToolbar(
                 currentTechnique: $currentTechnique,
                 currentFret: $currentFret,
-                currentDuration: $currentDuration,
                 gridSize: $gridSize,
                 zoomLevel: $zoomLevel,
                 isPlaying: $isPlaying,
@@ -41,7 +39,6 @@ struct SoloEditorView: View {
                     selectedNotes: $selectedNotes,
                     currentTechnique: currentTechnique,
                     currentFret: currentFret,
-                    currentDuration: currentDuration,
                     gridSize: gridSize,
                     zoomLevel: zoomLevel,
                     playbackPosition: playbackPosition,
@@ -80,15 +77,11 @@ struct SoloEditorView: View {
             // 当选择的音符变为一个时，用它的属性更新工具栏
             if selectedNotes.count == 1, let selectedNote = soloSegment.notes.first(where: { $0.id == selectedNotes.first! }) {
                 currentFret = selectedNote.fret
-                currentDuration = selectedNote.duration
                 currentTechnique = selectedNote.technique
             }
         }
         .onChange(of: currentFret) { 
             updateSelectedNote { $0.fret = currentFret }
-        }
-        .onChange(of: currentDuration) { 
-            updateSelectedNote { $0.duration = currentDuration }
         }
         .onChange(of: currentTechnique) { 
             updateSelectedNote { $0.technique = currentTechnique }
@@ -113,10 +106,8 @@ struct SoloEditorView: View {
         
         let newNote = SoloNote(
             startTime: alignedTime,
-            duration: currentDuration,
             string: string,
             fret: currentFret,
-            velocity: 100, // Hardcoded velocity
             technique: currentTechnique
         )
         
@@ -178,7 +169,6 @@ struct SoloEditorView: View {
 struct SoloToolbar: View {
     @Binding var currentTechnique: PlayingTechnique
     @Binding var currentFret: Int
-    @Binding var currentDuration: Double
     @Binding var gridSize: Double
     @Binding var zoomLevel: CGFloat
     @Binding var isPlaying: Bool
@@ -222,14 +212,6 @@ struct SoloToolbar: View {
                         .frame(width: 40)
                 }
                 .help("Fret Number")
-
-                Picker("Duration", selection: $currentDuration) {
-                    ForEach(durations, id: \.1) { name, value in
-                        Label(name, systemImage: "music.note").tag(value)
-                    }
-                }
-                .frame(minWidth: 80)
-                .help("Note Duration")
             }
 
             Spacer()
@@ -263,7 +245,6 @@ struct SoloTablatureView: View {
     
     let currentTechnique: PlayingTechnique
     let currentFret: Int
-    let currentDuration: Double
     let gridSize: Double
     let zoomLevel: CGFloat
     let playbackPosition: Double
