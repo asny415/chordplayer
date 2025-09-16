@@ -11,6 +11,11 @@ struct SoloEditorView: View {
     @State private var currentFret: Int = 0
     @State private var gridSize: Double = 0.25
     @State private var zoomLevel: CGFloat = 1.0
+    
+    // State for fret input
+    @State private var fretInputBuffer: String = ""
+    @State private var fretInputCancellable: AnyCancellable?
+    @State private var showingFretPopover: Bool = false
 
     private let stringNames = ["E", "B", "G", "D", "A", "E"]
     private let beatWidth: CGFloat = 80
@@ -23,10 +28,11 @@ struct SoloEditorView: View {
                 currentFret: $currentFret,
                 gridSize: $gridSize,
                 zoomLevel: $zoomLevel,
-                isPlaying: .constant(soloPlayer.isPlaying), // Use soloPlayer's state
+                isPlaying: .constant(soloPlayer.isPlaying),
                 playbackPosition: .constant(soloPlayer.playbackPosition),
                 segmentLength: $soloSegment.lengthInBeats,
-                onPlay: playToggle
+                onPlay: playToggle,
+                onSetFret: { showingFretPopover = true }
             )
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
@@ -41,13 +47,14 @@ struct SoloEditorView: View {
                     currentFret: currentFret,
                     gridSize: gridSize,
                     zoomLevel: zoomLevel,
-                    isPlaying: soloPlayer.isPlaying, // Use soloPlayer's state
+                    isPlaying: soloPlayer.isPlaying,
                     playbackPosition: soloPlayer.playbackPosition,
                     beatWidth: beatWidth,
                     stringHeight: stringHeight,
                     onNoteSelect: selectNote,
                     onNoteDelete: deleteSelectedNotes,
-                    onBackgroundTap: handleBackgroundTap
+                    onBackgroundTap: handleBackgroundTap,
+                    onSetFret: { showingFretPopover = true }
                 )
                 .frame(
                     width: max(600, 40.0 + beatWidth * CGFloat(soloSegment.lengthInBeats) * zoomLevel),
@@ -80,6 +87,9 @@ struct SoloEditorView: View {
         }
         .onChange(of: currentFret) { updateSelectedNote { $0.fret = currentFret } }
         .onChange(of: currentTechnique) { updateSelectedNote { $0.technique = currentTechnique } }
+        .popover(isPresented: $showingFretPopover, arrowEdge: .bottom) {
+            FretInputPopover(currentFret: $currentFret, onCommit: { showingFretPopover = false })
+        }
     }
     
     // MARK: - Actions
@@ -138,15 +148,41 @@ struct SoloEditorView: View {
     
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         switch event.keyCode {
-        case 51: deleteSelectedNotes(); return true
-        case 49: playToggle(); return true
-        default: return false
+        case 51: // Backspace/Delete
+            deleteSelectedNotes()
+            return true
+        case 49: // Spacebar
+            playToggle()
+            return true
+        default:
+            // Check for numeric input for fret setting
+            if let chars = event.characters, let _ = Int(chars) {
+                fretInputCancellable?.cancel()
+                fretInputBuffer += chars
+                
+                if fretInputBuffer.count >= 2 {
+                    commitFretInput()
+                } else {
+                    fretInputCancellable = Just(())
+                        .delay(for: .milliseconds(400), scheduler: DispatchQueue.main)
+                        .sink { [self] in commitFretInput() }
+                }
+                return true
+            }
+            return false
         }
+    }
+    
+    private func commitFretInput() {
+        if let fret = Int(fretInputBuffer), (0...24).contains(fret) {
+            self.currentFret = fret
+        }
+        fretInputBuffer = ""
+        fretInputCancellable = nil
     }
 }
 
-// MARK: - Subviews (Toolbar, Tablature, etc.)
-// Subviews remain largely the same, but now receive bindings from the soloPlayer.
+// MARK: - Subviews
 
 struct SoloToolbar: View {
     @Binding var currentTechnique: PlayingTechnique
@@ -160,6 +196,7 @@ struct SoloToolbar: View {
     @State private var showingSettings: Bool = false
 
     let onPlay: () -> Void
+    let onSetFret: () -> Void
     
     private let durations: [(String, Double)] = [("1/1", 1.0), ("1/2", 0.5), ("1/4", 0.25), ("1/8", 0.125), ("1/16", 0.0625)]
     
@@ -180,10 +217,10 @@ struct SoloToolbar: View {
                     }
                 }.frame(minWidth: 80).help("Playing Technique")
 
-                HStack(spacing: 4) {
-                    Image(systemName: "number")
-                    TextField("Fret", value: $currentFret, format: .number).frame(width: 40)
-                }.help("Fret Number")
+                Button(action: onSetFret) {
+                    Text("Fret: \(currentFret)")
+                }
+                .help("Set Current Fret (or use number keys)")
             }
 
             Spacer()
@@ -229,6 +266,7 @@ struct SoloTablatureView: View {
     let onNoteSelect: (UUID, Bool) -> Void
     let onNoteDelete: () -> Void
     let onBackgroundTap: (CGPoint) -> Void
+    let onSetFret: () -> Void
     
     private let stringNames = ["E", "B", "G", "D", "A", "E"]
     
@@ -256,6 +294,31 @@ struct SoloTablatureView: View {
         .onTapGesture { location in
             onBackgroundTap(location)
         }
+        .contextMenu {
+            Button("Set Current Fret", action: onSetFret)
+        }
+    }
+}
+
+struct FretInputPopover: View {
+    @Binding var currentFret: Int
+    let onCommit: () -> Void
+    @FocusState private var isFretFieldFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Set Current Fret").font(.headline)
+            TextField("Fret", value: $currentFret, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 80)
+                .labelsHidden()
+                .focused($isFretFieldFocused)
+                .onAppear { isFretFieldFocused = true }
+            
+            Button("Done", action: onCommit)
+                .keyboardShortcut(.defaultAction)
+        }
+        .padding()
     }
 }
 
