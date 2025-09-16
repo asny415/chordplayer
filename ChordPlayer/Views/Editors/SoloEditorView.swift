@@ -6,7 +6,6 @@ struct SoloEditorView: View {
     @State private var currentTechnique: PlayingTechnique = .normal
     @State private var currentFret: Int = 0
     @State private var currentDuration: Double = 0.25 // 四分音符
-    @State private var currentVelocity: Int = 100
     @State private var gridSize: Double = 0.25 // 四分音符网格
     @State private var zoomLevel: CGFloat = 1.0
     @State private var isPlaying: Bool = false
@@ -23,7 +22,6 @@ struct SoloEditorView: View {
                 currentTechnique: $currentTechnique,
                 currentFret: $currentFret,
                 currentDuration: $currentDuration,
-                currentVelocity: $currentVelocity,
                 gridSize: $gridSize,
                 zoomLevel: $zoomLevel,
                 isPlaying: $isPlaying,
@@ -44,7 +42,6 @@ struct SoloEditorView: View {
                     currentTechnique: currentTechnique,
                     currentFret: currentFret,
                     currentDuration: currentDuration,
-                    currentVelocity: currentVelocity,
                     gridSize: gridSize,
                     zoomLevel: zoomLevel,
                     playbackPosition: playbackPosition,
@@ -52,7 +49,8 @@ struct SoloEditorView: View {
                     stringHeight: stringHeight,
                     onNoteAdd: addNote,
                     onNoteSelect: selectNote,
-                    onNoteDelete: deleteSelectedNotes
+                    onNoteDelete: deleteSelectedNotes,
+                    onDeselectAll: deselectAllNotes
                 )
                 .frame(
                     width: max(600, beatWidth * CGFloat(soloSegment.lengthInBeats) * zoomLevel),
@@ -78,6 +76,29 @@ struct SoloEditorView: View {
         .onKeyDown { event in
             handleKeyDown(event)
         }
+        .onChange(of: selectedNotes) {
+            // 当选择的音符变为一个时，用它的属性更新工具栏
+            if selectedNotes.count == 1, let selectedNote = soloSegment.notes.first(where: { $0.id == selectedNotes.first! }) {
+                currentFret = selectedNote.fret
+                currentDuration = selectedNote.duration
+                currentTechnique = selectedNote.technique
+            }
+        }
+        .onChange(of: currentFret) { 
+            updateSelectedNote { $0.fret = currentFret }
+        }
+        .onChange(of: currentDuration) { 
+            updateSelectedNote { $0.duration = currentDuration }
+        }
+        .onChange(of: currentTechnique) { 
+            updateSelectedNote { $0.technique = currentTechnique }
+        }
+    }
+    
+    private func updateSelectedNote(change: (inout SoloNote) -> Void) {
+        if selectedNotes.count == 1, let index = soloSegment.notes.firstIndex(where: { $0.id == selectedNotes.first! }) {
+            change(&soloSegment.notes[index])
+        }
     }
     
     private func addNote(at position: CGPoint) {
@@ -95,7 +116,7 @@ struct SoloEditorView: View {
             duration: currentDuration,
             string: string,
             fret: currentFret,
-            velocity: currentVelocity,
+            velocity: 100, // Hardcoded velocity
             technique: currentTechnique
         )
         
@@ -113,6 +134,10 @@ struct SoloEditorView: View {
         } else {
             selectedNotes = [noteId]
         }
+    }
+    
+    private func deselectAllNotes() {
+        selectedNotes.removeAll()
     }
     
     private func deleteSelectedNotes() {
@@ -154,7 +179,6 @@ struct SoloToolbar: View {
     @Binding var currentTechnique: PlayingTechnique
     @Binding var currentFret: Int
     @Binding var currentDuration: Double
-    @Binding var currentVelocity: Int
     @Binding var gridSize: Double
     @Binding var zoomLevel: CGFloat
     @Binding var isPlaying: Bool
@@ -206,16 +230,6 @@ struct SoloToolbar: View {
                 }
                 .frame(minWidth: 80)
                 .help("Note Duration")
-
-                HStack(spacing: 4) {
-                    Image(systemName: "speaker.wave.2.fill")
-                    Slider(value: Binding(get: { Double(currentVelocity) }, set: { currentVelocity = Int($0) }), in: 1...127)
-                        .frame(width: 80)
-                    Text("\(currentVelocity)")
-                        .font(.system(.body, design: .monospaced))
-                        .frame(width: 30)
-                }
-                .help("Note Velocity")
             }
 
             Spacer()
@@ -250,7 +264,6 @@ struct SoloTablatureView: View {
     let currentTechnique: PlayingTechnique
     let currentFret: Int
     let currentDuration: Double
-    let currentVelocity: Int
     let gridSize: Double
     let zoomLevel: CGFloat
     let playbackPosition: Double
@@ -260,6 +273,7 @@ struct SoloTablatureView: View {
     let onNoteAdd: (CGPoint) -> Void
     let onNoteSelect: (UUID, Bool) -> Void
     let onNoteDelete: () -> Void
+    let onDeselectAll: () -> Void
     
     private let stringNames = ["E", "B", "G", "D", "A", "E"]
     
@@ -273,11 +287,6 @@ struct SoloTablatureView: View {
                 stringHeight: stringHeight,
                 zoomLevel: zoomLevel
             )
-            .background(GeometryReader { geometry in
-                Color.clear.onAppear {
-                    print("Debug: SoloGridView frame in global: \(geometry.frame(in: .global))")
-                }
-            })
             
             // 弦线
             VStack(spacing: 0) {
@@ -292,11 +301,6 @@ struct SoloTablatureView: View {
                     )
                 }
             }
-            .background(GeometryReader { geometry in
-                Color.clear.onAppear {
-                    print("Debug: String Lines VStack frame in global: \(geometry.frame(in: .global))")
-                }
-            })
             
             // 音符
             ForEach(soloSegment.notes) { note in
@@ -322,8 +326,11 @@ struct SoloTablatureView: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { location in
+        .onTapGesture(count: 2) { location in
             onNoteAdd(location)
+        }
+        .onTapGesture(count: 1) {
+            onDeselectAll()
         }
     }
 }
