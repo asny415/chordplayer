@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SoloSegmentsView: View {
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var soloPlayer: SoloPlayer
     @Binding var segmentToEdit: SoloSegment?
     
     var body: some View {
@@ -15,6 +16,7 @@ struct SoloSegmentsView: View {
                     let count = appData.preset?.soloSegments.count ?? 0
                     let newSegment = SoloSegment(name: "New Solo \(count + 1)", lengthInBeats: 4.0)
                     appData.preset?.soloSegments.append(newSegment)
+                    appData.saveChanges() // Ensure the new segment is saved
                     self.segmentToEdit = newSegment
                 }) {
                     Image(systemName: "plus.circle.fill")
@@ -59,6 +61,7 @@ struct SoloSegmentsView: View {
                     Button("Create First Solo") {
                         let newSegment = SoloSegment(name: "New Solo", lengthInBeats: 4.0)
                         appData.preset?.soloSegments.append(newSegment)
+                        appData.saveChanges()
                         self.segmentToEdit = newSegment
                     }
                     .buttonStyle(.borderedProminent)
@@ -117,22 +120,11 @@ struct SoloSegmentCard: View {
             if !segment.notes.isEmpty {
                 SoloPreviewView(segment: segment)
                     .frame(height: 30)
-                    .onTapGesture {
-                        soloPlayer.play(segment: segment)
-                    }
             }
             
             // 操作按钮
             HStack {
-                Button(action: onSelect) {
-                    Text(isActive ? "Active" : "Select")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-                .disabled(isActive)
-                
                 Spacer()
-                
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
                         .font(.caption)
@@ -155,19 +147,11 @@ struct SoloSegmentCard: View {
             if !isActive {
                 onSelect()
             }
+            soloPlayer.play(segment: segment)
         }
         .contextMenu {
-            Button("Select", action: onSelect)
-                .disabled(isActive)
-            
             Button("Edit", action: onEdit)
-            
             Divider()
-            
-            Button("Duplicate") {
-                // TODO: 实现复制功能
-            }
-            
             Button("Delete", role: .destructive) {
                 // TODO: 实现删除功能
             }
