@@ -94,7 +94,7 @@ struct SoloEditorView: View {
     
     // MARK: - Actions
     private func playToggle() {
-        soloPlayer.play(segment: soloSegment)
+        soloPlayer.play(segment: soloSegment, quantization: .none)
     }
 
     private func notifyChanges() {

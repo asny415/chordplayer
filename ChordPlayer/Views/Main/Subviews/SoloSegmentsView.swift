@@ -74,6 +74,7 @@ struct SoloSegmentsView: View {
 }
 
 struct SoloSegmentCard: View {
+    @EnvironmentObject var appData: AppData
     @EnvironmentObject var soloPlayer: SoloPlayer
     let segment: SoloSegment
     let isActive: Bool
@@ -151,7 +152,7 @@ struct SoloSegmentCard: View {
             if !isActive {
                 onSelect()
             }
-            soloPlayer.play(segment: segment)
+            soloPlayer.play(segment: segment, quantization: appData.preset?.quantize ?? .none)
         }
         .contextMenu {
             Button("Edit", action: onEdit)
