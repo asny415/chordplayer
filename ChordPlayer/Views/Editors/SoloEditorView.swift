@@ -36,8 +36,7 @@ struct SoloEditorView: View {
                 isPlaying: $isPlaying,
                 playbackPosition: $playbackPosition,
                 segmentLength: $soloSegment.lengthInBeats,
-                onPlay: playToggle,
-                onStop: stopPlayback
+                onPlay: playToggle
             )
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
@@ -234,16 +233,16 @@ struct SoloToolbar: View {
     @State private var showingSettings: Bool = false
 
     let onPlay: () -> Void
-    let onStop: () -> Void
     
     private let durations: [(String, Double)] = [("1/1", 1.0), ("1/2", 0.5), ("1/4", 0.25), ("1/8", 0.125), ("1/16", 0.0625)]
     
     var body: some View {
         HStack(spacing: 20) {
-            HStack {
-                Button(action: onPlay) { Image(systemName: isPlaying ? "pause.fill" : "play.fill") }
-                Button(action: onStop) { Image(systemName: "stop.fill") }
-            }.buttonStyle(.bordered)
+            Button(action: onPlay) {
+                Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .help(isPlaying ? "Stop Playback" : "Play Solo")
 
             Spacer()
 
