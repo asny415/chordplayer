@@ -1,22 +1,33 @@
 import SwiftUI
+import Combine
 
 struct SoloEditorView: View {
+    @EnvironmentObject var midiManager: MidiManager
+    @EnvironmentObject var appData: AppData
+    
     @Binding var soloSegment: SoloSegment
     @State private var selectedNotes: Set<UUID> = []
     @State private var currentTechnique: PlayingTechnique = .normal
     @State private var currentFret: Int = 0
     @State private var gridSize: Double = 0.25 // 四分音符网格
     @State private var zoomLevel: CGFloat = 1.0
+    
+    // Playback State
     @State private var isPlaying: Bool = false
     @State private var playbackPosition: Double = 0
-    
+    @State private var scheduledEventIDs: [UUID] = []
+    @State private var playbackStartDate: Date?
+    @State private var uiTimerCancellable: AnyCancellable?
+
     private let stringNames = ["E", "B", "G", "D", "A", "E"]
     private let beatWidth: CGFloat = 80
     private let stringHeight: CGFloat = 40
     
+    // MIDI note number for open strings, from high E (string 0) to low E (string 5)
+    private let openStringMIDINotes: [UInt8] = [64, 59, 55, 50, 45, 40]
+
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部工具栏
             SoloToolbar(
                 currentTechnique: $currentTechnique,
                 currentFret: $currentFret,
@@ -26,14 +37,13 @@ struct SoloEditorView: View {
                 playbackPosition: $playbackPosition,
                 segmentLength: $soloSegment.lengthInBeats,
                 onPlay: playToggle,
-                onStop: stop
+                onStop: stopPlayback
             )
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
             
             Divider()
             
-            // 主编辑区域
             ScrollView([.horizontal, .vertical]) {
                 SoloTablatureView(
                     soloSegment: $soloSegment,
@@ -42,6 +52,7 @@ struct SoloEditorView: View {
                     currentFret: currentFret,
                     gridSize: gridSize,
                     zoomLevel: zoomLevel,
+                    isPlaying: isPlaying,
                     playbackPosition: playbackPosition,
                     beatWidth: beatWidth,
                     stringHeight: stringHeight,
@@ -59,7 +70,6 @@ struct SoloEditorView: View {
             
             Divider()
             
-            // 底部信息栏
             HStack {
                 Text("Selected: \(selectedNotes.count) notes")
                 Spacer()
@@ -71,24 +81,100 @@ struct SoloEditorView: View {
             .frame(height: 30)
             .background(Color(NSColor.controlBackgroundColor))
         }
-        .onKeyDown { event in
-            handleKeyDown(event)
-        }
+        .onKeyDown { event in handleKeyDown(event) }
+        .onDisappear(perform: stopPlayback)
         .onChange(of: selectedNotes) {
-            // 当选择的音符变为一个时，用它的属性更新工具栏
             if selectedNotes.count == 1, let selectedNote = soloSegment.notes.first(where: { $0.id == selectedNotes.first! }) {
                 currentFret = selectedNote.fret
                 currentTechnique = selectedNote.technique
             }
         }
-        .onChange(of: currentFret) { 
-            updateSelectedNote { $0.fret = currentFret }
-        }
-        .onChange(of: currentTechnique) { 
-            updateSelectedNote { $0.technique = currentTechnique }
-        }
+        .onChange(of: currentFret) { updateSelectedNote { $0.fret = currentFret } }
+        .onChange(of: currentTechnique) { updateSelectedNote { $0.technique = currentTechnique } }
     }
     
+    // MARK: - Playback Logic
+    private func playToggle() {
+        isPlaying.toggle()
+        if isPlaying {
+            play()
+        } else {
+            stopPlayback()
+        }
+    }
+
+    private func play() {
+        stopPlayback() // Ensure everything is clean before starting
+        isPlaying = true
+
+        let bpm = appData.preset?.bpm ?? 120.0
+        let beatsToSeconds = 60.0 / bpm
+        let playbackStartTimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
+        
+        let notesSortedByTime = soloSegment.notes.sorted { $0.startTime < $1.startTime }
+        
+        var noteEvents: [(onTime: Double, offTime: Double, note: SoloNote)] = []
+        for i in 0..<notesSortedByTime.count {
+            let currentNote = notesSortedByTime[i]
+            var noteOffTime = soloSegment.lengthInBeats
+
+            if let nextNoteOnSameString = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
+                noteOffTime = nextNoteOnSameString.startTime
+            }
+            
+            noteEvents.append((onTime: currentNote.startTime, offTime: noteOffTime, note: currentNote))
+        }
+
+        var eventIDs: [UUID] = []
+        for event in noteEvents {
+            guard event.note.fret >= 0 else { continue } // Skip muted notes
+            let midiNoteNumber = midiNote(from: event.note.string, fret: event.note.fret)
+            let velocity = UInt8(event.note.velocity)
+
+            let noteOnTimeMs = playbackStartTimeMs + (event.onTime * beatsToSeconds * 1000.0)
+            let noteOffTimeMs = playbackStartTimeMs + (event.offTime * beatsToSeconds * 1000.0)
+
+            if noteOffTimeMs > noteOnTimeMs {
+                let onID = midiManager.scheduleNoteOn(note: midiNoteNumber, velocity: velocity, scheduledUptimeMs: noteOnTimeMs)
+                eventIDs.append(onID)
+
+                let offID = midiManager.scheduleNoteOff(note: midiNoteNumber, velocity: 0, scheduledUptimeMs: noteOffTimeMs)
+                eventIDs.append(offID)
+            }
+        }
+        self.scheduledEventIDs = eventIDs
+
+        // Start UI timer for playback line
+        self.playbackStartDate = Date()
+        self.uiTimerCancellable = Timer.publish(every: 0.02, on: .main, in: .common).autoconnect().sink { _ in
+            guard let startDate = self.playbackStartDate else { return }
+            let elapsedSeconds = Date().timeIntervalSince(startDate)
+            let beatsPerSecond = bpm / 60.0
+            self.playbackPosition = elapsedSeconds * beatsPerSecond
+            
+            if self.playbackPosition > soloSegment.lengthInBeats {
+                stopPlayback()
+            }
+        }
+    }
+
+    private func stopPlayback() {
+        isPlaying = false
+        midiManager.cancelAllPendingScheduledEvents()
+        midiManager.sendPanic() // Immediately stop any sounding notes
+        scheduledEventIDs.removeAll()
+        
+        uiTimerCancellable?.cancel()
+        playbackStartDate = nil
+        playbackPosition = 0
+    }
+    
+    private func midiNote(from string: Int, fret: Int) -> UInt8 {
+        guard string >= 0 && string < openStringMIDINotes.count else { return 0 }
+        return openStringMIDINotes[string] + UInt8(fret)
+    }
+
+    // MARK: - Note Editing Logic
     private func updateSelectedNote(change: (inout SoloNote) -> Void) {
         if selectedNotes.count == 1, let index = soloSegment.notes.firstIndex(where: { $0.id == selectedNotes.first! }) {
             change(&soloSegment.notes[index])
@@ -102,15 +188,9 @@ struct SoloEditorView: View {
         
         guard string >= 0 && string < 6 && time >= 0 && time <= soloSegment.lengthInBeats else { return }
         
-        // 对齐到网格
         let alignedTime = snapToGrid(time)
         
-        let newNote = SoloNote(
-            startTime: alignedTime,
-            string: string,
-            fret: currentFret,
-            technique: currentTechnique
-        )
+        let newNote = SoloNote(startTime: alignedTime, string: string, fret: currentFret, technique: currentTechnique)
         
         soloSegment.notes.append(newNote)
         selectedNotes = [newNote.id]
@@ -118,55 +198,30 @@ struct SoloEditorView: View {
     
     private func selectNote(_ noteId: UUID, addToSelection: Bool = false) {
         if addToSelection {
-            if selectedNotes.contains(noteId) {
-                selectedNotes.remove(noteId)
-            } else {
-                selectedNotes.insert(noteId)
-            }
+            if selectedNotes.contains(noteId) { selectedNotes.remove(noteId) } else { selectedNotes.insert(noteId) }
         } else {
             selectedNotes = [noteId]
         }
     }
     
-    private func deselectAllNotes() {
-        selectedNotes.removeAll()
-    }
-    
+    private func deselectAllNotes() { selectedNotes.removeAll() }
     private func deleteSelectedNotes() {
         soloSegment.notes.removeAll { selectedNotes.contains($0.id) }
         selectedNotes.removeAll()
     }
     
-    private func snapToGrid(_ time: Double) -> Double {
-        return round(time / gridSize) * gridSize
-    }
-    
-    private func playToggle() {
-        isPlaying.toggle()
-        if isPlaying {
-            // TODO: 实现播放逻辑
-        }
-    }
-    
-    private func stop() {
-        isPlaying = false
-        playbackPosition = 0
-    }
+    private func snapToGrid(_ time: Double) -> Double { round(time / gridSize) * gridSize }
     
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         switch event.keyCode {
-        case 51: // Delete key
-            deleteSelectedNotes()
-            return true
-        case 49: // Space key
-            playToggle()
-            return true
-        default:
-            return false
+        case 51: deleteSelectedNotes(); return true
+        case 49: playToggle(); return true
+        default: return false
         }
     }
 }
 
+// MARK: - Subviews (Toolbar, Tablature, etc.)
 struct SoloToolbar: View {
     @Binding var currentTechnique: PlayingTechnique
     @Binding var currentFret: Int
@@ -181,68 +236,48 @@ struct SoloToolbar: View {
     let onPlay: () -> Void
     let onStop: () -> Void
     
-    private let durations: [(String, Double)] = [
-        ("1/1", 1.0), ("1/2", 0.5), ("1/4", 0.25), ("1/8", 0.125), ("1/16", 0.0625)
-    ]
+    private let durations: [(String, Double)] = [("1/1", 1.0), ("1/2", 0.5), ("1/4", 0.25), ("1/8", 0.125), ("1/16", 0.0625)]
     
     var body: some View {
         HStack(spacing: 20) {
-            // --- Group 1: Playback Controls ---
             HStack {
-                Button(action: onPlay) {
-                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                }
-                Button(action: onStop) {
-                    Image(systemName: "stop.fill")
-                }
-            }
-            .buttonStyle(.bordered)
+                Button(action: onPlay) { Image(systemName: isPlaying ? "pause.fill" : "play.fill") }
+                Button(action: onStop) { Image(systemName: "stop.fill") }
+            }.buttonStyle(.bordered)
 
             Spacer()
 
-            // --- Group 2: Note Properties ---
             HStack(spacing: 15) {
                 Picker("Technique", selection: $currentTechnique) {
                     ForEach(PlayingTechnique.allCases) { technique in
                         Text(technique.symbol.isEmpty ? technique.rawValue : technique.symbol).tag(technique)
                     }
-                }
-                .frame(minWidth: 80)
-                .help("Playing Technique")
+                }.frame(minWidth: 80).help("Playing Technique")
 
                 HStack(spacing: 4) {
                     Image(systemName: "number")
-                    TextField("Fret", value: $currentFret, format: .number)
-                        .frame(width: 40)
-                }
-                .help("Fret Number")
+                    TextField("Fret", value: $currentFret, format: .number).frame(width: 40)
+                }.help("Fret Number")
             }
 
             Spacer()
 
-            // --- Group 3: Canvas Controls ---
             HStack(spacing: 15) {
                 Picker("Grid", selection: $gridSize) {
                     ForEach(durations, id: \.1) { name, value in
                         Label(name, systemImage: "squareshape.split.2x2").tag(value)
                     }
-                }
-                .frame(minWidth: 80)
-                .help("Grid Snap")
+                }.frame(minWidth: 80).help("Grid Snap")
                 
                 HStack(spacing: 4) {
                     Image(systemName: "magnifyingglass")
-                    Slider(value: $zoomLevel, in: 0.5...3.0)
-                        .frame(width: 100)
-                }
-                .help("Zoom Level")
+                    Slider(value: $zoomLevel, in: 0.5...3.0).frame(width: 100)
+                }.help("Zoom Level")
             }
             
-            // --- Group 4: Segment Settings ---
             Button(action: { showingSettings = true }) {
                 Image(systemName: "gearshape.fill")
-            }
-            .buttonStyle(.bordered)
+            }.buttonStyle(.bordered)
             .popover(isPresented: $showingSettings, arrowEdge: .bottom) {
                 SegmentSettingsView(lengthInBeats: $segmentLength)
             }
@@ -260,6 +295,7 @@ struct SoloTablatureView: View {
     let currentFret: Int
     let gridSize: Double
     let zoomLevel: CGFloat
+    let isPlaying: Bool
     let playbackPosition: Double
     let beatWidth: CGFloat
     let stringHeight: CGFloat
@@ -273,90 +309,42 @@ struct SoloTablatureView: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // 背景网格
-            SoloGridView(
-                lengthInBeats: soloSegment.lengthInBeats,
-                gridSize: gridSize,
-                beatWidth: beatWidth,
-                stringHeight: stringHeight,
-                zoomLevel: zoomLevel
-            )
+            SoloGridView(lengthInBeats: soloSegment.lengthInBeats, gridSize: gridSize, beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel)
             
-            // 弦线
             VStack(spacing: 0) {
                 ForEach(0..<6, id: \.self) { stringIndex in
-                    SoloStringLineView(
-                        stringIndex: stringIndex,
-                        stringName: stringNames[stringIndex],
-                        lengthInBeats: soloSegment.lengthInBeats,
-                        beatWidth: beatWidth,
-                        stringHeight: stringHeight,
-                        zoomLevel: zoomLevel
-                    )
+                    SoloStringLineView(stringIndex: stringIndex, stringName: stringNames[stringIndex], lengthInBeats: soloSegment.lengthInBeats, beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel)
                 }
             }
             
-            // 音符
             ForEach(soloSegment.notes) { note in
-                SoloNoteView(
-                    note: note,
-                    isSelected: selectedNotes.contains(note.id),
-                    beatWidth: beatWidth,
-                    stringHeight: stringHeight,
-                    zoomLevel: zoomLevel,
-                    onSelect: { addToSelection in
-                        onNoteSelect(note.id, addToSelection)
-                    }
-                )
+                SoloNoteView(note: note, isSelected: selectedNotes.contains(note.id), beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel, onSelect: { onNoteSelect(note.id, $0) })
             }
             
-            // 播放位置指示器
-            if playbackPosition > 0 {
+            if isPlaying && playbackPosition > 0 {
                 let stringLabelWidth: CGFloat = 40.0
-                Rectangle()
-                    .fill(Color.red)
-                    .frame(width: 2)
-                    .position(x: stringLabelWidth + CGFloat(playbackPosition) * beatWidth * zoomLevel, y: stringHeight * 3)
+                Rectangle().fill(Color.red).frame(width: 2)
+                    .offset(x: stringLabelWidth + CGFloat(playbackPosition) * beatWidth * zoomLevel)
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { location in
-            onNoteAdd(location)
-        }
-        .onTapGesture(count: 1) {
-            onDeselectAll()
-        }
+        .onTapGesture(count: 2) { onNoteAdd($0) }
+        .onTapGesture(count: 1) { onDeselectAll() }
     }
 }
 
 struct SoloGridView: View {
-    let lengthInBeats: Double
-    let gridSize: Double
-    let beatWidth: CGFloat
-    let stringHeight: CGFloat
-    let zoomLevel: CGFloat
+    let lengthInBeats: Double, gridSize: Double, beatWidth: CGFloat, stringHeight: CGFloat, zoomLevel: CGFloat
     
     var body: some View {
         Canvas { context, size in
             let stringLabelWidth: CGFloat = 40.0
-            let totalWidth = beatWidth * CGFloat(lengthInBeats) * zoomLevel
             let totalHeight = stringHeight * 6
-            
-            // 垂直网格线
             var beat = 0.0
             while beat <= lengthInBeats {
                 let x = stringLabelWidth + CGFloat(beat) * beatWidth * zoomLevel
                 let isMainBeat = beat.truncatingRemainder(dividingBy: 1.0) == 0
-                
-                context.stroke(
-                    Path { path in
-                        path.move(to: CGPoint(x: x, y: 0))
-                        path.addLine(to: CGPoint(x: x, y: totalHeight))
-                    },
-                    with: .color(isMainBeat ? .secondary : .secondary.opacity(0.5)),
-                    lineWidth: isMainBeat ? 1 : 0.5
-                )
-                
+                context.stroke(Path { $0.move(to: CGPoint(x: x, y: 0)); $0.addLine(to: CGPoint(x: x, y: totalHeight)) }, with: .color(isMainBeat ? .secondary : .secondary.opacity(0.5)), lineWidth: isMainBeat ? 1 : 0.5)
                 beat += gridSize
             }
         }
@@ -364,65 +352,33 @@ struct SoloGridView: View {
 }
 
 struct SoloStringLineView: View {
-    let stringIndex: Int
-    let stringName: String
-    let lengthInBeats: Double
-    let beatWidth: CGFloat
-    let stringHeight: CGFloat
-    let zoomLevel: CGFloat
+    let stringIndex: Int, stringName: String, lengthInBeats: Double, beatWidth: CGFloat, stringHeight: CGFloat, zoomLevel: CGFloat
     
     var body: some View {
         HStack(spacing: 10) {
-            // 弦名标签
-            Text(stringName)
-                .font(.system(size: 14, weight: .medium))
-                .frame(width: 30, height: stringHeight)
-                .background(Color(NSColor.controlBackgroundColor))
-            
-            // 弦线
-            Rectangle()
-                .fill(Color.primary)
-                .frame(width: beatWidth * CGFloat(lengthInBeats) * zoomLevel, height: 1)
-                .frame(height: stringHeight)
+            Text(stringName).font(.system(size: 14, weight: .medium)).frame(width: 30, height: stringHeight).background(Color(NSColor.controlBackgroundColor))
+            Rectangle().fill(Color.primary).frame(width: beatWidth * CGFloat(lengthInBeats) * zoomLevel, height: 1).frame(height: stringHeight)
         }
     }
 }
 
 struct SoloNoteView: View {
-    let note: SoloNote
-    let isSelected: Bool
-    let beatWidth: CGFloat
-    let stringHeight: CGFloat
-    let zoomLevel: CGFloat
+    let note: SoloNote, isSelected: Bool, beatWidth: CGFloat, stringHeight: CGFloat, zoomLevel: CGFloat
     let onSelect: (Bool) -> Void
     
     var body: some View {
         HStack(spacing: 2) {
-            // 品位数字
-            Text("\(note.fret)")
-                .font(.system(size: 12, weight: .bold))
+            Text("\(note.fret)").font(.system(size: 12, weight: .bold))
                 .foregroundColor(isSelected ? .white : .primary)
                 .frame(width: 20, height: 20)
-                .background(
-                    Circle()
-                        .fill(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor))
-                        .overlay(Circle().stroke(Color.primary, lineWidth: 1))
-                )
+                .background(Circle().fill(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor)).overlay(Circle().stroke(Color.primary, lineWidth: 1)))
             
-            // 技巧标记
             if !note.technique.symbol.isEmpty {
-                Text(note.technique.symbol)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                Text(note.technique.symbol).font(.system(size: 10)).foregroundColor(.secondary)
             }
         }
-        .position(
-            x: 40 + CGFloat(note.startTime) * beatWidth * zoomLevel,
-            y: CGFloat(note.string) * stringHeight + stringHeight / 2
-        )
-        .onTapGesture {
-            onSelect(false)
-        }
+        .position(x: 40 + CGFloat(note.startTime) * beatWidth * zoomLevel, y: CGFloat(note.string) * stringHeight + stringHeight / 2)
+        .onTapGesture { onSelect(false) }
     }
 }
 
@@ -431,20 +387,16 @@ struct SegmentSettingsView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text("Segment Properties")
-                .font(.headline)
-            
+            Text("Segment Properties").font(.headline)
             HStack {
                 Text("Length (beats):")
-                TextField("Length", value: $lengthInBeats, format: .number.precision(.fractionLength(1)))
-                    .frame(width: 60)
+                TextField("Length", value: $lengthInBeats, format: .number.precision(.fractionLength(1))).frame(width: 60)
             }
-        }
-        .padding()
+        }.padding()
     }
 }
 
-// 辅助扩展
+// MARK: - KeyDown Handling
 extension View {
     func onKeyDown(perform action: @escaping (NSEvent) -> Bool) -> some View {
         self.background(KeyEventHandlingView(onKeyDown: action))
@@ -453,25 +405,17 @@ extension View {
 
 struct KeyEventHandlingView: NSViewRepresentable {
     let onKeyDown: (NSEvent) -> Bool
-    
     func makeNSView(context: Context) -> NSView {
-        let view = KeyEventView()
-        view.onKeyDown = onKeyDown
-        return view
+        let view = KeyDownView(); view.onKeyDown = onKeyDown; return view
     }
-    
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
-class KeyEventView: NSView {
+class KeyDownView: NSView {
     var onKeyDown: ((NSEvent) -> Bool)?
-    
     override var acceptsFirstResponder: Bool { true }
-    
     override func keyDown(with event: NSEvent) {
-        if let handler = onKeyDown, handler(event) {
-            return
-        }
+        if let handler = onKeyDown, handler(event) { return }
         super.keyDown(with: event)
     }
 }
