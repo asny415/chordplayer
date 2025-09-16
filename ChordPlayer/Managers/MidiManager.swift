@@ -226,7 +226,6 @@ class MidiManager: ObservableObject {
     func scheduleNoteOn(note: UInt8, velocity: UInt8, channel: UInt8 = 0, scheduledUptimeMs: Double) -> UUID {
         let id = UUID()
         let ev = PendingEvent(id: id, note: note, velocity: velocity, channel: channel, isNoteOn: true, scheduledUptimeMs: scheduledUptimeMs)
-        let now = ProcessInfo.processInfo.systemUptime * 1000.0
         midiQueue.async { [weak self] in
             guard let self = self else { return }
             self.pendingEvents[id] = ev

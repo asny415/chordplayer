@@ -252,10 +252,12 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
     var chords: [Chord]
     var playingPatterns: [GuitarPattern]
     var drumPatterns: [DrumPattern]
+    var soloSegments: [SoloSegment] = []
     
     // Currently active patterns
     var activePlayingPatternId: UUID?
     var activeDrumPatternId: UUID?
+    var activeSoloSegmentId: UUID?
 
     init(id: UUID = UUID(),
          name: String,
@@ -268,8 +270,10 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
          chords: [Chord] = [],
          playingPatterns: [GuitarPattern] = [],
          drumPatterns: [DrumPattern] = [],
+         soloSegments: [SoloSegment] = [],
          activePlayingPatternId: UUID? = nil,
-         activeDrumPatternId: UUID? = nil) {
+         activeDrumPatternId: UUID? = nil,
+         activeSoloSegmentId: UUID? = nil) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
@@ -281,8 +285,10 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
         self.chords = chords
         self.playingPatterns = playingPatterns
         self.drumPatterns = drumPatterns
+        self.soloSegments = soloSegments
         self.activePlayingPatternId = activePlayingPatternId
         self.activeDrumPatternId = activeDrumPatternId
+        self.activeSoloSegmentId = activeSoloSegmentId
     }
     
     static func createNew(name: String = "New Preset") -> Preset {
@@ -337,4 +343,72 @@ enum PlayingMode: String, CaseIterable, Identifiable {
         case .automatic: return "A"
         }
     }
+}
+
+// MARK: - Solo Models
+
+struct SoloSegment: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    var name: String
+    var notes: [SoloNote] = []
+    var lengthInBeats: Double = 4.0  // solo总长度（以拍为单位）
+    
+    init(name: String = "New Solo", lengthInBeats: Double = 4.0) {
+        self.name = name
+        self.lengthInBeats = lengthInBeats
+    }
+}
+
+struct SoloNote: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    var startTime: Double        // 开始时间（以拍为单位，相对于solo开始）
+    var duration: Double         // 持续时间（以拍为单位）
+    var string: Int             // 弦（0-5，从高音弦到低音弦）
+    var fret: Int               // 品位（0为空弦，-1为静音）
+    var velocity: Int = 100     // 力度（0-127）
+    var technique: PlayingTechnique = .normal
+    var articulation: Articulation?
+    
+    init(startTime: Double, duration: Double, string: Int, fret: Int, velocity: Int = 100, technique: PlayingTechnique = .normal) {
+        self.startTime = startTime
+        self.duration = duration
+        self.string = string
+        self.fret = fret
+        self.velocity = velocity
+        self.technique = technique
+    }
+}
+
+enum PlayingTechnique: String, Codable, CaseIterable, Identifiable {
+    case normal = "Normal"
+    case hammer = "Hammer On"
+    case pullOff = "Pull Off" 
+    case slide = "Slide"
+    case bend = "Bend"
+    case vibrato = "Vibrato"
+    case harmonics = "Harmonics"
+    case mute = "Mute"
+    case palmMute = "Palm Mute"
+    
+    var id: Self { self }
+    
+    var symbol: String {
+        switch self {
+        case .normal: return ""
+        case .hammer: return "H"
+        case .pullOff: return "P"
+        case .slide: return "/"
+        case .bend: return "^"
+        case .vibrato: return "~"
+        case .harmonics: return "◇"
+        case .mute: return "X"
+        case .palmMute: return "PM"
+        }
+    }
+}
+
+struct Articulation: Codable, Hashable, Equatable {
+    var bendAmount: Double = 0   // 推弦幅度（半音为单位）
+    var slideTarget: Int?        // 滑音目标品位
+    var vibratoIntensity: Double = 0  // 颤音强度（0-1）
 }

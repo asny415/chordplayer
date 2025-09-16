@@ -108,6 +108,22 @@ class AppData: ObservableObject {
         saveChanges()
     }
     
+    func addSoloSegment(_ segment: SoloSegment) {
+        preset?.soloSegments.append(segment)
+        saveChanges()
+    }
+    
+    func removeSoloSegment(at offsets: IndexSet) {
+        preset?.soloSegments.remove(atOffsets: offsets)
+        saveChanges()
+    }
+    
+    func updateSoloSegment(_ segment: SoloSegment) {
+        guard let index = preset?.soloSegments.firstIndex(where: { $0.id == segment.id }) else { return }
+        preset?.soloSegments[index] = segment
+        saveChanges()
+    }
+    
     func updateChordProgression(_ newProgression: [String]) {
         preset?.chordProgression = newProgression
         saveChanges()
