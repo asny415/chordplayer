@@ -379,8 +379,6 @@ struct SoloNote: Codable, Identifiable, Hashable, Equatable {
 
 enum PlayingTechnique: String, Codable, CaseIterable, Identifiable {
     case normal = "Normal"
-    case hammer = "Hammer On"
-    case pullOff = "Pull Off" 
     case slide = "Slide"
     case bend = "Bend"
     case vibrato = "Vibrato"
@@ -393,8 +391,6 @@ enum PlayingTechnique: String, Codable, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .normal: return ""
-        case .hammer: return "H"
-        case .pullOff: return "P"
         case .slide: return "/"
         case .bend: return "^"
         case .vibrato: return "~"
