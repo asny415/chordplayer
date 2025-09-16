@@ -31,6 +31,7 @@ struct SoloEditorView: View {
         case playNote(note: SoloNote, offTime: Double)
         case slide(from: SoloNote, to: SoloNote, offTime: Double)
         case vibrato(note: SoloNote, offTime: Double)
+        case bend(note: SoloNote, offTime: Double)
     }
 
     var body: some View {
@@ -147,7 +148,10 @@ struct SoloEditorView: View {
             } else if currentNote.technique == .vibrato {
                 actions.append(.vibrato(note: currentNote, offTime: noteOffTime))
 
-            } else { // .normal, .bend, or a .slide at the end of a string
+            } else if currentNote.technique == .bend {
+                actions.append(.bend(note: currentNote, offTime: noteOffTime))
+
+            } else { // .normal, or a .slide at the end of a string
                 actions.append(.playNote(note: currentNote, offTime: noteOffTime))
             }
         }
@@ -230,7 +234,7 @@ struct SoloEditorView: View {
                     let vibratoRateHz = 5.5
                     let vibratoIntensity = note.articulation?.vibratoIntensity ?? 0.5
                     
-                    let maxBendSemitones = 0.4 // Vibrato depth in semitones
+                    let maxBendSemitones = 0.4
                     let pitchBendRangeSemitones = 12.0
                     let maxPitchBendAmount = (maxBendSemitones / pitchBendRangeSemitones) * 8191.0 * vibratoIntensity
 
@@ -251,6 +255,47 @@ struct SoloEditorView: View {
                             let bendTimeMs = playbackStartTimeMs + (bendTimeBeats * beatsToSeconds * 1000.0)
                             
                             let bendID = midiManager.schedulePitchBend(value: UInt16(pitchBendValue), scheduledUptimeMs: bendTimeMs)
+                            eventIDs.append(bendID)
+                        }
+                    }
+                }
+
+                let offID = midiManager.scheduleNoteOff(note: midiNoteNumber, velocity: 0, scheduledUptimeMs: noteOffTimeMs)
+                eventIDs.append(offID)
+                
+                let resetID = midiManager.schedulePitchBend(value: 8192, scheduledUptimeMs: noteOffTimeMs + 1)
+                eventIDs.append(resetID)
+                
+            case .bend(let note, let offTime):
+                guard note.fret >= 0 else { continue }
+                
+                let midiNoteNumber = midiNote(from: note.string, fret: note.fret)
+                let velocity = UInt8(note.velocity)
+                let noteOnTimeMs = playbackStartTimeMs + (note.startTime * beatsToSeconds * 1000.0)
+                let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
+
+                let onID = midiManager.scheduleNoteOn(note: midiNoteNumber, velocity: velocity, scheduledUptimeMs: noteOnTimeMs)
+                eventIDs.append(onID)
+
+                let bendAmountSemitones = note.articulation?.bendAmount ?? 1.0
+                if bendAmountSemitones > 0 {
+                    let bendDurationSeconds = 0.1
+                    let bendDurationBeats = bendDurationSeconds / beatsToSeconds
+                    
+                    let pitchBendRangeSemitones = 12.0
+                    let finalPitchBendValue = 8192 + Int(bendAmountSemitones * (8191.0 / pitchBendRangeSemitones))
+                    
+                    let pitchBendSteps = 10
+
+                    for step in 0...pitchBendSteps {
+                        let t = Double(step) / Double(pitchBendSteps)
+                        let intermediateTimeBeats = note.startTime + (t * bendDurationBeats)
+                        let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
+                        
+                        let bendTimeMs = playbackStartTimeMs + (intermediateTimeBeats * beatsToSeconds * 1000.0)
+                        
+                        if bendTimeMs < noteOffTimeMs {
+                            let bendID = midiManager.schedulePitchBend(value: UInt16(intermediatePitch), scheduledUptimeMs: bendTimeMs)
                             eventIDs.append(bendID)
                         }
                     }
