@@ -4,6 +4,9 @@ import UniformTypeIdentifiers
 // MARK: - Main Editor View
 
 struct AccompanimentEditorView: View {
+    enum Field { case segmentName }
+    @FocusState private var focusedField: Field?
+
     @Binding var segment: AccompanimentSegment
     let isNew: Bool
     let onSave: (AccompanimentSegment) -> Void
@@ -22,6 +25,7 @@ struct AccompanimentEditorView: View {
             AccompanimentToolbar(
                 segmentName: $segment.name,
                 zoomLevel: $zoomLevel,
+                focusedField: $focusedField,
                 onPlay: { chordPlayer.play(segment: segment) },
                 onStop: { chordPlayer.panic() }
             )
@@ -38,6 +42,9 @@ struct AccompanimentEditorView: View {
                     selectedEventId: $selectedEventId
                 )
                 .frame(minWidth: 600)
+                .onTapGesture {
+                    focusedField = nil
+                }
 
                 ResourceLibraryView()
                 .frame(minWidth: 280, idealWidth: 320, maxWidth: 450)
@@ -107,12 +114,14 @@ struct DragData: Codable {
 struct AccompanimentToolbar: View {
     @Binding var segmentName: String
     @Binding var zoomLevel: CGFloat
+    var focusedField: FocusState<AccompanimentEditorView.Field?>.Binding
     let onPlay: () -> Void
     let onStop: () -> Void
 
     var body: some View {
         HStack {
             TextField("Segment Name", text: $segmentName).textFieldStyle(.plain).font(.title.weight(.semibold))
+                .focused(focusedField, equals: .segmentName)
             Spacer()
             Button(action: onPlay) { Image(systemName: "play.fill") }
             Button(action: onStop) { Image(systemName: "stop.fill") }
