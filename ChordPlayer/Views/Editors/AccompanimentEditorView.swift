@@ -17,6 +17,9 @@ struct AccompanimentEditorView: View {
 
     @State private var zoomLevel: CGFloat = 1.0
     @State private var selectedEventId: UUID? // Can be either chord or pattern
+    @State private var isPlaying: Bool = false
+    @State private var playbackEndTask: DispatchWorkItem?
+    @State private var playbackStartTime: TimeInterval? = nil
 
     private var timeSignature: TimeSignature { appData.preset?.timeSignature ?? TimeSignature() }
 
@@ -26,8 +29,17 @@ struct AccompanimentEditorView: View {
                 segmentName: $segment.name,
                 zoomLevel: $zoomLevel,
                 focusedField: $focusedField,
-                onPlay: { chordPlayer.play(segment: segment) },
-                onStop: { chordPlayer.panic() }
+                isPlaying: $isPlaying,
+                measureCount: segment.lengthInMeasures,
+                onTogglePlayback: {
+                    if isPlaying {
+                        stop()
+                    } else {
+                        play()
+                    }
+                },
+                onAddMeasure: addMeasure,
+                onRemoveMeasure: removeMeasure
             )
             .padding()
             .background(Color.black.opacity(0.1))
@@ -39,15 +51,19 @@ struct AccompanimentEditorView: View {
                     segment: $segment,
                     timeSignature: timeSignature,
                     zoomLevel: $zoomLevel,
-                    selectedEventId: $selectedEventId
+                    selectedEventId: $selectedEventId,
+                    playbackStartTime: playbackStartTime
                 )
                 .frame(minWidth: 600)
                 .onTapGesture {
                     focusedField = nil
                 }
 
-                ResourceLibraryView()
-                .frame(minWidth: 280, idealWidth: 320, maxWidth: 450)
+                SidePanelView(
+                    segment: $segment,
+                    selectedEventId: $selectedEventId,
+                    onUpdateEventDuration: updateEventDuration
+                )
             }
 
             Divider()
@@ -93,7 +109,73 @@ struct AccompanimentEditorView: View {
         }
     }
 
-    
+    private func play() {
+        // Cancel any previously scheduled stop task
+        playbackEndTask?.cancel()
+
+        guard let preset = appData.preset else { return }
+        
+        // Reset playhead and start playback
+        playbackStartTime = ProcessInfo.processInfo.systemUptime
+        chordPlayer.play(segment: segment)
+        isPlaying = true
+
+        // Schedule a task to set isPlaying to false when playback finishes
+        let durationInSeconds = Double(segment.lengthInMeasures * preset.timeSignature.beatsPerMeasure) * (60.0 / preset.bpm)
+        
+        let task = DispatchWorkItem {
+            // Check if we are still in a playing state before automatically stopping
+            if self.isPlaying {
+                self.isPlaying = false
+                self.playbackStartTime = nil
+            }
+        }
+        playbackEndTask = task
+        
+        // Add a small buffer to ensure sounds can finish
+        DispatchQueue.main.asyncAfter(deadline: .now() + durationInSeconds + 0.2, execute: task)
+    }
+
+    private func stop() {
+        // Cancel the scheduled stop task
+        playbackEndTask?.cancel()
+        
+        // Stop all sounds and reset state
+        chordPlayer.panic()
+        isPlaying = false
+        playbackStartTime = nil
+    }
+
+    private func updateEventDuration(eventId: UUID, newDuration: Int) {
+        guard newDuration >= 1 else { return }
+        var updatedSegment = segment
+        
+        for i in 0..<updatedSegment.measures.count {
+            if let index = updatedSegment.measures[i].chordEvents.firstIndex(where: { $0.id == eventId }) {
+                updatedSegment.measures[i].chordEvents[index].durationInBeats = newDuration
+                segment = updatedSegment
+                return
+            }
+            if let index = updatedSegment.measures[i].patternEvents.firstIndex(where: { $0.id == eventId }) {
+                updatedSegment.measures[i].patternEvents[index].durationInBeats = newDuration
+                segment = updatedSegment
+                return
+            }
+        }
+    }
+
+    private func addMeasure() {
+        var updatedSegment = segment
+        updatedSegment.updateLength(updatedSegment.lengthInMeasures + 1)
+        segment = updatedSegment
+    }
+
+    private func removeMeasure() {
+        guard segment.lengthInMeasures > 1 else { return }
+        var updatedSegment = segment
+        updatedSegment.updateLength(updatedSegment.lengthInMeasures - 1)
+        segment = updatedSegment
+    }
 }
 
 enum DragSource: String, Codable { case newResource, existingEvent }
@@ -115,16 +197,30 @@ struct AccompanimentToolbar: View {
     @Binding var segmentName: String
     @Binding var zoomLevel: CGFloat
     var focusedField: FocusState<AccompanimentEditorView.Field?>.Binding
-    let onPlay: () -> Void
-    let onStop: () -> Void
+    @Binding var isPlaying: Bool
+    let measureCount: Int
+    let onTogglePlayback: () -> Void
+    let onAddMeasure: () -> Void
+    let onRemoveMeasure: () -> Void
 
     var body: some View {
         HStack {
             TextField("Segment Name", text: $segmentName).textFieldStyle(.plain).font(.title.weight(.semibold))
                 .focused(focusedField, equals: .segmentName)
+            
+            Text("\(measureCount) Measures").font(.callout).foregroundColor(.secondary)
+            Button(action: onRemoveMeasure) {
+                Image(systemName: "minus.square")
+            }.disabled(measureCount <= 1)
+            Button(action: onAddMeasure) {
+                Image(systemName: "plus.square")
+            }
+            
             Spacer()
-            Button(action: onPlay) { Image(systemName: "play.fill") }
-            Button(action: onStop) { Image(systemName: "stop.fill") }
+            
+            Button(action: onTogglePlayback) {
+                Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+            }
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass")
                 Slider(value: $zoomLevel, in: 0.5...4.0).frame(width: 100)
@@ -134,33 +230,114 @@ struct AccompanimentToolbar: View {
 }
 
 // MARK: - Timeline UI
+struct PlayheadView: View {
+    let position: CGFloat
+    let height: CGFloat
+    
+    var body: some View {
+        Rectangle()
+            .fill(Color.red)
+            .frame(width: 2)
+            .offset(x: position - 1) // Center the 2pt line on the position
+            .frame(height: height)
+    }
+}
+
+struct TrackHeadersView: View {
+    let trackHeight: CGFloat
+    let headerHeight: CGFloat
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Spacer to align with the timeline's measure number header
+            Rectangle()
+                .fill(Color(NSColor.windowBackgroundColor))
+                .frame(height: headerHeight)
+                .border(Color.secondary.opacity(0.5), width: 0.5)
+
+            // Header for Chord Track
+            ZStack {
+                Rectangle().fill(Color.blue.opacity(0.05))
+                Text("Chords")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+            }
+            .frame(height: trackHeight)
+            .border(Color.secondary.opacity(0.5), width: 0.5)
+
+            // Header for Pattern Track
+            ZStack {
+                Rectangle().fill(Color.green.opacity(0.05))
+                Text("Patterns")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+            }
+            .frame(height: trackHeight)
+            .border(Color.secondary.opacity(0.5), width: 0.5)
+        }
+        .frame(width: 90)
+    }
+}
+
 struct TimelineContainerView: View {
     @Binding var segment: AccompanimentSegment
     let timeSignature: TimeSignature
     @Binding var zoomLevel: CGFloat
     @Binding var selectedEventId: UUID?
+    let playbackStartTime: TimeInterval?
+    
+    @EnvironmentObject var appData: AppData
 
     private let beatWidth: CGFloat = 60
-    private let trackHeight: CGFloat = 50
+    private let trackHeight: CGFloat = 60
     private let headerHeight: CGFloat = 25
 
     private var totalBeats: Int { segment.lengthInMeasures * timeSignature.beatsPerMeasure }
     private var totalWidth: CGFloat { CGFloat(totalBeats) * beatWidth * zoomLevel }
+    private var secondsPerBeat: Double { 60.0 / (appData.preset?.bpm ?? 120.0) }
 
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
-            ZStack(alignment: .topLeading) {
-                TimelineGridView(totalBeats: totalBeats, beatsPerMeasure: timeSignature.beatsPerMeasure, beatWidth: beatWidth, height: trackHeight * 2 + headerHeight, zoom: zoomLevel)
-                TimelineHeaderView(totalMeasures: segment.lengthInMeasures, beatsPerMeasure: timeSignature.beatsPerMeasure, beatWidth: beatWidth, height: headerHeight, zoom: zoomLevel)
+        TimelineView(.animation) { context in
+            let playheadInBeats = calculatePlayheadPosition(context: context)
+            
+            HStack(spacing: 0) {
+                TrackHeadersView(trackHeight: trackHeight, headerHeight: headerHeight)
+                
+                ScrollView([.horizontal, .vertical]) {
+                    ZStack(alignment: .topLeading) {
+                        TimelineGridView(totalBeats: totalBeats, beatsPerMeasure: timeSignature.beatsPerMeasure, beatWidth: beatWidth, height: trackHeight * 2 + headerHeight, zoom: zoomLevel)
+                        TimelineHeaderView(totalMeasures: segment.lengthInMeasures, beatsPerMeasure: timeSignature.beatsPerMeasure, beatWidth: beatWidth, height: headerHeight, zoom: zoomLevel)
 
-                VStack(alignment: .leading, spacing: 0) {
-                    TrackView(type: .chord, segment: $segment, timeSignature: timeSignature, height: trackHeight, beatWidth: beatWidth, zoom: zoomLevel, selectedEventId: $selectedEventId)
-                    TrackView(type: .pattern, segment: $segment, timeSignature: timeSignature, height: trackHeight, beatWidth: beatWidth, zoom: zoomLevel, selectedEventId: $selectedEventId)
+                        VStack(alignment: .leading, spacing: 0) {
+                            TrackView(type: .chord, segment: $segment, timeSignature: timeSignature, height: trackHeight, beatWidth: beatWidth, zoom: zoomLevel, selectedEventId: $selectedEventId)
+                            TrackView(type: .pattern, segment: $segment, timeSignature: timeSignature, height: trackHeight, beatWidth: beatWidth, zoom: zoomLevel, selectedEventId: $selectedEventId)
+                        }
+                        .padding(.top, headerHeight)
+                        
+                        if let playheadInBeats = playheadInBeats {
+                            PlayheadView(
+                                position: CGFloat(playheadInBeats) * beatWidth * zoomLevel,
+                                height: trackHeight * 2 + headerHeight
+                            )
+                        }
+                    }
+                    .frame(width: totalWidth)
                 }
-                .padding(.top, headerHeight)
             }
-            .frame(width: totalWidth)
         }
+    }
+    
+    private func calculatePlayheadPosition(context: TimelineView.Context) -> Double? {
+        guard let playbackStartTime = playbackStartTime else { return nil }
+        
+        let now = ProcessInfo.processInfo.systemUptime
+        let elapsedTime = now - playbackStartTime
+        let currentBeat = elapsedTime / secondsPerBeat
+        
+        if currentBeat > Double(totalBeats) {
+            return nil
+        }
+        return currentBeat
     }
 }
 
@@ -219,8 +396,17 @@ struct TimelineEventView: View {
                 RoundedRectangle(cornerRadius: 4).stroke(Color.yellow, lineWidth: 2)
             }
             
-            Text(name).font(.caption).padding(.horizontal, 4).foregroundColor(.white)
+            if type == .chord, let chord = appData.preset?.chords.first(where: { $0.id == event.resourceId }) {
+                HStack {
+                    Text(name).font(.callout).fontWeight(.semibold)
+                    Spacer()
+                    ChordDiagramView(chord: chord, color: .white.opacity(0.8))
+                }.padding(.horizontal, 4)
+            } else {
+                Text(name).font(.caption).padding(.horizontal, 4)
+            }
         }
+        .foregroundColor(.white)
         .onDrag {
             let dragData = DragData(
                 source: .existingEvent,
@@ -235,6 +421,80 @@ struct TimelineEventView: View {
         }
     }
 }
+
+// MARK: - Inspector and Side Panel
+
+struct InspectorView: View {
+    @Binding var segment: AccompanimentSegment
+    let selectedEventId: UUID
+    let onUpdateDuration: (Int) -> Void
+    
+    // Find the event and its type
+    private var eventInfo: (event: TimelineEvent, type: EventType)? {
+        for measure in segment.measures {
+            if let event = measure.chordEvents.first(where: { $0.id == selectedEventId }) {
+                return (event, .chord)
+            }
+            if let event = measure.patternEvents.first(where: { $0.id == selectedEventId }) {
+                return (event, .pattern)
+            }
+        }
+        return nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let info = eventInfo {
+                Text("Inspector").font(.title2)
+                Text("Event ID: \(info.event.id.uuidString.prefix(8))")
+                Text("Type: \(info.type.rawValue)")
+                
+                Divider()
+                
+                VStack(alignment: .leading) {
+                    Text("Start Beat").font(.headline)
+                    Text("\(info.event.startBeat)")
+                }
+                
+                VStack(alignment: .leading) {
+                    Text("Duration (beats)").font(.headline)
+                    Stepper("\(info.event.durationInBeats)",
+                            onIncrement: { onUpdateDuration(info.event.durationInBeats + 1) },
+                            onDecrement: { onUpdateDuration(info.event.durationInBeats - 1) })
+                }
+
+                Spacer()
+            } else {
+                Text("No event selected or found.")
+            }
+        }
+        .padding()
+    }
+}
+
+struct SidePanelView: View {
+    @Binding var segment: AccompanimentSegment
+    @Binding var selectedEventId: UUID?
+    let onUpdateEventDuration: (UUID, Int) -> Void
+    
+    var body: some View {
+        VStack {
+            if let eventId = selectedEventId {
+                InspectorView(
+                    segment: $segment,
+                    selectedEventId: eventId,
+                    onUpdateDuration: { newDuration in
+                        onUpdateEventDuration(eventId, newDuration)
+                    }
+                )
+            } else {
+                ResourceLibraryView()
+            }
+        }
+        .frame(minWidth: 280, idealWidth: 320, maxWidth: 450)
+    }
+}
+
 
 // MARK: - Resource Library & Buttons
 struct ResourceLibraryView: View {
@@ -381,8 +641,8 @@ struct TimelineGridView: View {
                 let x = CGFloat(beat) * beatWidth * zoom
                 let isMeasureLine = beat % beatsPerMeasure == 0
                 context.stroke(Path { $0.move(to: .init(x: x, y: 0)); $0.addLine(to: .init(x: x, y: height)) }, 
-                               with: .color(isMeasureLine ? .primary.opacity(0.5) : .secondary.opacity(0.3)), 
-                               lineWidth: isMeasureLine ? 1.0 : 0.5)
+                               with: .color(isMeasureLine ? .primary.opacity(0.6) : .secondary.opacity(0.4)), 
+                               lineWidth: isMeasureLine ? 1.5 : 0.5)
             }
         }
     }
