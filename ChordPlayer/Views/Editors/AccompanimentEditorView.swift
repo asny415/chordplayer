@@ -327,7 +327,7 @@ struct TimelineContainerView: View {
         }
     }
     
-    private func calculatePlayheadPosition(context: TimelineView.Context) -> Double? {
+    private func calculatePlayheadPosition(context: TimelineViewDefaultContext) -> Double? {
         guard let playbackStartTime = playbackStartTime else { return nil }
         
         let now = ProcessInfo.processInfo.systemUptime
