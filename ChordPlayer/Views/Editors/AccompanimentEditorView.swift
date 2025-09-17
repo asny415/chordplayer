@@ -54,17 +54,53 @@ struct AccompanimentEditorView: View {
         }
         .frame(minWidth: 1000, idealWidth: 1400, minHeight: 600, idealHeight: 800)
         .background(Color(NSColor.windowBackgroundColor))
+        .background(
+            Button("", action: deleteSelectedEvent)
+                .keyboardShortcut(.delete, modifiers: [])
+                .opacity(0)
+        )
     }
+
+    private func deleteSelectedEvent() {
+        guard let selectedId = selectedEventId else { return }
+
+        var updatedSegment = segment
+        var eventFoundAndRemoved = false
+
+        for i in 0..<updatedSegment.measures.count {
+            if let index = updatedSegment.measures[i].chordEvents.firstIndex(where: { $0.id == selectedId }) {
+                updatedSegment.measures[i].chordEvents.remove(at: index)
+                eventFoundAndRemoved = true
+                break
+            }
+            if let index = updatedSegment.measures[i].patternEvents.firstIndex(where: { $0.id == selectedId }) {
+                updatedSegment.measures[i].patternEvents.remove(at: index)
+                eventFoundAndRemoved = true
+                break
+            }
+        }
+
+        if eventFoundAndRemoved {
+            segment = updatedSegment
+            selectedEventId = nil
+        }
+    }
+
+    
 }
+
+enum DragSource: String, Codable { case newResource, existingEvent }
 
 // MARK: - Drag & Drop Data
 enum EventType: String, Codable { case chord, pattern }
 struct DragData: Codable {
-    let type: EventType
-    let resourceId: UUID
-    let defaultDurationInBeats: Int
+    let source: DragSource
+    let type: EventType // chord or pattern
+    let resourceId: UUID // For newResource, chord/pattern ID. For existingEvent, also the chord/pattern ID.
+    let eventId: UUID?   // For existingEvent, the ID of the event being moved.
+    let durationInBeats: Int
     
-    static let typeIdentifier = "public.guitastudio.drag-data"
+    static let typeIdentifier = "public.data"
 }
 
 // MARK: - Toolbar
@@ -145,7 +181,7 @@ struct TrackView: View {
             }
         }
         .frame(height: height)
-        .onDrop(of: [DragData.typeIdentifier], delegate: DropHandler(segment: $segment, trackType: type, timeSignature: timeSignature, beatWidth: beatWidth, zoom: zoom))
+        .onDrop(of: [DragData.typeIdentifier], delegate: DropHandler(segment: $segment, selectedEventId: $selectedEventId, trackType: type, timeSignature: timeSignature, beatWidth: beatWidth, zoom: zoom))
     }
 }
 
@@ -176,6 +212,18 @@ struct TimelineEventView: View {
             
             Text(name).font(.caption).padding(.horizontal, 4).foregroundColor(.white)
         }
+        .onDrag {
+            let dragData = DragData(
+                source: .existingEvent,
+                type: self.type,
+                resourceId: event.resourceId,
+                eventId: event.id,
+                durationInBeats: event.durationInBeats
+            )
+            let provider = NSItemProvider()
+            provider.registerCodable(dragData)
+            return provider
+        }
     }
 }
 
@@ -193,7 +241,7 @@ struct ResourceLibraryView: View {
                             ForEach(chords) { chord in
                                 ResourceChordButton(chord: chord)
                                     .onDrag {
-                                        let dragData = DragData(type: .chord, resourceId: chord.id, defaultDurationInBeats: 4)
+                                        let dragData = DragData(source: .newResource, type: .chord, resourceId: chord.id, eventId: nil, durationInBeats: 4)
                                         let provider = NSItemProvider()
                                         provider.registerCodable(dragData)
                                         return provider
@@ -211,7 +259,7 @@ struct ResourceLibraryView: View {
                                 ResourcePatternButton(pattern: pattern)
                                     .onDrag {
                                         let beats = pattern.length / (pattern.resolution == .sixteenth ? 4 : 2)
-                                        let dragData = DragData(type: .pattern, resourceId: pattern.id, defaultDurationInBeats: beats > 0 ? beats : 1)
+                                        let dragData = DragData(source: .newResource, type: .pattern, resourceId: pattern.id, eventId: nil, durationInBeats: beats > 0 ? beats : 1)
                                         let provider = NSItemProvider()
                                         provider.registerCodable(dragData)
                                         return provider
@@ -250,6 +298,7 @@ struct ResourcePatternButton: View {
 
 struct DropHandler: DropDelegate {
     @Binding var segment: AccompanimentSegment
+    @Binding var selectedEventId: UUID?
     let trackType: EventType
     let timeSignature: TimeSignature
     let beatWidth: CGFloat
@@ -260,23 +309,54 @@ struct DropHandler: DropDelegate {
         
         _ = provider.loadDataRepresentation(forTypeIdentifier: DragData.typeIdentifier) { data, error in
             guard let data = data, let dragData = try? JSONDecoder().decode(DragData.self, from: data) else { return }
-            guard dragData.type == trackType else { return }
+            
+            // A drop is only valid on its own track type
+            guard dragData.type == self.trackType else { return }
 
             DispatchQueue.main.async {
                 let dropLocationX = info.location.x
-                let beat = Int(round(dropLocationX / (beatWidth * zoom)))
-                
+                let beat = Int(floor(dropLocationX / (beatWidth * zoom)))
                 let measureIndex = beat / timeSignature.beatsPerMeasure
                 let startBeatInMeasure = beat % timeSignature.beatsPerMeasure
                 
                 guard segment.measures.indices.contains(measureIndex) else { return }
                 
-                let newEvent = TimelineEvent(resourceId: dragData.resourceId, startBeat: startBeatInMeasure, durationInBeats: dragData.defaultDurationInBeats)
+                var updatedSegment = segment
+                let eventToDropId = UUID()
+
+                // Step 1: Remove the original event if this is a move operation
+                if dragData.source == .existingEvent, let existingEventId = dragData.eventId {
+                    for i in 0..<updatedSegment.measures.count {
+                        updatedSegment.measures[i].chordEvents.removeAll(where: { $0.id == existingEventId })
+                        updatedSegment.measures[i].patternEvents.removeAll(where: { $0.id == existingEventId })
+                    }
+                }
                 
-                if trackType == .chord {
-                    segment.measures[measureIndex].chordEvents.append(newEvent)
+                // Step 2: Create the new event instance to be placed
+                let newEvent = TimelineEvent(
+                    id: eventToDropId,
+                    resourceId: dragData.resourceId,
+                    startBeat: startBeatInMeasure,
+                    durationInBeats: dragData.durationInBeats
+                )
+
+                // Step 3: Add the new event to the target location
+                if self.trackType == .chord {
+                    // Prevent overlap
+                    if !updatedSegment.measures[measureIndex].chordEvents.contains(where: { $0.startBeat == newEvent.startBeat }) {
+                        updatedSegment.measures[measureIndex].chordEvents.append(newEvent)
+                    }
                 } else {
-                    segment.measures[measureIndex].patternEvents.append(newEvent)
+                    // Prevent overlap
+                    if !updatedSegment.measures[measureIndex].patternEvents.contains(where: { $0.startBeat == newEvent.startBeat }) {
+                        updatedSegment.measures[measureIndex].patternEvents.append(newEvent)
+                    }
+                }
+                
+                // Step 4: Assign back to binding and update selection
+                if segment != updatedSegment {
+                    segment = updatedSegment
+                    selectedEventId = eventToDropId
                 }
             }
         }
