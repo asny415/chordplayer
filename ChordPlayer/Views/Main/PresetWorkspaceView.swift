@@ -29,6 +29,10 @@ struct PresetWorkspaceView: View {
                 GroupBox {
                     SoloSegmentsView(segmentToEdit: $segmentToEdit)
                 }
+
+                GroupBox {
+                    AccompanimentSegmentsView()
+                }
                 
             }
             .padding()

@@ -123,7 +123,35 @@ class AppData: ObservableObject {
         preset?.soloSegments[index] = segment
         saveChanges()
     }
-    
+
+    // MARK: - Accompaniment Segment Management
+
+    func addAccompanimentSegment(_ segment: AccompanimentSegment) {
+        preset?.accompanimentSegments.append(segment)
+        saveChanges()
+    }
+
+    func removeAccompanimentSegment(at offsets: IndexSet) {
+        preset?.accompanimentSegments.remove(atOffsets: offsets)
+        saveChanges()
+    }
+
+    func updateAccompanimentSegment(_ segment: AccompanimentSegment) {
+        guard let index = preset?.accompanimentSegments.firstIndex(where: { $0.id == segment.id }) else { return }
+        preset?.accompanimentSegments[index] = segment
+        saveChanges()
+    }
+
+    func getChord(for id: UUID?) -> Chord? {
+        guard let id = id else { return nil }
+        return preset?.chords.first(where: { $0.id == id })
+    }
+
+    func getPlayingPattern(for id: UUID?) -> GuitarPattern? {
+        guard let id = id else { return nil }
+        return preset?.playingPatterns.first(where: { $0.id == id })
+    }
+
     func updateChordProgression(_ newProgression: [String]) {
         preset?.chordProgression = newProgression
         saveChanges()

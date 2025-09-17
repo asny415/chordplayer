@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-class ChordPlayer: ObservableObject, Quantizable {
+class ChordPlayer: ObservableObject {
     private let schedulingQueue = DispatchQueue(label: "com.guitastudio.guitarScheduler", qos: .userInitiated)
     private var midiManager: MidiManager
     var appData: AppData
@@ -17,24 +17,93 @@ class ChordPlayer: ObservableObject, Quantizable {
         self.midiManager = midiManager
         self.appData = appData
         self.drumPlayer = drumPlayer
+    }
 
-        drumPlayer.beatSubject
-            .sink { [weak self] beat in
-                // We can use this to trigger events on the beat
+    // MARK: - Public Playback Methods
+
+    func play(segment: AccompanimentSegment) {
+        guard let preset = appData.preset else { return }
+        panic() // Stop any previous playback
+
+        let secondsPerBeat = 60.0 / preset.bpm
+        let playbackStartTime = ProcessInfo.processInfo.systemUptime
+
+        // Create a flat, time-sorted list of all chord events with their absolute start times.
+        let absoluteChordEvents = segment.measures.enumerated().flatMap { (measureIndex, measure) -> [TimelineEvent] in
+            measure.chordEvents.map { event in
+                var absoluteEvent = event
+                absoluteEvent.startBeat += measureIndex * preset.timeSignature.beatsPerMeasure
+                return absoluteEvent
             }
-            .store(in: &cancellables)
+        }.sorted { $0.startBeat < $1.startBeat }
+
+        // Iterate through each measure and its pattern events.
+        for (measureIndex, measure) in segment.measures.enumerated() {
+            for patternEvent in measure.patternEvents {
+                let absolutePatternStartBeat = measureIndex * preset.timeSignature.beatsPerMeasure + patternEvent.startBeat
+
+                // Find the chord that should be active for this pattern event.
+                // It's the last chord event that starts at or before the pattern event.
+                let activeChordEvent = absoluteChordEvents.last { $0.startBeat <= absolutePatternStartBeat }
+
+                guard let chordEvent = activeChordEvent else { continue }
+                
+                // Find the actual Chord and GuitarPattern objects from the preset library.
+                guard let chordToPlay = preset.chords.first(where: { $0.id == chordEvent.resourceId }),
+                      let patternToPlay = preset.playingPatterns.first(where: { $0.id == patternEvent.resourceId }) else {
+                    continue
+                }
+
+                let scheduledUptime = playbackStartTime + (Double(absolutePatternStartBeat) * secondsPerBeat)
+                let totalDuration = Double(patternEvent.durationInBeats) * secondsPerBeat
+
+                schedulePattern(
+                    chord: chordToPlay,
+                    pattern: patternToPlay,
+                    preset: preset,
+                    scheduledUptime: scheduledUptime,
+                    totalDuration: totalDuration,
+                    dynamics: measure.dynamics
+                )
+            }
+        }
     }
 
     func previewPattern(_ pattern: GuitarPattern) {
+        guard let preset = appData.preset else { return }
         panic()
         let previewChord = Chord(name: "C", frets: [-1, 3, 2, 0, 1, 0], fingers: [])
-        let previewPreset = Preset.createNew(name: "PreviewPreset")
-        playChord(chord: previewChord, pattern: pattern, preset: previewPreset, quantization: .none)
+        
+        // Calculate a sensible preview duration based on pattern properties
+        let wholeNoteSeconds = (60.0 / Double(preset.bpm)) * 4.0
+        let stepsPerWholeNote = pattern.resolution == .sixteenth ? 16.0 : 8.0
+        let singleStepDuration = wholeNoteSeconds / stepsPerWholeNote
+        let previewDuration = singleStepDuration * Double(pattern.length)
+
+        schedulePattern(
+            chord: previewChord, 
+            pattern: pattern, 
+            preset: preset, 
+            scheduledUptime: ProcessInfo.processInfo.systemUptime,
+            totalDuration: previewDuration, 
+            dynamics: .medium
+        )
     }
 
-    func playChord(chord: Chord, pattern: GuitarPattern, preset: Preset, quantization: QuantizationMode, velocity: UInt8 = 100, duration: TimeInterval = 0.5) {
-        let schedulingStartUptimeMs = nextQuantizationTime(for: quantization)
-        let delay = (schedulingStartUptimeMs - ProcessInfo.processInfo.systemUptime * 1000.0) / 1000.0
+    func panic() {
+        notesLock.lock()
+        defer { notesLock.unlock() }
+
+        midiManager.sendPanic()
+        midiManager.cancelAllPendingScheduledEvents()
+        playingNotes.removeAll()
+        stringNotes.removeAll()
+    }
+
+    // MARK: - Scheduling Logic
+
+    func schedulePattern(chord: Chord, pattern: GuitarPattern, preset: Preset, scheduledUptime: TimeInterval, totalDuration: TimeInterval, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100) {
+        let delay = scheduledUptime - ProcessInfo.processInfo.systemUptime
 
         schedulingQueue.asyncAfter(deadline: .now() + (delay > 0 ? delay : 0)) { [weak self] in
             guard let self = self else { return }
@@ -49,9 +118,8 @@ class ChordPlayer: ObservableObject, Quantizable {
                 }
             }
 
-            let wholeNoteSeconds = (60.0 / Double(preset.bpm)) * 4.0
-            let stepsPerWholeNote = pattern.resolution == .sixteenth ? 16.0 : 8.0
-            let singleStepDurationSeconds = wholeNoteSeconds / stepsPerWholeNote
+            // If the pattern is empty, don't try to divide by zero
+            let singleStepDurationSeconds = pattern.steps.isEmpty ? totalDuration : (totalDuration / Double(pattern.steps.count))
 
             DispatchQueue.main.async {
                 self.updateCurrentlyPlayingUI(chordName: chord.name)
@@ -61,17 +129,13 @@ class ChordPlayer: ObservableObject, Quantizable {
             for (stepIndex, step) in pattern.steps.enumerated() {
                 guard !step.activeNotes.isEmpty else { continue }
 
-                let stepStartTimeOffsetMs = Double(stepIndex) * singleStepDurationSeconds * 1000.0
+                let stepStartTimeOffset = Double(stepIndex) * singleStepDurationSeconds
 
-                // NEW LOGIC: Check for fret overrides when determining active notes
                 let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
                     var finalFret: Int
                     if let overrideFret = step.fretOverrides[stringIndex] {
                         finalFret = overrideFret
                     } else {
-                        // Fallback to the chord's fret. The logic here seems to reverse the frets array.
-                        // We will maintain that pattern to avoid breaking other logic.
-                        let fretsForPlayback = Array(chord.frets.reversed())
                         guard stringIndex < fretsForPlayback.count else { return nil }
                         finalFret = fretsForPlayback[stringIndex]
                     }
@@ -83,7 +147,8 @@ class ChordPlayer: ObservableObject, Quantizable {
 
                 guard !activeNotesInStep.isEmpty else { continue }
 
-                let adaptiveVelocity = self.calculateAdaptiveVelocity(baseVelocity: velocity, noteCount: activeNotesInStep.count)
+                let velocityWithDynamics = UInt8(max(1, min(127, Double(baseVelocity) * dynamics.velocityMultiplier)))
+                let adaptiveVelocity = self.calculateAdaptiveVelocity(baseVelocity: velocityWithDynamics, noteCount: activeNotesInStep.count)
 
                 switch step.type {
                 case .rest:
@@ -92,34 +157,26 @@ class ChordPlayer: ObservableObject, Quantizable {
                     let arpeggioStepDuration = singleStepDurationSeconds / Double(activeNotesInStep.count)
                     let sortedNotes = activeNotesInStep.sorted { $0.stringIndex > $1.stringIndex }
                     for (noteIndex, noteItem) in sortedNotes.enumerated() {
-                        let noteStartTimeOffsetMs = Double(noteIndex) * arpeggioStepDuration * 1000.0
-                        self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: velocity, startTimeMs: schedulingStartUptimeMs + stepStartTimeOffsetMs + noteStartTimeOffsetMs, durationSeconds: duration)
+                        let noteStartTimeOffset = Double(noteIndex) * arpeggioStepDuration
+                        self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: velocityWithDynamics, scheduledUptime: scheduledUptime + stepStartTimeOffset + noteStartTimeOffset, durationSeconds: totalDuration)
                     }
                 case .strum:
                     let strumDelay = self.strumDelayInSeconds(for: step.strumSpeed)
                     let sortedNotes = activeNotesInStep.sorted { step.strumDirection == .down ? $0.stringIndex > $1.stringIndex : $0.stringIndex < $1.stringIndex }
                     for (noteIndex, noteItem) in sortedNotes.enumerated() {
-                        let noteStartTimeOffsetMs = Double(noteIndex) * strumDelay * 1000.0
-                        self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: adaptiveVelocity, startTimeMs: schedulingStartUptimeMs + stepStartTimeOffsetMs + noteStartTimeOffsetMs, durationSeconds: duration)
+                        let noteStartTimeOffset = Double(noteIndex) * strumDelay
+                        self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: adaptiveVelocity, scheduledUptime: scheduledUptime + stepStartTimeOffset + noteStartTimeOffset, durationSeconds: totalDuration)
                     }
                 }
             }
         }
     }
     
-    
-
-    private func strumDelayInSeconds(for speed: StrumSpeed) -> TimeInterval {
-        switch speed {
-        case .fast: return 0.01
-        case .medium: return 0.025
-        case .slow: return 0.05
-        }
-    }
-
-    private func scheduleNote(note: UInt8, stringIndex: Int, velocity: UInt8, startTimeMs: Double, durationSeconds: TimeInterval) {
+    private func scheduleNote(note: UInt8, stringIndex: Int, velocity: UInt8, scheduledUptime: TimeInterval, durationSeconds: TimeInterval) {
         notesLock.lock()
         defer { notesLock.unlock() }
+
+        let scheduledUptimeMs = scheduledUptime * 1000.0
 
         if let previousNote = self.stringNotes[stringIndex] {
             if let scheduledOffId = self.playingNotes[previousNote] {
@@ -129,10 +186,10 @@ class ChordPlayer: ObservableObject, Quantizable {
             self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: UInt8(appData.chordMidiChannel - 1))
         }
 
-        self.midiManager.scheduleNoteOn(note: note, velocity: velocity, channel: UInt8(appData.chordMidiChannel - 1), scheduledUptimeMs: startTimeMs)
+        self.midiManager.scheduleNoteOn(note: note, velocity: velocity, channel: UInt8(appData.chordMidiChannel - 1), scheduledUptimeMs: scheduledUptimeMs)
         self.stringNotes[stringIndex] = note
 
-        let scheduledNoteOffUptimeMs = startTimeMs + (durationSeconds * 1000.0)
+        let scheduledNoteOffUptimeMs = scheduledUptimeMs + (durationSeconds * 1000.0)
         let offId = self.midiManager.scheduleNoteOff(note: note, velocity: 0, channel: UInt8(appData.chordMidiChannel - 1), scheduledUptimeMs: scheduledNoteOffUptimeMs)
         
         self.playingNotes[note] = offId
@@ -160,14 +217,12 @@ class ChordPlayer: ObservableObject, Quantizable {
         }
     }
 
-    func panic() {
-        notesLock.lock()
-        defer { notesLock.unlock() }
-
-        midiManager.sendPanic()
-        midiManager.cancelAllPendingScheduledEvents()
-        playingNotes.removeAll()
-        stringNotes.removeAll()
+    private func strumDelayInSeconds(for speed: StrumSpeed) -> TimeInterval {
+        switch speed {
+        case .fast: return 0.01
+        case .medium: return 0.025
+        case .slow: return 0.05
+        }
     }
     
     private func calculateAdaptiveVelocity(baseVelocity: UInt8, noteCount: Int) -> UInt8 {

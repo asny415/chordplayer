@@ -255,11 +255,13 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
     var playingPatterns: [GuitarPattern]
     var drumPatterns: [DrumPattern]
     var soloSegments: [SoloSegment] = []
-    
+    var accompanimentSegments: [AccompanimentSegment] = []
+
     // Currently active patterns
     var activePlayingPatternId: UUID?
     var activeDrumPatternId: UUID?
     var activeSoloSegmentId: UUID?
+    var activeAccompanimentSegmentId: UUID?
 
     init(id: UUID = UUID(),
          name: String,
@@ -273,9 +275,11 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
          playingPatterns: [GuitarPattern] = [],
          drumPatterns: [DrumPattern] = [],
          soloSegments: [SoloSegment] = [],
+         accompanimentSegments: [AccompanimentSegment] = [],
          activePlayingPatternId: UUID? = nil,
          activeDrumPatternId: UUID? = nil,
-         activeSoloSegmentId: UUID? = nil) {
+         activeSoloSegmentId: UUID? = nil,
+         activeAccompanimentSegmentId: UUID? = nil) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
@@ -288,9 +292,11 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
         self.playingPatterns = playingPatterns
         self.drumPatterns = drumPatterns
         self.soloSegments = soloSegments
+        self.accompanimentSegments = accompanimentSegments
         self.activePlayingPatternId = activePlayingPatternId
         self.activeDrumPatternId = activeDrumPatternId
         self.activeSoloSegmentId = activeSoloSegmentId
+        self.activeAccompanimentSegmentId = activeAccompanimentSegmentId
     }
     
     static func createNew(name: String = "New Preset") -> Preset {
@@ -411,3 +417,106 @@ struct Articulation: Codable, Hashable, Equatable {
     var slideTarget: Int?        // 滑音目标品位
     var vibratoIntensity: Double = 0  // 颤音强度（0-1）
 }
+
+// MARK: - Accompaniment Models
+
+/// Represents a single, resizable event on the timeline for a chord or a pattern.
+struct TimelineEvent: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    /// The ID of the `Chord` or `GuitarPattern` this event refers to.
+    var resourceId: UUID
+    /// The beat on which this event starts within its measure.
+    var startBeat: Int
+    /// The duration of this event in beats.
+    var durationInBeats: Int
+}
+
+/// A measure in an accompaniment segment, containing two tracks of timeline events.
+struct AccompanimentMeasure: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    var chordEvents: [TimelineEvent] = []
+    var patternEvents: [TimelineEvent] = []
+    var dynamics: MeasureDynamics = .medium
+
+    init() {}
+}
+
+/// A segment of accompaniment, composed of multiple measures.
+struct AccompanimentSegment: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    var name: String
+    var lengthInMeasures: Int
+    var measures: [AccompanimentMeasure]
+
+    init(name: String = "New Accompaniment", lengthInMeasures: Int = 4) {
+        self.name = name
+        self.lengthInMeasures = lengthInMeasures
+        self.measures = Array(repeating: AccompanimentMeasure(), count: lengthInMeasures)
+    }
+
+    mutating func updateLength(_ newLength: Int) {
+        guard newLength != lengthInMeasures else { return }
+        lengthInMeasures = newLength
+
+        if newLength > measures.count {
+            measures.append(contentsOf: Array(repeating: AccompanimentMeasure(), count: newLength - measures.count))
+        } else if newLength < measures.count {
+            measures = Array(measures.prefix(newLength))
+        }
+    }
+
+    func generateAutomaticName(using preset: Preset) -> String {
+        let allChordEvents = measures.flatMap { $0.chordEvents }.sorted { $0.startBeat < $1.startBeat }
+        
+        let chordNames: [String] = allChordEvents.compactMap { event in
+            preset.chords.first { $0.id == event.resourceId }?.name
+        }
+
+        let uniqueChords = chordNames.removingDuplicates().prefix(4)
+        let progression = uniqueChords.joined(separator: "→")
+
+        if progression.isEmpty {
+            return name
+        } else {
+            return "\(name) (\(progression))"
+        }
+    }
+}
+
+// Dynamics enum remains the same
+enum MeasureDynamics: String, Codable, CaseIterable, CustomStringConvertible, Identifiable {
+    case soft = "Soft"
+    case medium = "Medium"
+    case loud = "Loud"
+
+    var id: Self { self }
+    var description: String { rawValue }
+
+    var velocityMultiplier: Double {
+        switch self {
+        case .soft: return 0.7
+        case .medium: return 1.0
+        case .loud: return 1.3
+        }
+    }
+
+    var displaySymbol: String {
+        switch self {
+        case .soft: return "p"
+        case .medium: return "mf"
+        case .loud: return "f"
+        }
+    }
+}
+
+
+// Helper extension to get unique elements while preserving order
+extension Array where Element: Hashable {
+    func removingDuplicates() -> [Element] {
+        var addedDict = [Element: Bool]()
+        return filter {
+            addedDict.updateValue(true, forKey: $0) == nil
+        }
+    }
+}
+

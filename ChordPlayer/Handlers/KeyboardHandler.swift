@@ -84,11 +84,19 @@ class KeyboardHandler: ObservableObject {
             return
         }
         
-        chordPlayer.playChord(
+        // Calculate a sensible duration for the pattern based on its properties
+        let wholeNoteSeconds = (60.0 / Double(preset.bpm)) * 4.0
+        let stepsPerWholeNote = patternToPlay.resolution == .sixteenth ? 16.0 : 8.0
+        let singleStepDuration = wholeNoteSeconds / stepsPerWholeNote
+        let totalDuration = singleStepDuration * Double(patternToPlay.length)
+
+        chordPlayer.schedulePattern(
             chord: chordToPlay,
             pattern: patternToPlay,
             preset: preset,
-            quantization: preset.quantize
+            scheduledUptime: ProcessInfo.processInfo.systemUptime, // Play immediately
+            totalDuration: totalDuration,
+            dynamics: .medium // Use a default dynamic for keyboard triggers
         )
         
         print("Playing chord \(chordName) with pattern \(patternToPlay.name)")
