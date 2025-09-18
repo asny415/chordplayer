@@ -66,19 +66,24 @@ struct AccompanimentEditorView: View {
             Divider()
 
             HSplitView {
-                TimelineContainerView(
-                    segment: $segment,
-                    timeSignature: timeSignature,
-                    zoomLevel: $zoomLevel,
-                    selectedEventId: $selectedEventId,
-                    playbackStartTime: playbackStartTime
-                )
-                .frame(minWidth: 600)
+                // Main content: Libraries on top, timeline on bottom with a draggable splitter
+                VSplitView {
+                    ResourceLibraryView()
+                    TimelineContainerView(
+                        segment: $segment,
+                        timeSignature: timeSignature,
+                        zoomLevel: $zoomLevel,
+                        selectedEventId: $selectedEventId,
+                        playbackStartTime: playbackStartTime
+                    )
+                }
+                .frame(maxWidth: .infinity)
                 .onTapGesture {
                     focusedField = nil
                     selectedEventId = nil
                 }
 
+                // Inspector panel on the right
                 SidePanelView(
                     segment: $segment,
                     selectedEventId: $selectedEventId,
@@ -503,7 +508,15 @@ struct SidePanelView: View {
                     }
                 )
             } else {
-                ResourceLibraryView()
+                VStack {
+                    Spacer()
+                    Text("Select an event on the timeline to see its properties.")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding()
+                    Spacer()
+                }
             }
         }
         .frame(minWidth: 280, idealWidth: 320, maxWidth: 450)
@@ -516,10 +529,11 @@ struct ResourceLibraryView: View {
     @EnvironmentObject var appData: AppData
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Chords").font(.headline)
+        HStack(alignment: .top, spacing: 16) {
+            // Chord Library
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Chords").font(.headline)
+                ScrollView {
                     if let chords = appData.preset?.chords, !chords.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 75))], spacing: 8) {
                             ForEach(chords) { chord in
@@ -532,11 +546,14 @@ struct ResourceLibraryView: View {
                                     }
                             }
                         }
-                    } else { Text("No chords in preset.").foregroundColor(.secondary) }
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Playing Patterns").font(.headline)
+                    } else { Text("No chords in preset.").foregroundColor(.secondary).padding() }
+                }.background(Color.black.opacity(0.1))
+            }
+            
+            // Pattern Library
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Playing Patterns").font(.headline)
+                ScrollView {
                     if let patterns = appData.preset?.playingPatterns, !patterns.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
                             ForEach(patterns) { pattern in
@@ -550,10 +567,12 @@ struct ResourceLibraryView: View {
                                     }
                             }
                         }
-                    } else { Text("No patterns in preset.").foregroundColor(.secondary) }
-                }
-            }.padding()
+                    } else { Text("No patterns in preset.").foregroundColor(.secondary).padding() }
+                }.background(Color.black.opacity(0.1))
+            }
         }
+        .frame(maxWidth: .infinity)
+        .padding()
     }
 }
 
