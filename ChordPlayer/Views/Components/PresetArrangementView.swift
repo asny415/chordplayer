@@ -373,7 +373,7 @@ struct ArrangementToolbar: View {
                            get: { measures },
                            set: { onUpdateLength($0 * 4) }
                        ),
-                       in: 1...50,
+                       in: 1...300,
                        step: 1)
             }
 
