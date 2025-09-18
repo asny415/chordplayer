@@ -96,7 +96,8 @@ class KeyboardHandler: ObservableObject {
             preset: preset,
             scheduledUptime: ProcessInfo.processInfo.systemUptime, // Play immediately
             totalDuration: totalDuration,
-            dynamics: .medium // Use a default dynamic for keyboard triggers
+            dynamics: .medium, // Use a default dynamic for keyboard triggers
+            completion: { _ in }
         )
         
         print("Playing chord \(chordName) with pattern \(patternToPlay.name)")

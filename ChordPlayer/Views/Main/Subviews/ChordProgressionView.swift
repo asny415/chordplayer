@@ -91,7 +91,8 @@ struct ChordProgressionView: View {
                 preset: preset, 
                 scheduledUptime: ProcessInfo.processInfo.systemUptime, // Play immediately
                 totalDuration: totalDuration, 
-                dynamics: .medium
+                dynamics: .medium,
+                completion: { _ in }
             )
         }
     }

@@ -18,6 +18,7 @@ class PresetArrangerPlayer: ObservableObject {
 
     private var playbackStartTime: TimeInterval?
     private var playbackTimer: Timer?
+    private let eventsLock = NSRecursiveLock()
     private var scheduledEvents: [UUID] = []
     private var currentPreset: Preset?
     private let openStringMIDINotes: [UInt8] = [64, 59, 55, 50, 45, 40]
@@ -61,16 +62,12 @@ class PresetArrangerPlayer: ObservableObject {
         playbackTimer = nil
         playbackStartTime = nil
 
-        // 停止所有播放器
-        chordPlayer.panic()
-        drumPlayer.stop()
-        soloPlayer.stopPlayback()
+        midiManager.cancelAllPendingScheduledEvents()
+        midiManager.sendPanic()
 
-        // 取消所有计划的事件
-        for eventId in scheduledEvents {
-            midiManager.cancelScheduledEvent(id: eventId)
-        }
+        eventsLock.lock()
         scheduledEvents.removeAll()
+        eventsLock.unlock()
 
         playbackPosition = 0
     }
@@ -80,10 +77,12 @@ class PresetArrangerPlayer: ObservableObject {
         playbackTimer?.invalidate()
         playbackTimer = nil
 
-        // 停止所有播放器但保持位置
-        chordPlayer.panic()
-        drumPlayer.stop()
-        soloPlayer.stopPlayback()
+        midiManager.cancelAllPendingScheduledEvents()
+        midiManager.sendPanic()
+        
+        eventsLock.lock()
+        scheduledEvents.removeAll()
+        eventsLock.unlock()
     }
 
     func resume() {
@@ -149,10 +148,12 @@ class PresetArrangerPlayer: ObservableObject {
         let currentTime = ProcessInfo.processInfo.systemUptime
 
         // 清除之前的事件
+        eventsLock.lock()
         for eventId in scheduledEvents {
             midiManager.cancelScheduledEvent(id: eventId)
         }
         scheduledEvents.removeAll()
+        eventsLock.unlock()
 
         // 安排鼓机事件
         scheduleDrumEvents(track: preset.arrangement.drumTrack, preset: preset, startBeat: startBeat, currentTime: currentTime, beatsToSeconds: beatsToSeconds)
@@ -263,11 +264,12 @@ class PresetArrangerPlayer: ObservableObject {
         // 这里简化实现，实际应该使用SoloPlayer的逻辑
         guard let preset = currentPreset else { return }
         let beatsToSeconds = 60.0 / preset.bpm
+        let transposition = self.transposition(forKey: preset.key)
 
         for note in segment.notes {
             let noteStartTime = startTime + note.startTime * beatsToSeconds
 
-            let midiNote = self.midiNote(from: note.string, fret: note.fret)
+            let midiNote = self.midiNote(from: note.string, fret: note.fret, transposition: transposition)
             let velocity = UInt8(min(127, max(1, Int(Double(note.velocity) * track.volume))))
 
             let eventId = midiManager.scheduleNoteOn(
@@ -276,8 +278,7 @@ class PresetArrangerPlayer: ObservableObject {
                 channel: UInt8(channel(for: track, in: preset) - 1),
                 scheduledUptimeMs: noteStartTime * 1000
             )
-            scheduledEvents.append(eventId)
-
+            
             // 音符持续时间（简化为0.5秒）
             let offEventId = midiManager.scheduleNoteOff(
                 note: UInt8(midiNote),
@@ -285,7 +286,11 @@ class PresetArrangerPlayer: ObservableObject {
                 channel: UInt8(channel(for: track, in: preset) - 1),
                 scheduledUptimeMs: (noteStartTime + 0.5) * 1000
             )
+            
+            eventsLock.lock()
+            scheduledEvents.append(eventId)
             scheduledEvents.append(offEventId)
+            eventsLock.unlock()
         }
     }
 
@@ -332,7 +337,12 @@ class PresetArrangerPlayer: ObservableObject {
                     scheduledUptime: scheduledUptime,
                     totalDuration: totalDuration,
                     dynamics: measure.dynamics,
-                    midiChannel: channel(for: track, in: preset)
+                    midiChannel: channel(for: track, in: preset),
+                    completion: { eventIDs in
+                        self.eventsLock.lock()
+                        self.scheduledEvents.append(contentsOf: eventIDs)
+                        self.eventsLock.unlock()
+                    }
                 )
             }
         }
@@ -345,8 +355,18 @@ class PresetArrangerPlayer: ObservableObject {
         return appData.chordMidiChannel // Fallback
     }
 
-    private func midiNote(from string: Int, fret: Int) -> UInt8 {
+    private func transposition(forKey key: String) -> Int {
+        let keyMap: [String: Int] = [
+            "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
+            "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9,
+            "A#": 10, "Bb": 10, "B": 11
+        ]
+        return keyMap[key] ?? 0
+    }
+
+    private func midiNote(from string: Int, fret: Int, transposition: Int) -> UInt8 {
         guard string >= 0 && string < openStringMIDINotes.count else { return 0 }
-        return openStringMIDINotes[string] + UInt8(fret)
+        let baseNote = openStringMIDINotes[string] + UInt8(fret)
+        return UInt8(Int(baseNote) + transposition)
     }
 }

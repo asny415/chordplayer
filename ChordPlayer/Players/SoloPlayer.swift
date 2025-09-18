@@ -60,6 +60,9 @@ class SoloPlayer: ObservableObject, Quantizable {
             let notesSortedByTime = segment.notes.sorted { $0.startTime < $1.startTime }
             var consumedNoteIDs = Set<UUID>()
             var actions: [MusicalAction] = []
+            
+            let transposition = self.transposition(forKey: self.appData.preset?.key ?? "C")
+
 
             for i in 0..<notesSortedByTime.count {
                 let currentNote = notesSortedByTime[i]
@@ -98,7 +101,7 @@ class SoloPlayer: ObservableObject, Quantizable {
                 switch action {
                 case .playNote(let note, let offTime):
                     guard note.fret >= 0 else { continue }
-                    let midiNoteNumber = self.midiNote(from: note.string, fret: note.fret)
+                    let midiNoteNumber = self.midiNote(from: note.string, fret: note.fret, transposition: transposition)
                     let velocity = UInt8(note.velocity)
                     let noteOnTimeMs = playbackStartTimeMs + (note.startTime * beatsToSeconds * 1000.0)
                     let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
@@ -110,7 +113,7 @@ class SoloPlayer: ObservableObject, Quantizable {
 
                 case .slide(let fromNote, let toNote, let offTime):
                     guard fromNote.fret >= 0, toNote.fret >= 0 else { continue }
-                    let startMidiNote = self.midiNote(from: fromNote.string, fret: fromNote.fret)
+                    let startMidiNote = self.midiNote(from: fromNote.string, fret: fromNote.fret, transposition: transposition)
                     let velocity = UInt8(fromNote.velocity)
                     let noteOnTimeMs = playbackStartTimeMs + (fromNote.startTime * beatsToSeconds * 1000.0)
                     let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
@@ -137,7 +140,7 @@ class SoloPlayer: ObservableObject, Quantizable {
 
                 case .vibrato(let note, let offTime):
                     guard note.fret >= 0 else { continue }
-                    let midiNoteNumber = self.midiNote(from: note.string, fret: note.fret)
+                    let midiNoteNumber = self.midiNote(from: note.string, fret: note.fret, transposition: transposition)
                     let velocity = UInt8(note.velocity)
                     let noteOnTimeMs = playbackStartTimeMs + (note.startTime * beatsToSeconds * 1000.0)
                     let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
@@ -171,7 +174,7 @@ class SoloPlayer: ObservableObject, Quantizable {
                     
                 case .bend(let note, let offTime):
                     guard note.fret >= 0 else { continue }
-                    let midiNoteNumber = self.midiNote(from: note.string, fret: note.fret)
+                    let midiNoteNumber = self.midiNote(from: note.string, fret: note.fret, transposition: transposition)
                     let velocity = UInt8(note.velocity)
                     let noteOnTimeMs = playbackStartTimeMs + (note.startTime * beatsToSeconds * 1000.0)
                     let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
@@ -228,9 +231,26 @@ class SoloPlayer: ObservableObject, Quantizable {
         playbackPosition = 0
     }
     
-    private func midiNote(from string: Int, fret: Int) -> UInt8 {
+    private func transposition(forKey key: String) -> Int {
+        let keyMap: [String: Int] = [
+            "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
+            "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9,
+            "A#": 10, "Bb": 10, "B": 11
+        ]
+        // The notes in SoloSegment are relative to C major scale.
+        // We need to transpose them to the preset's key.
+        // The transposition should be `keyMap[key] ?? 0`.
+        // For example, if the key is "D", the transposition is 2.
+        // A C note (fret 1 on string 1) should become a D note.
+        // The midi note for C is 60. The midi note for D is 62.
+        // So we need to add 2 to the midi note.
+        return keyMap[key] ?? 0
+    }
+
+    private func midiNote(from string: Int, fret: Int, transposition: Int) -> UInt8 {
         guard string >= 0 && string < openStringMIDINotes.count else { return 0 }
-        return openStringMIDINotes[string] + UInt8(fret)
+        let baseNote = openStringMIDINotes[string] + UInt8(fret)
+        return baseNote + UInt8(transposition)
     }
 
     
