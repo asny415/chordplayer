@@ -102,12 +102,13 @@ class ChordPlayer: ObservableObject {
 
     // MARK: - Scheduling Logic
 
-    func schedulePattern(chord: Chord, pattern: GuitarPattern, preset: Preset, scheduledUptime: TimeInterval, totalDuration: TimeInterval, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100) {
+    func schedulePattern(chord: Chord, pattern: GuitarPattern, preset: Preset, scheduledUptime: TimeInterval, totalDuration: TimeInterval, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100, midiChannel: Int? = nil) {
         let delay = scheduledUptime - ProcessInfo.processInfo.systemUptime
 
         schedulingQueue.asyncAfter(deadline: .now() + (delay > 0 ? delay : 0)) { [weak self] in
             guard let self = self else { return }
 
+            let channel = UInt8((midiChannel ?? self.appData.chordMidiChannel) - 1)
             let transpositionOffset = MusicTheory.KEY_CYCLE.firstIndex(of: preset.key) ?? 0
 
             var midiNotesForChord: [Int] = Array(repeating: -1, count: 6)
@@ -123,7 +124,7 @@ class ChordPlayer: ObservableObject {
 
             DispatchQueue.main.async {
                 self.updateCurrentlyPlayingUI(chordName: chord.name)
-                self.stopSilentStrings(newChordMidiNotes: midiNotesForChord)
+                self.stopSilentStrings(newChordMidiNotes: midiNotesForChord, channel: channel)
             }
 
             for (stepIndex, step) in pattern.steps.enumerated() {
@@ -158,21 +159,21 @@ class ChordPlayer: ObservableObject {
                     let sortedNotes = activeNotesInStep.sorted { $0.stringIndex > $1.stringIndex }
                     for (noteIndex, noteItem) in sortedNotes.enumerated() {
                         let noteStartTimeOffset = Double(noteIndex) * arpeggioStepDuration
-                        self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: velocityWithDynamics, scheduledUptime: scheduledUptime + stepStartTimeOffset + noteStartTimeOffset, durationSeconds: totalDuration)
+                        self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: velocityWithDynamics, channel: channel, scheduledUptime: scheduledUptime + stepStartTimeOffset + noteStartTimeOffset, durationSeconds: totalDuration)
                     }
                 case .strum:
                     let strumDelay = self.strumDelayInSeconds(for: step.strumSpeed)
                     let sortedNotes = activeNotesInStep.sorted { step.strumDirection == .down ? $0.stringIndex > $1.stringIndex : $0.stringIndex < $1.stringIndex }
                     for (noteIndex, noteItem) in sortedNotes.enumerated() {
                         let noteStartTimeOffset = Double(noteIndex) * strumDelay
-                        self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: adaptiveVelocity, scheduledUptime: scheduledUptime + stepStartTimeOffset + noteStartTimeOffset, durationSeconds: totalDuration)
+                        self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: adaptiveVelocity, channel: channel, scheduledUptime: scheduledUptime + stepStartTimeOffset + noteStartTimeOffset, durationSeconds: totalDuration)
                     }
                 }
             }
         }
     }
     
-    private func scheduleNote(note: UInt8, stringIndex: Int, velocity: UInt8, scheduledUptime: TimeInterval, durationSeconds: TimeInterval) {
+    private func scheduleNote(note: UInt8, stringIndex: Int, velocity: UInt8, channel: UInt8, scheduledUptime: TimeInterval, durationSeconds: TimeInterval) {
         notesLock.lock()
         defer { notesLock.unlock() }
 
@@ -183,19 +184,19 @@ class ChordPlayer: ObservableObject {
                 self.midiManager.cancelScheduledEvent(id: scheduledOffId)
                 self.playingNotes.removeValue(forKey: previousNote)
             }
-            self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: UInt8(appData.chordMidiChannel - 1))
+            self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: channel)
         }
 
-        self.midiManager.scheduleNoteOn(note: note, velocity: velocity, channel: UInt8(appData.chordMidiChannel - 1), scheduledUptimeMs: scheduledUptimeMs)
+        self.midiManager.scheduleNoteOn(note: note, velocity: velocity, channel: channel, scheduledUptimeMs: scheduledUptimeMs)
         self.stringNotes[stringIndex] = note
 
         let scheduledNoteOffUptimeMs = scheduledUptimeMs + (durationSeconds * 1000.0)
-        let offId = self.midiManager.scheduleNoteOff(note: note, velocity: 0, channel: UInt8(appData.chordMidiChannel - 1), scheduledUptimeMs: scheduledNoteOffUptimeMs)
+        let offId = self.midiManager.scheduleNoteOff(note: note, velocity: 0, channel: channel, scheduledUptimeMs: scheduledNoteOffUptimeMs)
         
         self.playingNotes[note] = offId
     }
     
-    private func stopSilentStrings(newChordMidiNotes: [Int]) {
+    private func stopSilentStrings(newChordMidiNotes: [Int], channel: UInt8) {
         notesLock.lock()
         defer { notesLock.unlock() }
 
@@ -205,7 +206,7 @@ class ChordPlayer: ObservableObject {
                     midiManager.cancelScheduledEvent(id: scheduledOffId)
                     playingNotes.removeValue(forKey: note)
                 }
-                midiManager.sendNoteOff(note: note, velocity: 0, channel: UInt8(appData.chordMidiChannel - 1))
+                midiManager.sendNoteOff(note: note, velocity: 0, channel: channel)
                 stringNotes.removeValue(forKey: stringIndex)
             }
         }

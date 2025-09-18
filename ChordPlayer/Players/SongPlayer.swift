@@ -266,7 +266,7 @@ class PresetArrangerPlayer: ObservableObject {
             let noteStartTime = startTime + note.startTime * beatsToSeconds
             guard noteStartTime >= ProcessInfo.processInfo.systemUptime else { continue }
 
-            let midiNote = midiNote(from: note.string, fret: note.fret)
+            let midiNote = self.midiNote(from: note.string, fret: note.fret)
             let velocity = UInt8(min(127, max(1, Int(Double(note.velocity) * track.volume))))
 
             let eventId = midiManager.scheduleNoteOn(
@@ -289,11 +289,54 @@ class PresetArrangerPlayer: ObservableObject {
     }
 
     private func scheduleAccompanimentSegment(segment: AccompanimentSegment, startTime: TimeInterval, track: GuitarTrack, preset: Preset) {
-        // 这里应该使用ChordPlayer的逻辑来播放伴奏片段
-        // 简化实现，只是占位
-        // 实际实现中应该调用chordPlayer.play(segment: segment)并调整时间偏移和MIDI通道
+        let secondsPerBeat = 60.0 / preset.bpm
+
+        // Create a flat, time-sorted list of all chord events with their absolute start times.
+        let absoluteChordEvents = segment.measures.enumerated().flatMap { (measureIndex, measure) -> [TimelineEvent] in
+            measure.chordEvents.map { event in
+                var absoluteEvent = event
+                absoluteEvent.startBeat += measureIndex * preset.timeSignature.beatsPerMeasure
+                return absoluteEvent
+            }
+        }.sorted { $0.startBeat < $1.startBeat }
+
+        // Iterate through each measure and its pattern events.
+        for (measureIndex, measure) in segment.measures.enumerated() {
+            for patternEvent in measure.patternEvents {
+                let absolutePatternStartBeat = measureIndex * preset.timeSignature.beatsPerMeasure + patternEvent.startBeat
+
+                // Find the chord that should be active for this pattern event.
+                let activeChordEvent = absoluteChordEvents.last { $0.startBeat <= absolutePatternStartBeat }
+
+                guard let chordEvent = activeChordEvent else { continue }
+                
+                // Find the actual Chord and GuitarPattern objects from the preset library.
+                guard let chordToPlay = preset.chords.first(where: { $0.id == chordEvent.resourceId }),
+                      let patternToPlay = preset.playingPatterns.first(where: { $0.id == patternEvent.resourceId }) else {
+                    continue
+                }
+
+                let scheduledUptime = startTime + (Double(absolutePatternStartBeat) * secondsPerBeat)
+                let totalDuration = Double(patternEvent.durationInBeats) * secondsPerBeat
+
+                // Ensure we don't schedule events in the past
+                if scheduledUptime < ProcessInfo.processInfo.systemUptime {
+                    continue
+                }
+
+                chordPlayer.schedulePattern(
+                    chord: chordToPlay,
+                    pattern: patternToPlay,
+                    preset: preset,
+                    scheduledUptime: scheduledUptime,
+                    totalDuration: totalDuration,
+                    dynamics: measure.dynamics,
+                    midiChannel: track.midiChannel
+                )
+            }
+        }
     }
-    
+
     private func midiNote(from string: Int, fret: Int) -> UInt8 {
         guard string >= 0 && string < openStringMIDINotes.count else { return 0 }
         return openStringMIDINotes[string] + UInt8(fret)
