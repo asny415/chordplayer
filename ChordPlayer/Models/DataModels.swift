@@ -518,7 +518,7 @@ enum MeasureDynamics: String, Codable, CaseIterable, CustomStringConvertible, Id
 // MARK: - Song Arrangement Models
 
 struct SongArrangement: Codable, Hashable, Equatable {
-    var lengthInBeats: Double = 64.0 // 歌曲编排总长度（拍数）
+    var lengthInBeats: Double = 16.0 // 歌曲编排总长度（拍数）
 
     // 各种轨道
     var drumTrack: DrumTrack = DrumTrack()

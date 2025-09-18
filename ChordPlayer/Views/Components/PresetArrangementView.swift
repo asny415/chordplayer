@@ -48,7 +48,7 @@ struct PresetArrangementView: View {
                     }
 
                     HStack {
-                        Image(systemName: "drum.fill")
+                        Image(systemName: "hifispeaker.fill")
                             .foregroundColor(.orange)
                         Text("Drum segments: \(preset.arrangement.drumTrack.segments.count)")
                             .font(.subheadline)
@@ -373,7 +373,7 @@ struct ArrangementToolbar: View {
                            get: { measures },
                            set: { onUpdateLength($0 * 4) }
                        ),
-                       in: 4...50,
+                       in: 1...50,
                        step: 1)
             }
 
@@ -525,7 +525,7 @@ struct ArrangementDrumTrackView: View {
             // 轨道控制
             TrackControlView(
                 title: "Drums",
-                icon: "drum.fill",
+                icon: "hifispeaker.fill",
                 iconColor: .orange,
                 isMuted: track.isMuted
             )

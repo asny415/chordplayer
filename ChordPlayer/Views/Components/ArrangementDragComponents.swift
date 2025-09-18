@@ -169,7 +169,7 @@ struct DrumPatternResourceButton: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: "drum.fill")
+            Image(systemName: "hifispeaker.fill")
                 .font(.title2)
                 .foregroundColor(.orange)
 
