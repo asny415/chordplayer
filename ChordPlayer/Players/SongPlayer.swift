@@ -367,8 +367,6 @@ class PresetArrangerPlayer: ObservableObject {
                 continue
             }
 
-            print("[SongPlayer] Scheduling pattern \(patternToPlay.name) at beat \(Double(currentPatternEvent.startBeat)). Calculated duration: \(durationInBeats) beats (\(totalDuration)s)")
-
             chordPlayer.schedulePattern(
                 chord: chordToPlay,
                 pattern: patternToPlay,

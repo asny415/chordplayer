@@ -99,8 +99,6 @@ class KeyboardHandler: ObservableObject {
             dynamics: .medium, // Use a default dynamic for keyboard triggers
             completion: { _ in }
         )
-        
-        print("Playing chord \(chordName) with pattern \(patternToPlay.name)")
 
         DispatchQueue.main.async {
             self.lastPlayedChord = chordName

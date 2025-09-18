@@ -38,7 +38,6 @@ class DrumPlayer: ObservableObject {
 
     func playActivePattern() {
         guard let preset = appData.preset, let activePatternId = preset.activeDrumPatternId else {
-            print("[DrumPlayer] No active drum pattern selected.")
             return
         }
         
@@ -63,7 +62,6 @@ class DrumPlayer: ObservableObject {
         self.playbackState = .playing
         self.isPlaying = true
         
-        print("[DrumPlayer] Playback started for pattern: \(pattern.name)")
         scheduleBeat(beatIndex: 0, schedule: schedule, measureDurationMs: measureDurationMs)
     }
     
@@ -129,7 +127,6 @@ class DrumPlayer: ObservableObject {
 
     public func stop() {
         if playbackState == .stopped && !isPreviewing { return }
-        print("[DrumPlayer] stopped")
         
         self.playbackState = .stopped
         self.isPlaying = false

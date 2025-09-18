@@ -73,14 +73,13 @@ struct PlayingPatternsView: View {
     }
     
     private func calculateDefaultLength(timeSignature: TimeSignature, resolution: NoteResolution) -> Int {
-        let beatsPerMeasure = Double(timeSignature.beatsPerMeasure)
         let beatUnit = Double(timeSignature.beatUnit)
         
         switch resolution {
         case .eighth:
-            return Int(beatsPerMeasure * (8.0 / beatUnit))
+            return Int(8.0 / beatUnit)
         case .sixteenth:
-            return Int(beatsPerMeasure * (16.0 / beatUnit))
+            return Int(16.0 / beatUnit)
         }
     }
 }

@@ -206,9 +206,7 @@ class ChordPlayer: ObservableObject {
         let scheduledUptimeMs = scheduledUptime * 1000.0
 
         if let previousNote = self.stringNotes[stringIndex] {
-            print("[ChordPlayer] scheduleNote: String \(stringIndex) is busy. Stopping previous note \(previousNote) immediately.")
             if let scheduledOffId = self.playingNotes[previousNote] {
-                print("[ChordPlayer] scheduleNote: Cancelling future note-off for note \(previousNote).")
                 self.midiManager.cancelScheduledEvent(id: scheduledOffId)
                 self.playingNotes.removeValue(forKey: previousNote)
             }
@@ -224,7 +222,6 @@ class ChordPlayer: ObservableObject {
         
         self.playingNotes[note] = offId
         eventIDs.append(offId)
-        print("[ChordPlayer] Note \(note) on string \(stringIndex): ON at \(scheduledUptimeMs), OFF at \(scheduledNoteOffUptimeMs)ms (duration: \(durationSeconds)s)")
         return eventIDs
     }
     

@@ -25,7 +25,6 @@ class PresetManager: ObservableObject {
         loadPresetsList()
         
         if presets.isEmpty {
-            print("[PresetManager] No presets found. Creating a default one.")
             let defaultPreset = Preset.createNew(name: "Default Preset")
             presets.append(defaultPreset.toInfo())
             savePresetToFile(defaultPreset)
@@ -37,8 +36,6 @@ class PresetManager: ObservableObject {
         } else {
             print("[PresetManager] CRITICAL: Failed to load or create an initial preset.")
         }
-        
-        print("[PresetManager] Initialized. Current preset: \(currentPreset?.name ?? "None")")
     }
     
     func loadPreset(_ presetInfo: PresetInfo) {
@@ -50,7 +47,6 @@ class PresetManager: ObservableObject {
             let data = try Data(contentsOf: fileURL)
             let preset = try decoder.decode(Preset.self, from: data)
             self.currentPreset = preset
-            print("[PresetManager] ✅ Loaded preset: \(preset.name)")
         } catch {
             print("[PresetManager] ❌ Failed to load or decode preset file for \(presetInfo.name): \(error). This might be an old format.")
             // Handle failure: e.g., remove from list and load another
@@ -74,7 +70,6 @@ class PresetManager: ObservableObject {
         savePresetsList()
         saveCurrentPresetToFile()
         
-        print("[PresetManager] ✅ Created preset: \(newName)")
         return newPreset
     }
     
@@ -195,7 +190,6 @@ class PresetManager: ObservableObject {
         do {
             let data = try encoder.encode(preset)
             try data.write(to: url, options: .atomic)
-            print("[PresetManager] 💾 Saved preset \(preset.name) to \(url.lastPathComponent)")
         } catch {
             print("[PresetManager] ❌ Failed to save preset \(preset.name): \(error)")
         }

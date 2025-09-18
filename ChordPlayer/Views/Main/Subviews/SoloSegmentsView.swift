@@ -42,6 +42,11 @@ struct SoloSegmentsView: View {
                             },
                             onDelete: {
                                 appData.removeSoloSegment(at: IndexSet(integer: index))
+                            },
+                            onNameChange: { newName in
+                                var updatedSegment = segment
+                                updatedSegment.name = newName
+                                appData.updateSoloSegment(updatedSegment)
                             }
                         )
                     }
@@ -81,6 +86,11 @@ struct SoloSegmentCard: View {
     let onSelect: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
+    let onNameChange: (String) -> Void
+
+    @State private var isEditingName = false
+    @State private var editedName = ""
+    @FocusState private var isNameFieldFocused: Bool
     
     @State private var showingDeleteConfirmation = false
 
@@ -88,9 +98,25 @@ struct SoloSegmentCard: View {
         VStack(alignment: .leading, spacing: 8) {
             // 标题行
             HStack {
-                Text(segment.name)
-                    .font(.headline)
-                    .lineLimit(1)
+                if isEditingName {
+                    TextField("Segment Name", text: $editedName)
+                        .focused($isNameFieldFocused)
+                        .onSubmit {
+                            onNameChange(editedName)
+                            isEditingName = false
+                        }
+                        .textFieldStyle(.plain)
+                        .font(.headline)
+                } else {
+                    Text(segment.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .onTapGesture(count: 2) {
+                            editedName = segment.name
+                            isEditingName = true
+                            isNameFieldFocused = true
+                        }
+                }
                 
                 Spacer()
                 

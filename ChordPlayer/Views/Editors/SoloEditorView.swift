@@ -17,12 +17,34 @@ struct SoloEditorView: View {
     @State private var fretInputCancellable: AnyCancellable?
     @State private var showingFretPopover: Bool = false
 
+    @State private var isEditingName = false
+    @FocusState private var isNameFieldFocused: Bool
+
     private let stringNames = ["E", "B", "G", "D", "A", "E"]
     private let beatWidth: CGFloat = 80
     private let stringHeight: CGFloat = 40
 
     var body: some View {
         VStack(spacing: 0) {
+            if isEditingName {
+                TextField("Segment Name", text: $soloSegment.name)
+                    .font(.largeTitle)
+                    .textFieldStyle(.plain)
+                    .padding()
+                    .focused($isNameFieldFocused)
+                    .onSubmit { isEditingName = false }
+                    .onDisappear { isEditingName = false } // Ensure editing stops if view disappears
+            } else {
+                Text(soloSegment.name)
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .padding()
+                    .onTapGesture(count: 2) {
+                        isEditingName = true
+                        isNameFieldFocused = true
+                    }
+            }
+
             SoloToolbar(
                 currentTechnique: $currentTechnique,
                 currentFret: $currentFret,

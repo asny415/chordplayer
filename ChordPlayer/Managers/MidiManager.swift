@@ -253,7 +253,6 @@ class MidiManager: ObservableObject {
 
     @discardableResult
     func scheduleNoteOff(note: UInt8, velocity: UInt8, channel: UInt8 = 0, scheduledUptimeMs: Double) -> UUID {
-        print("[MidiManager] scheduleNoteOff: Scheduling OFF for note \(note) on channel \(channel) at \(scheduledUptimeMs)ms.")
         let id = UUID()
         let type: MIDIEventType = .note(isNoteOn: false, note: note, velocity: velocity)
         let ev = PendingEvent(id: id, type: type, channel: channel, scheduledUptimeMs: scheduledUptimeMs)
