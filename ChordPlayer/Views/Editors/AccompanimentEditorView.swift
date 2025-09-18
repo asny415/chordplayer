@@ -57,6 +57,7 @@ struct AccompanimentEditorView: View {
                 .frame(minWidth: 600)
                 .onTapGesture {
                     focusedField = nil
+                    selectedEventId = nil
                 }
 
                 SidePanelView(

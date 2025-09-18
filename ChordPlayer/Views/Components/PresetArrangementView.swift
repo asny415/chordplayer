@@ -529,15 +529,15 @@ struct ArrangementDrumTrackView: View {
                 }
             }
             .frame(height: trackHeight)
+            .onDrop(of: [.data, .text], delegate: EnhancedDrumTrackDropDelegate(
+                track: track,
+                arrangement: arrangement,
+                beatWidth: beatWidth,
+                zoomLevel: zoomLevel,
+                isDragOver: $isDragOver,
+                appData: appData
+            ))
         }
-        .onDrop(of: [.data], delegate: EnhancedDrumTrackDropDelegate(
-            track: track,
-            arrangement: arrangement,
-            beatWidth: beatWidth,
-            zoomLevel: zoomLevel,
-            isDragOver: $isDragOver,
-            appData: appData
-        ))
     }
 }
 
@@ -605,15 +605,15 @@ struct ArrangementGuitarTrackView: View {
                 }
             }
             .frame(height: trackHeight)
+            .onDrop(of: [.data, .text], delegate: EnhancedGuitarTrackDropDelegate(
+                track: track,
+                arrangement: arrangement,
+                beatWidth: beatWidth,
+                zoomLevel: zoomLevel,
+                isDragOver: $isDragOver,
+                appData: appData
+            ))
         }
-        .onDrop(of: [.data], delegate: EnhancedGuitarTrackDropDelegate(
-            track: track,
-            arrangement: arrangement,
-            beatWidth: beatWidth,
-            zoomLevel: zoomLevel,
-            isDragOver: $isDragOver,
-            appData: appData
-        ))
     }
 }
 
