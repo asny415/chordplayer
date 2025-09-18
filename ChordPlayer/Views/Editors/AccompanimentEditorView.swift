@@ -23,24 +23,43 @@ struct AccompanimentEditorView: View {
 
     private var timeSignature: TimeSignature { appData.preset?.timeSignature ?? TimeSignature() }
 
+    @State private var isEditingName = false
+    @FocusState private var isNameFieldFocused: Bool
+
     var body: some View {
         VStack(spacing: 0) {
-            AccompanimentToolbar(
-                segmentName: $segment.name,
-                zoomLevel: $zoomLevel,
-                focusedField: $focusedField,
-                isPlaying: $isPlaying,
-                measureCount: segment.lengthInMeasures,
-                onTogglePlayback: {
-                    if isPlaying {
-                        stop()
-                    } else {
-                        play()
-                    }
-                },
-                onAddMeasure: addMeasure,
-                onRemoveMeasure: removeMeasure
-            )
+            VStack {
+                if isEditingName {
+                    TextField("Segment Name", text: $segment.name)
+                        .font(.largeTitle)
+                        .textFieldStyle(.plain)
+                        .focused($isNameFieldFocused)
+                        .onSubmit { isEditingName = false }
+                        .onDisappear { isEditingName = false } // Ensure editing stops if view disappears
+                } else {
+                    Text(segment.name)
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .onTapGesture(count: 2) {
+                            isEditingName = true
+                            isNameFieldFocused = true
+                        }
+                }
+                AccompanimentToolbar(
+                    zoomLevel: $zoomLevel,
+                    isPlaying: $isPlaying,
+                    measureCount: segment.lengthInMeasures,
+                    onTogglePlayback: {
+                        if isPlaying {
+                            stop()
+                        } else {
+                            play()
+                        }
+                    },
+                    onAddMeasure: addMeasure,
+                    onRemoveMeasure: removeMeasure
+                )
+            }
             .padding()
             .background(Color.black.opacity(0.1))
 
@@ -195,9 +214,7 @@ struct DragData: Codable {
 
 // MARK: - Toolbar
 struct AccompanimentToolbar: View {
-    @Binding var segmentName: String
     @Binding var zoomLevel: CGFloat
-    var focusedField: FocusState<AccompanimentEditorView.Field?>.Binding
     @Binding var isPlaying: Bool
     let measureCount: Int
     let onTogglePlayback: () -> Void
@@ -206,9 +223,6 @@ struct AccompanimentToolbar: View {
 
     var body: some View {
         HStack {
-            TextField("Segment Name", text: $segmentName).textFieldStyle(.plain).font(.title.weight(.semibold))
-                .focused(focusedField, equals: .segmentName)
-            
             Text("\(measureCount) Measures").font(.callout).foregroundColor(.secondary)
             Button(action: onRemoveMeasure) {
                 Image(systemName: "minus.square")

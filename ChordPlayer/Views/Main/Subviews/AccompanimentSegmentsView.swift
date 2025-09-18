@@ -26,13 +26,28 @@ struct AccompanimentSegmentsView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))], spacing: 10) {
                     ForEach(preset.accompanimentSegments) { segment in
                         let isActive = appData.preset?.activeAccompanimentSegmentId == segment.id
-                        Button(action: {
-                            appData.preset?.activeAccompanimentSegmentId = segment.id
-                            appData.saveChanges()
-                        }) {
-                            AccompanimentSegmentCardView(segment: segment, isActive: isActive)
-                        }
-                        .buttonStyle(.plain)
+                        AccompanimentSegmentCardView(
+                            segment: segment,
+                            isActive: isActive,
+                            onSelect: {
+                                appData.preset?.activeAccompanimentSegmentId = segment.id
+                                appData.saveChanges()
+                            },
+                            onEdit: {
+                                self.segmentToEdit = segment
+                            },
+                            onDelete: {
+                                if let index = appData.preset?.accompanimentSegments.firstIndex(where: { $0.id == segment.id }) {
+                                    appData.removeAccompanimentSegment(at: IndexSet(integer: index))
+                                }
+                            },
+                            onNameChange: { newName in
+                                if let index = appData.preset?.accompanimentSegments.firstIndex(where: { $0.id == segment.id }) {
+                                    appData.preset?.accompanimentSegments[index].name = newName
+                                    appData.saveChanges()
+                                }
+                            }
+                        )
                         .contextMenu {
                             Button("Edit") {
                                 self.segmentToEdit = segment
@@ -109,14 +124,39 @@ private struct EditorWrapperView: View {
 struct AccompanimentSegmentCardView: View {
     let segment: AccompanimentSegment
     let isActive: Bool
+    let onSelect: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    let onNameChange: (String) -> Void
+    
     @EnvironmentObject var appData: AppData
+    @State private var isEditingName = false
+    @State private var editedName = ""
+    @FocusState private var isNameFieldFocused: Bool
+    @State private var showingDeleteConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(segment.name)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .foregroundColor(.primary)
+            if isEditingName {
+                TextField("Segment Name", text: $editedName)
+                    .focused($isNameFieldFocused)
+                    .onSubmit {
+                        onNameChange(editedName)
+                        isEditingName = false
+                    }
+                    .textFieldStyle(.plain)
+                    .font(.subheadline.weight(.semibold))
+            } else {
+                Text(segment.name)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .foregroundColor(.primary)
+                    .onTapGesture(count: 2) {
+                        editedName = segment.name
+                        isEditingName = true
+                        isNameFieldFocused = true
+                    }
+            }
 
             if let chordProgression = getChordProgressionPreview() {
                 Text(chordProgression)
@@ -138,6 +178,12 @@ struct AccompanimentSegmentCardView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(isActive ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isActive ? 2.5 : 1)
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !isActive {
+                onSelect()
+            }
+        }
     }
 
     private func getChordProgressionPreview() -> String? {
