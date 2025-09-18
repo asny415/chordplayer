@@ -377,34 +377,45 @@ struct ArrangementTimelineView: View {
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
-            VStack(spacing: 2) {
-                // 鼓机轨道
-                ArrangementDrumTrackView(
-                    track: arrangement.drumTrack,
-                    arrangement: arrangement,
-                    selectedSegmentId: $selectedSegmentId,
-                    beatWidth: beatWidth,
-                    trackHeight: trackHeight,
-                    zoomLevel: zoomLevel,
-                    onEditDrumSegment: onEditDrumSegment,
-                    onDeleteSegment: onDeleteSegment
-                )
-
-                // 吉他轨道
-                ForEach(arrangement.guitarTracks) { track in
-                    ArrangementGuitarTrackView(
-                        track: track,
+            ZStack(alignment: .topLeading) {
+                VStack(spacing: 2) {
+                    // 鼓机轨道
+                    ArrangementDrumTrackView(
+                        track: arrangement.drumTrack,
                         arrangement: arrangement,
                         selectedSegmentId: $selectedSegmentId,
                         beatWidth: beatWidth,
                         trackHeight: trackHeight,
                         zoomLevel: zoomLevel,
-                        onEditGuitarSegment: onEditGuitarSegment,
+                        onEditDrumSegment: onEditDrumSegment,
                         onDeleteSegment: onDeleteSegment
                     )
+
+                    // 吉他轨道
+                    ForEach(arrangement.guitarTracks) { track in
+                        ArrangementGuitarTrackView(
+                            track: track,
+                            arrangement: arrangement,
+                            selectedSegmentId: $selectedSegmentId,
+                            beatWidth: beatWidth,
+                            trackHeight: trackHeight,
+                            zoomLevel: zoomLevel,
+                            onEditGuitarSegment: onEditGuitarSegment,
+                            onDeleteSegment: onDeleteSegment
+                        )
+                    }
+                }
+                .frame(width: max(800, beatWidth * CGFloat(arrangement.lengthInBeats) * zoomLevel + 200))
+                
+                // 播放进度指示器 (Playhead)
+                if isPlaying {
+                    Rectangle()
+                        .fill(Color.red)
+                        .frame(width: 2)
+                        .frame(maxHeight: .infinity)
+                        .offset(x: 120 + CGFloat(playbackPosition) * beatWidth * zoomLevel)
                 }
             }
-            .frame(width: max(800, beatWidth * CGFloat(arrangement.lengthInBeats) * zoomLevel + 200))
         }
     }
 }
