@@ -43,7 +43,7 @@ struct PresetArrangementView: View {
                     HStack {
                         Image(systemName: "music.note")
                             .foregroundColor(.blue)
-                        Text("Length: \(String(format: "%.0f", preset.arrangement.lengthInBeats)) beats (\(String(format: "%.1f", preset.arrangement.lengthInBeats / Double(preset.timeSignature.beatsPerMeasure))) measures)")
+                        Text("Length: \(String(format: "%.0f", preset.arrangement.lengthInBeats / 4)) measures (\(String(format: "%.0f", preset.arrangement.lengthInBeats)) beats)")
                             .font(.subheadline)
                     }
 
@@ -339,13 +339,14 @@ struct ArrangementToolbar: View {
             // 长度控制
             HStack {
                 Text("Length:")
-                Stepper("\(String(format: "%.0f", arrangement.lengthInBeats)) beats",
+                let measures = arrangement.lengthInBeats / 4
+                Stepper("\(String(format: "%.0f", measures)) measures",
                        value: Binding(
-                           get: { arrangement.lengthInBeats },
-                           set: { onUpdateLength($0) }
+                           get: { measures },
+                           set: { onUpdateLength($0 * 4) }
                        ),
-                       in: 16...200,
-                       step: 4)
+                       in: 4...50,
+                       step: 1)
             }
 
             // 缩放控制
@@ -375,47 +376,35 @@ struct ArrangementTimelineView: View {
     @EnvironmentObject var appData: AppData
 
     var body: some View {
-        VStack(spacing: 0) {
-            // 时间标尺
-            ArrangementTimeRuler(
-                arrangement: arrangement,
-                beatWidth: beatWidth,
-                headerHeight: headerHeight,
-                zoomLevel: zoomLevel,
-                playbackPosition: playbackPosition,
-                isPlaying: isPlaying
-            )
+        ScrollView([.horizontal, .vertical]) {
+            VStack(spacing: 2) {
+                // 鼓机轨道
+                ArrangementDrumTrackView(
+                    track: arrangement.drumTrack,
+                    arrangement: arrangement,
+                    selectedSegmentId: $selectedSegmentId,
+                    beatWidth: beatWidth,
+                    trackHeight: trackHeight,
+                    zoomLevel: zoomLevel,
+                    onEditDrumSegment: onEditDrumSegment,
+                    onDeleteSegment: onDeleteSegment
+                )
 
-            ScrollView([.horizontal, .vertical]) {
-                VStack(spacing: 2) {
-                    // 鼓机轨道
-                    ArrangementDrumTrackView(
-                        track: arrangement.drumTrack,
+                // 吉他轨道
+                ForEach(arrangement.guitarTracks) { track in
+                    ArrangementGuitarTrackView(
+                        track: track,
                         arrangement: arrangement,
                         selectedSegmentId: $selectedSegmentId,
                         beatWidth: beatWidth,
                         trackHeight: trackHeight,
                         zoomLevel: zoomLevel,
-                        onEditDrumSegment: onEditDrumSegment,
+                        onEditGuitarSegment: onEditGuitarSegment,
                         onDeleteSegment: onDeleteSegment
                     )
-
-                    // 吉他轨道
-                    ForEach(arrangement.guitarTracks) { track in
-                        ArrangementGuitarTrackView(
-                            track: track,
-                            arrangement: arrangement,
-                            selectedSegmentId: $selectedSegmentId,
-                            beatWidth: beatWidth,
-                            trackHeight: trackHeight,
-                            zoomLevel: zoomLevel,
-                            onEditGuitarSegment: onEditGuitarSegment,
-                            onDeleteSegment: onDeleteSegment
-                        )
-                    }
                 }
-                .frame(width: max(800, beatWidth * CGFloat(arrangement.lengthInBeats) * zoomLevel + 200))
             }
+            .frame(width: max(800, beatWidth * CGFloat(arrangement.lengthInBeats) * zoomLevel + 200))
         }
     }
 }

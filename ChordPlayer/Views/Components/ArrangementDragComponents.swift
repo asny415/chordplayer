@@ -19,6 +19,29 @@ extension ArrangementDragData: Transferable {
     }
 }
 
+// MARK: - 片段重新定位拖拽数据
+enum SegmentType: Codable {
+    case drum
+    case guitar
+}
+
+struct SegmentDragData: Codable {
+    let segmentId: UUID
+    let segmentType: SegmentType
+    let originalStartBeat: Double
+    let durationInBeats: Double
+
+    enum CodingKeys: CodingKey {
+        case segmentId, segmentType, originalStartBeat, durationInBeats
+    }
+}
+
+extension SegmentDragData: Transferable {
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(for: SegmentDragData.self, contentType: .text)
+    }
+}
+
 // MARK: - 片段视图组件
 
 struct DrumSegmentView: View {
@@ -64,6 +87,12 @@ struct DrumSegmentView: View {
             }
             .disabled(onDelete == nil)
         }
+        .draggable(SegmentDragData(
+            segmentId: segment.id,
+            segmentType: .drum,
+            originalStartBeat: segment.startBeat,
+            durationInBeats: segment.durationInBeats
+        ))
     }
 }
 
@@ -124,6 +153,12 @@ struct GuitarSegmentView: View {
             }
             .disabled(onDelete == nil)
         }
+        .draggable(SegmentDragData(
+            segmentId: segment.id,
+            segmentType: .guitar,
+            originalStartBeat: segment.startBeat,
+            durationInBeats: segment.durationInBeats
+        ))
     }
 }
 
@@ -233,7 +268,7 @@ struct DrumTrackDropDelegate: DropDelegate {
     @EnvironmentObject var appData: AppData
 
     func validateDrop(info: DropInfo) -> Bool {
-        return info.hasItemsConforming(to: [.data])
+        return info.hasItemsConforming(to: [.data]) || info.hasItemsConforming(to: [.text])
     }
 
     func dropEntered(info: DropInfo) {
@@ -255,8 +290,8 @@ struct DrumTrackDropDelegate: DropDelegate {
 
             DispatchQueue.main.async {
                 let dropLocationX = info.location.x - 120 // 减去轨道控制区域宽度
-                let beat = max(0, dropLocationX / (beatWidth * zoomLevel))
-                let snappedBeat = round(beat) // 对齐到拍
+                let beat = dropLocationX / (beatWidth * zoomLevel)
+                let snappedBeat = max(0, round(beat)) // 对齐到拍后再确保不小于0
 
                 let newSegment = DrumSegment(
                     startBeat: snappedBeat,
@@ -287,7 +322,7 @@ struct GuitarTrackDropDelegate: DropDelegate {
     @EnvironmentObject var appData: AppData
 
     func validateDrop(info: DropInfo) -> Bool {
-        return info.hasItemsConforming(to: [.data])
+        return info.hasItemsConforming(to: [.data]) || info.hasItemsConforming(to: [.text])
     }
 
     func dropEntered(info: DropInfo) {
@@ -309,8 +344,8 @@ struct GuitarTrackDropDelegate: DropDelegate {
 
             DispatchQueue.main.async {
                 let dropLocationX = info.location.x - 120 // 减去轨道控制区域宽度
-                let beat = max(0, dropLocationX / (beatWidth * zoomLevel))
-                let snappedBeat = round(beat) // 对齐到拍
+                let beat = dropLocationX / (beatWidth * zoomLevel)
+                let snappedBeat = max(0, round(beat)) // 对齐到拍后再确保不小于0
 
                 let segmentType: GuitarSegmentType = dragData.type == "solo"
                     ? .solo(segmentId: dragData.resourceId)
@@ -351,7 +386,7 @@ struct EnhancedDrumTrackDropDelegate: DropDelegate {
     let appData: AppData
 
     func validateDrop(info: DropInfo) -> Bool {
-        return info.hasItemsConforming(to: [.data])
+        return info.hasItemsConforming(to: [.data]) || info.hasItemsConforming(to: [.text])
     }
 
     func dropEntered(info: DropInfo) {
@@ -365,36 +400,72 @@ struct EnhancedDrumTrackDropDelegate: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         isDragOver = false
 
-        let items = info.itemProviders(for: [.data])
-        guard let provider = items.first else { return false }
+        // 处理新片段添加（来自资源面板）
+        if info.hasItemsConforming(to: [.data]) {
+            let items = info.itemProviders(for: [.data])
+            guard let provider = items.first else { return false }
 
-        provider.loadDataRepresentation(forTypeIdentifier: UTType.data.identifier) { data, error in
-            guard let data = data,
-                  let dragData = try? JSONDecoder().decode(ArrangementDragData.self, from: data),
-                  dragData.type == "drum" else { return }
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.data.identifier) { data, error in
+                guard let data = data,
+                      let dragData = try? JSONDecoder().decode(ArrangementDragData.self, from: data),
+                      dragData.type == "drum" else { return }
 
-            DispatchQueue.main.async {
-                let dropLocationX = info.location.x - 120 // 减去轨道控制区域宽度
-                let beat = max(0, dropLocationX / (beatWidth * zoomLevel))
-                let snappedBeat = round(beat) // 对齐到拍
+                DispatchQueue.main.async {
+                    let dropLocationX = info.location.x - 120 // 减去轨道控制区域宽度
+                    let beat = dropLocationX / (beatWidth * zoomLevel)
+                    let snappedBeat = max(0, round(beat)) // 对齐到拍后再确保不小于0
 
-                let newSegment = DrumSegment(
-                    startBeat: snappedBeat,
-                    durationInBeats: dragData.defaultDuration,
-                    patternId: dragData.resourceId
-                )
+                    let newSegment = DrumSegment(
+                        startBeat: snappedBeat,
+                        durationInBeats: dragData.defaultDuration,
+                        patternId: dragData.resourceId
+                    )
 
-                self.updateDrumTrack(with: newSegment, appData: self.appData)
+                    self.updateDrumTrack(with: newSegment, appData: self.appData)
+                }
             }
+            return true
         }
 
-        return true
+        // 处理片段重新定位（来自现有片段）
+        if info.hasItemsConforming(to: [.text]) {
+            let items = info.itemProviders(for: [.text])
+            guard let provider = items.first else { return false }
+
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, error in
+                guard let data = data,
+                      let segmentDragData = try? JSONDecoder().decode(SegmentDragData.self, from: data),
+                      segmentDragData.segmentType == .drum else { return }
+
+                DispatchQueue.main.async {
+                    let dropLocationX = info.location.x - 120 // 减去轨道控制区域宽度
+                    let beat = dropLocationX / (beatWidth * zoomLevel)
+                    let snappedBeat = max(0, round(beat)) // 对齐到拍后再确保不小于0
+
+                    self.repositionDrumSegment(segmentId: segmentDragData.segmentId, newStartBeat: snappedBeat, appData: self.appData)
+                }
+            }
+            return true
+        }
+
+        return false
     }
 
     private func updateDrumTrack(with segment: DrumSegment, appData: AppData) {
         guard var preset = appData.preset else { return }
         preset.arrangement.drumTrack.addSegment(segment)
         appData.updateArrangement(preset.arrangement)
+    }
+
+    private func repositionDrumSegment(segmentId: UUID, newStartBeat: Double, appData: AppData) {
+        guard var preset = appData.preset else { return }
+        var arrangement = preset.arrangement
+
+        // 找到并更新片段位置
+        if let index = arrangement.drumTrack.segments.firstIndex(where: { $0.id == segmentId }) {
+            arrangement.drumTrack.segments[index].startBeat = newStartBeat
+            appData.updateArrangement(arrangement)
+        }
     }
 }
 
@@ -407,7 +478,7 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
     let appData: AppData
 
     func validateDrop(info: DropInfo) -> Bool {
-        return info.hasItemsConforming(to: [.data])
+        return info.hasItemsConforming(to: [.data]) || info.hasItemsConforming(to: [.text])
     }
 
     func dropEntered(info: DropInfo) {
@@ -421,34 +492,59 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         isDragOver = false
 
-        let items = info.itemProviders(for: [.data])
-        guard let provider = items.first else { return false }
+        // 处理新片段添加（来自资源面板）
+        if info.hasItemsConforming(to: [.data]) {
+            let items = info.itemProviders(for: [.data])
+            guard let provider = items.first else { return false }
 
-        provider.loadDataRepresentation(forTypeIdentifier: UTType.data.identifier) { data, error in
-            guard let data = data,
-                  let dragData = try? JSONDecoder().decode(ArrangementDragData.self, from: data),
-                  dragData.type == "solo" || dragData.type == "accompaniment" else { return }
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.data.identifier) { data, error in
+                guard let data = data,
+                      let dragData = try? JSONDecoder().decode(ArrangementDragData.self, from: data),
+                      dragData.type == "solo" || dragData.type == "accompaniment" else { return }
 
-            DispatchQueue.main.async {
-                let dropLocationX = info.location.x - 120 // 减去轨道控制区域宽度
-                let beat = max(0, dropLocationX / (beatWidth * zoomLevel))
-                let snappedBeat = round(beat) // 对齐到拍
+                DispatchQueue.main.async {
+                    let dropLocationX = info.location.x - 120 // 减去轨道控制区域宽度
+                    let beat = dropLocationX / (beatWidth * zoomLevel)
+                    let snappedBeat = max(0, round(beat)) // 对齐到拍后再确保不小于0
 
-                let segmentType: GuitarSegmentType = dragData.type == "solo"
-                    ? .solo(segmentId: dragData.resourceId)
-                    : .accompaniment(segmentId: dragData.resourceId)
+                    let segmentType: GuitarSegmentType = dragData.type == "solo"
+                        ? .solo(segmentId: dragData.resourceId)
+                        : .accompaniment(segmentId: dragData.resourceId)
 
-                let newSegment = GuitarSegment(
-                    startBeat: snappedBeat,
-                    durationInBeats: dragData.defaultDuration,
-                    type: segmentType
-                )
+                    let newSegment = GuitarSegment(
+                        startBeat: snappedBeat,
+                        durationInBeats: dragData.defaultDuration,
+                        type: segmentType
+                    )
 
-                self.updateGuitarTrack(with: newSegment, appData: self.appData)
+                    self.updateGuitarTrack(with: newSegment, appData: self.appData)
+                }
             }
+            return true
         }
 
-        return true
+        // 处理片段重新定位（来自现有片段）
+        if info.hasItemsConforming(to: [.text]) {
+            let items = info.itemProviders(for: [.text])
+            guard let provider = items.first else { return false }
+
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, error in
+                guard let data = data,
+                      let segmentDragData = try? JSONDecoder().decode(SegmentDragData.self, from: data),
+                      segmentDragData.segmentType == .guitar else { return }
+
+                DispatchQueue.main.async {
+                    let dropLocationX = info.location.x - 120 // 减去轨道控制区域宽度
+                    let beat = dropLocationX / (beatWidth * zoomLevel)
+                    let snappedBeat = max(0, round(beat)) // 对齐到拍后再确保不小于0
+
+                    self.repositionGuitarSegment(segmentId: segmentDragData.segmentId, newStartBeat: snappedBeat, appData: self.appData)
+                }
+            }
+            return true
+        }
+
+        return false
     }
 
     private func updateGuitarTrack(with segment: GuitarSegment, appData: AppData) {
@@ -458,6 +554,20 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
         if let trackIndex = preset.arrangement.guitarTracks.firstIndex(where: { $0.id == track.id }) {
             preset.arrangement.guitarTracks[trackIndex].addSegment(segment)
             appData.updateArrangement(preset.arrangement)
+        }
+    }
+
+    private func repositionGuitarSegment(segmentId: UUID, newStartBeat: Double, appData: AppData) {
+        guard var preset = appData.preset else { return }
+        var arrangement = preset.arrangement
+
+        // 在所有吉他轨道中查找并更新片段位置
+        for trackIndex in 0..<arrangement.guitarTracks.count {
+            if let segmentIndex = arrangement.guitarTracks[trackIndex].segments.firstIndex(where: { $0.id == segmentId }) {
+                arrangement.guitarTracks[trackIndex].segments[segmentIndex].startBeat = newStartBeat
+                appData.updateArrangement(arrangement)
+                break
+            }
         }
     }
 }
