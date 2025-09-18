@@ -326,16 +326,40 @@ struct FretInputPopover: View {
 
 struct SoloGridView: View {
     let lengthInBeats: Double, gridSize: Double, beatWidth: CGFloat, stringHeight: CGFloat, zoomLevel: CGFloat
-    
+    let beatsPerBar: Int = 4 // Assuming 4/4 time signature
+
     var body: some View {
         Canvas { context, size in
             let stringLabelWidth: CGFloat = 40.0
             let totalHeight = stringHeight * 6
             var beat = 0.0
+            
             while beat <= lengthInBeats {
                 let x = stringLabelWidth + CGFloat(beat) * beatWidth * zoomLevel
-                let isMainBeat = beat.truncatingRemainder(dividingBy: 1.0) == 0
-                context.stroke(Path { $0.move(to: CGPoint(x: x, y: 0)); $0.addLine(to: CGPoint(x: x, y: totalHeight)) }, with: .color(isMainBeat ? .secondary : .secondary.opacity(0.5)), lineWidth: isMainBeat ? 1 : 0.5)
+                
+                let isBarLine = beat.truncatingRemainder(dividingBy: Double(beatsPerBar)) == 0
+                let isBeatLine = beat.truncatingRemainder(dividingBy: 1.0) == 0
+
+                var finalColor: Color = .secondary.opacity(0.3)
+                var finalLineWidth: CGFloat = 0.5
+
+                if isBarLine {
+                    finalColor = .primary.opacity(0.8)
+                    finalLineWidth = 1.2
+                } else if isBeatLine {
+                    finalColor = .secondary.opacity(0.7)
+                    finalLineWidth = 0.8
+                }
+                
+                context.stroke(
+                    Path { path in
+                        path.move(to: CGPoint(x: x, y: 0))
+                        path.addLine(to: CGPoint(x: x, y: totalHeight))
+                    },
+                    with: .color(finalColor),
+                    lineWidth: finalLineWidth
+                )
+                
                 beat += gridSize
             }
         }
@@ -375,15 +399,31 @@ struct SoloNoteView: View {
 
 struct SegmentSettingsView: View {
     @Binding var lengthInBeats: Double
+    @State private var lengthInBarsString: String = ""
+    private let beatsPerBar: Int = 4
 
     var body: some View {
         VStack(spacing: 12) {
             Text("Segment Properties").font(.headline)
             HStack {
-                Text("Length (beats):")
-                TextField("Length", value: $lengthInBeats, format: .number.precision(.fractionLength(1))).frame(width: 60)
+                Text("Length (bars):")
+                TextField("Length", text: $lengthInBarsString)
+                    .frame(width: 60)
+                    .onSubmit(commitLengthChange)
             }
         }.padding()
+        .onAppear {
+            let currentBars = lengthInBeats / Double(beatsPerBar)
+            lengthInBarsString = String(format: "%.2f", currentBars).trimmingCharacters(in: ["0", "."]) // Clean up trailing .00 or .X0
+            if lengthInBarsString.isEmpty { lengthInBarsString = "0" }
+        }
+    }
+    
+    private func commitLengthChange() {
+        if let bars = Double(lengthInBarsString) {
+            let newLength = max(0, bars * Double(beatsPerBar))
+            lengthInBeats = newLength
+        }
     }
 }
 
