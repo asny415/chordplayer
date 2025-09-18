@@ -400,6 +400,8 @@ struct EnhancedDrumTrackDropDelegate: DropDelegate {
             return false
         }
 
+        let beatsPerMeasure = Double(self.appData.preset?.timeSignature.beatsPerMeasure ?? 4)
+
         // 优先尝试作为“重新定位”操作处理
         if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
             provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, error in
@@ -409,7 +411,9 @@ struct EnhancedDrumTrackDropDelegate: DropDelegate {
 
                 DispatchQueue.main.async {
                     let beat = info.location.x / (beatWidth * zoomLevel)
-                    let snappedBeat = max(0, round(beat))
+                    let measure = beat / beatsPerMeasure
+                    let snappedMeasure = floor(measure)
+                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
                     self.repositionDrumSegment(segmentId: segmentDragData.segmentId, newStartBeat: snappedBeat, appData: self.appData)
                 }
             }
@@ -425,7 +429,9 @@ struct EnhancedDrumTrackDropDelegate: DropDelegate {
 
                 DispatchQueue.main.async {
                     let beat = info.location.x / (beatWidth * zoomLevel)
-                    let snappedBeat = max(0, round(beat))
+                    let measure = beat / beatsPerMeasure
+                    let snappedMeasure = floor(measure)
+                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
                     let newSegment = DrumSegment(startBeat: snappedBeat, durationInBeats: dragData.defaultDuration, patternId: dragData.resourceId)
                     self.updateDrumTrack(with: newSegment, appData: self.appData)
                 }
@@ -476,6 +482,8 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
             return false
         }
 
+        let beatsPerMeasure = Double(self.appData.preset?.timeSignature.beatsPerMeasure ?? 4)
+
         // 优先尝试作为“重新定位”操作处理
         if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
             provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, error in
@@ -484,7 +492,9 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
 
                 DispatchQueue.main.async {
                     let beat = info.location.x / (beatWidth * zoomLevel)
-                    let snappedBeat = max(0, round(beat))
+                    let measure = beat / beatsPerMeasure
+                    let snappedMeasure = floor(measure)
+                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
                     self.repositionGuitarSegment(segmentId: segmentDragData.segmentId, newStartBeat: snappedBeat, appData: self.appData)
                 }
             }
@@ -499,7 +509,9 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
 
                 DispatchQueue.main.async {
                     let beat = info.location.x / (beatWidth * zoomLevel)
-                    let snappedBeat = max(0, round(beat))
+                    let measure = beat / beatsPerMeasure
+                    let snappedMeasure = floor(measure)
+                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
                     let segmentType: GuitarSegmentType = dragData.type == "solo" ? .solo(segmentId: dragData.resourceId) : .accompaniment(segmentId: dragData.resourceId)
                     let newSegment = GuitarSegment(startBeat: snappedBeat, durationInBeats: dragData.defaultDuration, type: segmentType)
                     self.updateGuitarTrack(with: newSegment, appData: self.appData)
