@@ -8,6 +8,8 @@ class ChordPlayer: ObservableObject {
     var drumPlayer: DrumPlayer
 
     private let notesLock = NSRecursiveLock()
+    private var scheduledWorkItems: [UUID: DispatchWorkItem] = [:]
+    private let workItemsLock = NSRecursiveLock()
 
     private var playingNotes: [UInt8: UUID] = [:] // Maps MIDI Note -> Scheduled Note-Off Task ID
     private var stringNotes: [Int: UInt8] = [:] // Maps String Index (0-5) -> MIDI Note
@@ -93,6 +95,15 @@ class ChordPlayer: ObservableObject {
     }
 
     func panic() {
+        print("[ChordPlayer] >>>> PANIC called")
+        workItemsLock.lock()
+        print("[ChordPlayer] Cancelling \(scheduledWorkItems.count) scheduled work items.")
+        for item in scheduledWorkItems.values {
+            item.cancel()
+        }
+        scheduledWorkItems.removeAll()
+        workItemsLock.unlock()
+
         notesLock.lock()
         defer { notesLock.unlock() }
 
@@ -106,9 +117,15 @@ class ChordPlayer: ObservableObject {
 
     func schedulePattern(chord: Chord, pattern: GuitarPattern, preset: Preset, scheduledUptime: TimeInterval, totalDuration: TimeInterval, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100, midiChannel: Int? = nil, completion: @escaping ([UUID]) -> Void) {
         let delay = scheduledUptime - ProcessInfo.processInfo.systemUptime
+        let workItemID = UUID()
+        let channelForLog = midiChannel ?? self.appData.chordMidiChannel
+        
+        print("[ChordPlayer] Scheduling pattern '\(pattern.name)' for chord '\(chord.name)' on channel \(channelForLog) with delay \(delay)s")
 
-        schedulingQueue.asyncAfter(deadline: .now() + (delay > 0 ? delay : 0)) { [weak self] in
+        let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return completion([]) }
+            
+            print("[ChordPlayer] EXECUTING work item for pattern '\(pattern.name)' on channel \(channelForLog)")
 
             var eventIDs: [UUID] = []
             let channel = UInt8((midiChannel ?? self.appData.chordMidiChannel) - 1)
@@ -174,7 +191,17 @@ class ChordPlayer: ObservableObject {
                 }
             }
             completion(eventIDs)
+            
+            self.workItemsLock.lock()
+            self.scheduledWorkItems.removeValue(forKey: workItemID)
+            self.workItemsLock.unlock()
         }
+        
+        workItemsLock.lock()
+        scheduledWorkItems[workItemID] = workItem
+        workItemsLock.unlock()
+
+        schedulingQueue.asyncAfter(deadline: .now() + (delay > 0 ? delay : 0), execute: workItem)
     }
     
     private func scheduleNote(note: UInt8, stringIndex: Int, velocity: UInt8, channel: UInt8, scheduledUptime: TimeInterval, durationSeconds: TimeInterval) -> [UUID] {
