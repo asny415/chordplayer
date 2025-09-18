@@ -95,9 +95,7 @@ class ChordPlayer: ObservableObject {
     }
 
     func panic() {
-        print("[ChordPlayer] >>>> PANIC called")
         workItemsLock.lock()
-        print("[ChordPlayer] Cancelling \(scheduledWorkItems.count) scheduled work items.")
         for item in scheduledWorkItems.values {
             item.cancel()
         }
@@ -118,14 +116,9 @@ class ChordPlayer: ObservableObject {
     func schedulePattern(chord: Chord, pattern: GuitarPattern, preset: Preset, scheduledUptime: TimeInterval, totalDuration: TimeInterval, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100, midiChannel: Int? = nil, completion: @escaping ([UUID]) -> Void) {
         let delay = scheduledUptime - ProcessInfo.processInfo.systemUptime
         let workItemID = UUID()
-        let channelForLog = midiChannel ?? self.appData.chordMidiChannel
-        
-        print("[ChordPlayer] Scheduling pattern '\(pattern.name)' for chord '\(chord.name)' on channel \(channelForLog) with delay \(delay)s")
 
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return completion([]) }
-            
-            print("[ChordPlayer] EXECUTING work item for pattern '\(pattern.name)' on channel \(channelForLog)")
 
             var eventIDs: [UUID] = []
             let channel = UInt8((midiChannel ?? self.appData.chordMidiChannel) - 1)

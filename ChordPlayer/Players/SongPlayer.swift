@@ -38,7 +38,6 @@ class PresetArrangerPlayer: ObservableObject {
             stop()
             return
         }
-        print("[PresetArrangerPlayer] >>>> PLAYING arrangement at beat \(startFromBeat)")
 
         currentPreset = preset
         playbackPosition = startFromBeat
@@ -58,7 +57,6 @@ class PresetArrangerPlayer: ObservableObject {
     }
 
     func stop() {
-        print("[PresetArrangerPlayer] >>>> STOPPING arrangement")
         isPlaying = false
         playbackTimer?.invalidate()
         playbackTimer = nil
@@ -251,7 +249,6 @@ class PresetArrangerPlayer: ObservableObject {
     }
 
     private func scheduleGuitarEvents(track: GuitarTrack, preset: Preset, startBeat: Double, currentTime: TimeInterval, beatsToSeconds: Double) {
-        print("[PresetArrangerPlayer] Scheduling guitar track: \(track.name)")
         for segment in track.segments {
             // 只处理在播放范围内的片段
             guard segment.startBeat + segment.durationInBeats > startBeat &&
@@ -263,13 +260,11 @@ class PresetArrangerPlayer: ObservableObject {
             switch segment.type {
             case .solo(let segmentId):
                 if let soloSegment = appData.getSoloSegment(for: segmentId) {
-                    print("  -> Scheduling SOLO segment: \(soloSegment.name)")
                     scheduleSoloSegment(segment: soloSegment, startTime: segmentStartTime, track: track)
                 }
 
             case .accompaniment(let segmentId):
                 if let accompSegment = appData.getAccompanimentSegment(for: segmentId) {
-                    print("  -> Scheduling ACCOMPANIMENT segment: \(accompSegment.name)")
                     scheduleAccompanimentSegment(segment: accompSegment, startTime: segmentStartTime, track: track, preset: preset)
                 }
             }
@@ -345,9 +340,6 @@ class PresetArrangerPlayer: ObservableObject {
                 if scheduledUptime < ProcessInfo.processInfo.systemUptime {
                     continue
                 }
-                
-                let midiChannel = channel(for: track, in: preset)
-                print("    --> Calling chordPlayer.schedulePattern for track '\(track.name)' on channel \(midiChannel)")
 
                 chordPlayer.schedulePattern(
                     chord: chordToPlay,
@@ -356,7 +348,7 @@ class PresetArrangerPlayer: ObservableObject {
                     scheduledUptime: scheduledUptime,
                     totalDuration: totalDuration,
                     dynamics: measure.dynamics,
-                    midiChannel: midiChannel,
+                    midiChannel: channel(for: track, in: preset),
                     completion: { eventIDs in
                         self.eventsLock.lock()
                         self.scheduledEvents.append(contentsOf: eventIDs)
