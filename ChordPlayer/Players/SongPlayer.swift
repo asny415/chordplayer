@@ -166,26 +166,38 @@ class PresetArrangerPlayer: ObservableObject {
     }
 
     private func scheduleDrumEvents(track: DrumTrack, preset: Preset, startBeat: Double, currentTime: TimeInterval, beatsToSeconds: Double) {
-        guard !track.isMuted else { return }
+        guard !track.isMuted, !track.segments.isEmpty else { return }
 
-        for segment in track.segments {
-            // 只处理在播放范围内的片段
-            guard segment.startBeat + segment.durationInBeats > startBeat &&
-                  segment.startBeat < preset.arrangement.lengthInBeats else { continue }
+        let sortedSegments = track.segments.sorted { $0.startBeat < $1.startBeat }
 
-            guard let drumPattern = appData.getDrumPattern(for: segment.patternId) else { continue }
+        for i in 0..<sortedSegments.count {
+            let currentSegment = sortedSegments[i]
+            
+            // Determine the end beat for the current segment's loop
+            let nextSegmentStartBeat = (i + 1 < sortedSegments.count) ? sortedSegments[i+1].startBeat : preset.arrangement.lengthInBeats
+            let loopEndBeat = min(nextSegmentStartBeat, preset.arrangement.lengthInBeats)
 
-            let segmentStartTime = currentTime + (max(segment.startBeat, startBeat) - startBeat) * beatsToSeconds
-            let segmentDuration = min(segment.durationInBeats, preset.arrangement.lengthInBeats - segment.startBeat) * beatsToSeconds
+            // Only process segments that are relevant to the current playback time
+            guard currentSegment.startBeat < loopEndBeat && loopEndBeat > startBeat else { continue }
+            
+            guard let drumPattern = appData.getDrumPattern(for: currentSegment.patternId) else { continue }
 
-            // 计算需要重复播放pattern多少次
+            let segmentStartTime = currentTime + (max(currentSegment.startBeat, startBeat) - startBeat) * beatsToSeconds
+            let segmentEffectiveDuration = (loopEndBeat - max(currentSegment.startBeat, startBeat)) * beatsToSeconds
+            
+            guard segmentEffectiveDuration > 0 else { continue }
+
             let patternDurationBeats = Double(drumPattern.length) / (drumPattern.resolution == .sixteenth ? 4.0 : 2.0)
             let patternDurationSeconds = patternDurationBeats * beatsToSeconds
-            let repeatCount = Int(ceil(segmentDuration / patternDurationSeconds))
+            
+            guard patternDurationSeconds > 0 else { continue }
+            
+            let repeatCount = Int(ceil(segmentEffectiveDuration / patternDurationSeconds))
 
             for repeatIndex in 0..<repeatCount {
                 let repeatStartTime = segmentStartTime + Double(repeatIndex) * patternDurationSeconds
-                if repeatStartTime >= currentTime {
+                // Ensure we don't schedule past the loop end time
+                if repeatStartTime < (segmentStartTime + segmentEffectiveDuration) && repeatStartTime >= currentTime {
                     scheduleDrumPattern(pattern: drumPattern, startTime: repeatStartTime, volume: track.volume)
                 }
             }
