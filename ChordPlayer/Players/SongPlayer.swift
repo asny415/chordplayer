@@ -20,6 +20,7 @@ class PresetArrangerPlayer: ObservableObject {
     private var playbackTimer: Timer?
     private var scheduledEvents: [UUID] = []
     private var currentPreset: Preset?
+    private let openStringMIDINotes: [UInt8] = [64, 59, 55, 50, 45, 40]
 
     init(midiManager: MidiManager, appData: AppData, chordPlayer: ChordPlayer, drumPlayer: DrumPlayer, soloPlayer: SoloPlayer) {
         self.midiManager = midiManager
@@ -265,7 +266,7 @@ class PresetArrangerPlayer: ObservableObject {
             let noteStartTime = startTime + note.startTime * beatsToSeconds
             guard noteStartTime >= ProcessInfo.processInfo.systemUptime else { continue }
 
-            let midiNote = 40 + note.string * 5 + note.fret // 简化的MIDI音符计算
+            let midiNote = midiNote(from: note.string, fret: note.fret)
             let velocity = UInt8(min(127, max(1, Int(Double(note.velocity) * track.volume))))
 
             let eventId = midiManager.scheduleNoteOn(
@@ -291,5 +292,10 @@ class PresetArrangerPlayer: ObservableObject {
         // 这里应该使用ChordPlayer的逻辑来播放伴奏片段
         // 简化实现，只是占位
         // 实际实现中应该调用chordPlayer.play(segment: segment)并调整时间偏移和MIDI通道
+    }
+    
+    private func midiNote(from string: Int, fret: Int) -> UInt8 {
+        guard string >= 0 && string < openStringMIDINotes.count else { return 0 }
+        return openStringMIDINotes[string] + UInt8(fret)
     }
 }
