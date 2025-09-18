@@ -257,6 +257,9 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
     var soloSegments: [SoloSegment] = []
     var accompanimentSegments: [AccompanimentSegment] = []
 
+    // Song Arrangement - 歌曲编排功能
+    var arrangement: SongArrangement = SongArrangement()
+
     // Currently active patterns
     var activePlayingPatternId: UUID?
     var activeDrumPatternId: UUID?
@@ -276,6 +279,7 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
          drumPatterns: [DrumPattern] = [],
          soloSegments: [SoloSegment] = [],
          accompanimentSegments: [AccompanimentSegment] = [],
+         arrangement: SongArrangement = SongArrangement(),
          activePlayingPatternId: UUID? = nil,
          activeDrumPatternId: UUID? = nil,
          activeSoloSegmentId: UUID? = nil,
@@ -293,6 +297,7 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
         self.drumPatterns = drumPatterns
         self.soloSegments = soloSegments
         self.accompanimentSegments = accompanimentSegments
+        self.arrangement = arrangement
         self.activePlayingPatternId = activePlayingPatternId
         self.activeDrumPatternId = activeDrumPatternId
         self.activeSoloSegmentId = activeSoloSegmentId
@@ -509,6 +514,221 @@ enum MeasureDynamics: String, Codable, CaseIterable, CustomStringConvertible, Id
     }
 }
 
+
+// MARK: - Song Arrangement Models
+
+struct SongArrangement: Codable, Hashable, Equatable {
+    var lengthInBeats: Double = 64.0 // 歌曲编排总长度（拍数）
+
+    // 各种轨道
+    var drumTrack: DrumTrack = DrumTrack()
+    var guitarTracks: [GuitarTrack] = []
+    var annotationTrack: AnnotationTrack = AnnotationTrack()
+    var lyricsTrack: LyricsTrack = LyricsTrack()
+
+    var lastModified: Date = Date()
+
+    init() {
+        // 默认添加一条吉他轨道
+        self.guitarTracks.append(GuitarTrack(name: "Guitar 1"))
+    }
+
+    mutating func updateLength(_ newLength: Double) {
+        guard newLength > 0 else { return }
+        lengthInBeats = newLength
+        lastModified = Date()
+    }
+
+    mutating func addGuitarTrack() {
+        let newTrack = GuitarTrack(name: "Guitar \(guitarTracks.count + 1)")
+        guitarTracks.append(newTrack)
+        lastModified = Date()
+    }
+
+    mutating func removeGuitarTrack(withId id: UUID) {
+        guitarTracks.removeAll { $0.id == id }
+        lastModified = Date()
+    }
+}
+
+// MARK: - Drum Track Models
+
+struct DrumTrack: Codable, Hashable, Equatable {
+    var segments: [DrumSegment] = []
+    var isMuted: Bool = false
+    var volume: Double = 1.0
+
+    mutating func addSegment(_ segment: DrumSegment) {
+        // 确保不重叠
+        segments.removeAll { existing in
+            existing.startBeat < segment.startBeat + segment.durationInBeats &&
+            existing.startBeat + existing.durationInBeats > segment.startBeat
+        }
+        segments.append(segment)
+        segments.sort { $0.startBeat < $1.startBeat }
+    }
+}
+
+struct DrumSegment: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    var startBeat: Double
+    var durationInBeats: Double
+    var patternId: UUID // 引用Preset中的DrumPattern
+
+    init(startBeat: Double, durationInBeats: Double, patternId: UUID) {
+        self.startBeat = startBeat
+        self.durationInBeats = durationInBeats
+        self.patternId = patternId
+    }
+}
+
+// MARK: - Guitar Track Models
+
+struct GuitarTrack: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    var name: String
+    var segments: [GuitarSegment] = []
+    var isMuted: Bool = false
+    var isSolo: Bool = false
+    var volume: Double = 1.0
+    var pan: Double = 0.0 // -1.0 (左) 到 1.0 (右)
+
+    init(name: String) {
+        self.name = name
+    }
+
+    mutating func addSegment(_ segment: GuitarSegment) {
+        // 允许重叠，按开始时间排序
+        segments.append(segment)
+        segments.sort { $0.startBeat < $1.startBeat }
+    }
+
+    mutating func removeSegment(withId id: UUID) {
+        segments.removeAll { $0.id == id }
+    }
+}
+
+struct GuitarSegment: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    var startBeat: Double
+    var durationInBeats: Double
+    var type: GuitarSegmentType
+
+    init(startBeat: Double, durationInBeats: Double, type: GuitarSegmentType) {
+        self.startBeat = startBeat
+        self.durationInBeats = durationInBeats
+        self.type = type
+    }
+}
+
+enum GuitarSegmentType: Codable, Hashable, Equatable {
+    case solo(segmentId: UUID)
+    case accompaniment(segmentId: UUID)
+
+    var segmentId: UUID {
+        switch self {
+        case .solo(let id): return id
+        case .accompaniment(let id): return id
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .solo: return "Solo"
+        case .accompaniment: return "Accompaniment"
+        }
+    }
+}
+
+// MARK: - Annotation Track Models
+
+struct AnnotationTrack: Codable, Hashable, Equatable {
+    var annotations: [Annotation] = []
+    var isVisible: Bool = true
+
+    mutating func addAnnotation(_ annotation: Annotation) {
+        annotations.append(annotation)
+        annotations.sort { $0.startBeat < $1.startBeat }
+    }
+
+    mutating func removeAnnotation(withId id: UUID) {
+        annotations.removeAll { $0.id == id }
+    }
+}
+
+struct Annotation: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    var startBeat: Double
+    var text: String
+    var type: AnnotationType = .chord
+    var color: String = "blue" // 颜色标识
+
+    init(startBeat: Double, text: String, type: AnnotationType = .chord) {
+        self.startBeat = startBeat
+        self.text = text
+        self.type = type
+        self.color = type.defaultColor
+    }
+}
+
+enum AnnotationType: String, Codable, CaseIterable, Hashable, Equatable, Identifiable {
+    case chord = "和弦"
+    case scaleNote = "音阶"
+    case marker = "标记"
+    case structure = "结构" // 如：Verse, Chorus, Bridge
+
+    var id: Self { self }
+
+    var defaultColor: String {
+        switch self {
+        case .chord: return "blue"
+        case .scaleNote: return "green"
+        case .marker: return "orange"
+        case .structure: return "purple"
+        }
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .chord: return "music.note"
+        case .scaleNote: return "tuningfork"
+        case .marker: return "flag.fill"
+        case .structure: return "building.columns.fill"
+        }
+    }
+}
+
+// MARK: - Lyrics Track Models
+
+struct LyricsTrack: Codable, Hashable, Equatable {
+    var lyrics: [LyricsSegment] = []
+    var isVisible: Bool = true
+    var fontSize: Double = 14.0
+
+    mutating func addLyrics(_ lyrics: LyricsSegment) {
+        self.lyrics.append(lyrics)
+        self.lyrics.sort { $0.startBeat < $1.startBeat }
+    }
+
+    mutating func removeLyrics(withId id: UUID) {
+        lyrics.removeAll { $0.id == id }
+    }
+}
+
+struct LyricsSegment: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    var startBeat: Double
+    var durationInBeats: Double
+    var text: String
+    var language: String = "zh" // 支持多语言歌词
+
+    init(startBeat: Double, durationInBeats: Double, text: String, language: String = "zh") {
+        self.startBeat = startBeat
+        self.durationInBeats = durationInBeats
+        self.text = text
+        self.language = language
+    }
+}
 
 // Helper extension to get unique elements while preserving order
 extension Array where Element: Hashable {

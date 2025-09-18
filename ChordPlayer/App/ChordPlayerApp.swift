@@ -7,6 +7,7 @@ struct ChordPlayerApp: App {
     @StateObject private var chordPlayer: ChordPlayer
     @StateObject private var drumPlayer: DrumPlayer
     @StateObject private var soloPlayer: SoloPlayer
+    @StateObject private var presetArrangerPlayer: PresetArrangerPlayer
     @StateObject private var keyboardHandler: KeyboardHandler
 
     init() {
@@ -16,6 +17,7 @@ struct ChordPlayerApp: App {
         let initialDrumPlayer = DrumPlayer(midiManager: initialMidiManager, appData: initialAppData)
         let initialChordPlayer = ChordPlayer(midiManager: initialMidiManager, appData: initialAppData, drumPlayer: initialDrumPlayer)
         let initialSoloPlayer = SoloPlayer(midiManager: initialMidiManager, appData: initialAppData, drumPlayer: initialDrumPlayer)
+        let initialPresetArrangerPlayer = PresetArrangerPlayer(midiManager: initialMidiManager, appData: initialAppData, chordPlayer: initialChordPlayer, drumPlayer: initialDrumPlayer, soloPlayer: initialSoloPlayer)
         let initialKeyboardHandler = KeyboardHandler(midiManager: initialMidiManager, chordPlayer: initialChordPlayer, drumPlayer: initialDrumPlayer, appData: initialAppData)
 
         _appData = StateObject(wrappedValue: initialAppData)
@@ -23,6 +25,7 @@ struct ChordPlayerApp: App {
         _chordPlayer = StateObject(wrappedValue: initialChordPlayer)
         _drumPlayer = StateObject(wrappedValue: initialDrumPlayer)
         _soloPlayer = StateObject(wrappedValue: initialSoloPlayer)
+        _presetArrangerPlayer = StateObject(wrappedValue: initialPresetArrangerPlayer)
         _keyboardHandler = StateObject(wrappedValue: initialKeyboardHandler)
 
         
@@ -38,6 +41,7 @@ struct ChordPlayerApp: App {
                 .environmentObject(chordPlayer)
                 .environmentObject(drumPlayer)
                 .environmentObject(soloPlayer)
+                .environmentObject(presetArrangerPlayer)
                 .environmentObject(keyboardHandler)
                 .environmentObject(PresetManager.shared)
         }

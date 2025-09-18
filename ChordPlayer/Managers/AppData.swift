@@ -156,4 +156,38 @@ class AppData: ObservableObject {
         preset?.chordProgression = newProgression
         saveChanges()
     }
+
+    // MARK: - Song Arrangement Management
+
+    func updateArrangement(_ arrangement: SongArrangement) {
+        preset?.arrangement = arrangement
+        saveChanges()
+    }
+
+    func addGuitarTrackToArrangement() {
+        preset?.arrangement.addGuitarTrack()
+        saveChanges()
+    }
+
+    func removeGuitarTrackFromArrangement(trackId: UUID) {
+        preset?.arrangement.removeGuitarTrack(withId: trackId)
+        saveChanges()
+    }
+
+    // MARK: - Arrangement Content Helpers
+
+    func getDrumPattern(for id: UUID?) -> DrumPattern? {
+        guard let id = id else { return nil }
+        return preset?.drumPatterns.first(where: { $0.id == id })
+    }
+
+    func getSoloSegment(for id: UUID?) -> SoloSegment? {
+        guard let id = id else { return nil }
+        return preset?.soloSegments.first(where: { $0.id == id })
+    }
+
+    func getAccompanimentSegment(for id: UUID?) -> AccompanimentSegment? {
+        guard let id = id else { return nil }
+        return preset?.accompanimentSegments.first(where: { $0.id == id })
+    }
 }
