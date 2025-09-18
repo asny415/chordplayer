@@ -307,55 +307,82 @@ class PresetArrangerPlayer: ObservableObject {
 
     private func scheduleAccompanimentSegment(segment: AccompanimentSegment, startTime: TimeInterval, track: GuitarTrack, preset: Preset) {
         let secondsPerBeat = 60.0 / preset.bpm
+        let beatsPerMeasure = preset.timeSignature.beatsPerMeasure
 
-        // Create a flat, time-sorted list of all chord events with their absolute start times.
+        // 1. Create a flat, time-sorted list of all chord and pattern events with ABSOLUTE beats as Int.
         let absoluteChordEvents = segment.measures.enumerated().flatMap { (measureIndex, measure) -> [TimelineEvent] in
             measure.chordEvents.map { event in
                 var absoluteEvent = event
-                absoluteEvent.startBeat += measureIndex * preset.timeSignature.beatsPerMeasure
+                absoluteEvent.startBeat += measureIndex * beatsPerMeasure
                 return absoluteEvent
             }
         }.sorted { $0.startBeat < $1.startBeat }
 
-        // Iterate through each measure and its pattern events.
-        for (measureIndex, measure) in segment.measures.enumerated() {
-            for patternEvent in measure.patternEvents {
-                let absolutePatternStartBeat = measureIndex * preset.timeSignature.beatsPerMeasure + patternEvent.startBeat
-
-                // Find the chord that should be active for this pattern event.
-                let activeChordEvent = absoluteChordEvents.last { $0.startBeat <= absolutePatternStartBeat }
-
-                guard let chordEvent = activeChordEvent else { continue }
-                
-                // Find the actual Chord and GuitarPattern objects from the preset library.
-                guard let chordToPlay = preset.chords.first(where: { $0.id == chordEvent.resourceId }),
-                      let patternToPlay = preset.playingPatterns.first(where: { $0.id == patternEvent.resourceId }) else {
-                    continue
-                }
-
-                let scheduledUptime = startTime + (Double(absolutePatternStartBeat) * secondsPerBeat)
-                let totalDuration = Double(patternEvent.durationInBeats) * secondsPerBeat
-
-                // Ensure we don't schedule events in the past
-                if scheduledUptime < ProcessInfo.processInfo.systemUptime {
-                    continue
-                }
-
-                chordPlayer.schedulePattern(
-                    chord: chordToPlay,
-                    pattern: patternToPlay,
-                    preset: preset,
-                    scheduledUptime: scheduledUptime,
-                    totalDuration: totalDuration,
-                    dynamics: measure.dynamics,
-                    midiChannel: channel(for: track, in: preset),
-                    completion: { eventIDs in
-                        self.eventsLock.lock()
-                        self.scheduledEvents.append(contentsOf: eventIDs)
-                        self.eventsLock.unlock()
-                    }
-                )
+        let absolutePatternEvents = segment.measures.enumerated().flatMap { (measureIndex, measure) -> [TimelineEvent] in
+            measure.patternEvents.map { event in
+                var absoluteEvent = event
+                absoluteEvent.startBeat += measureIndex * beatsPerMeasure
+                return absoluteEvent
             }
+        }.sorted { $0.startBeat < $1.startBeat }
+
+        guard !absolutePatternEvents.isEmpty else { return }
+
+        // 2. Iterate through the sorted pattern events to calculate correct durations.
+        for i in 0..<absolutePatternEvents.count {
+            let currentPatternEvent = absolutePatternEvents[i]
+            
+            // 3. Determine the end beat for the current pattern, using Doubles for precision.
+            let segmentDurationInBeats = Double(segment.lengthInMeasures * beatsPerMeasure)
+            let nextPatternStartBeat = (i + 1 < absolutePatternEvents.count) 
+                ? Double(absolutePatternEvents[i+1].startBeat) 
+                : segmentDurationInBeats
+            
+            let durationInBeats = nextPatternStartBeat - Double(currentPatternEvent.startBeat)
+
+            // Ignore zero-duration events
+            guard durationInBeats > 0 else { continue }
+
+            // Find the active chord for this pattern event.
+            let activeChordEvent = absoluteChordEvents.last { $0.startBeat <= currentPatternEvent.startBeat }
+            guard let chordEvent = activeChordEvent else { continue }
+
+            // Find the actual Chord and GuitarPattern objects.
+            guard let chordToPlay = preset.chords.first(where: { $0.id == chordEvent.resourceId }),
+                  let patternToPlay = preset.playingPatterns.first(where: { $0.id == currentPatternEvent.resourceId }) else {
+                continue
+            }
+            
+            // Find the dynamics for the measure this pattern belongs to.
+            let measureIndexForPattern = Int(floor(Double(currentPatternEvent.startBeat) / Double(beatsPerMeasure)))
+            guard measureIndexForPattern < segment.measures.count else { continue }
+            let dynamics = segment.measures[measureIndexForPattern].dynamics
+
+            // 4. Calculate scheduling time and the corrected total duration.
+            let scheduledUptime = startTime + (Double(currentPatternEvent.startBeat) * secondsPerBeat)
+            let totalDuration = durationInBeats * secondsPerBeat
+
+            // Ensure we don't schedule events in the past.
+            if scheduledUptime < ProcessInfo.processInfo.systemUptime {
+                continue
+            }
+
+            print("[SongPlayer] Scheduling pattern \(patternToPlay.name) at beat \(Double(currentPatternEvent.startBeat)). Calculated duration: \(durationInBeats) beats (\(totalDuration)s)")
+
+            chordPlayer.schedulePattern(
+                chord: chordToPlay,
+                pattern: patternToPlay,
+                preset: preset,
+                scheduledUptime: scheduledUptime,
+                totalDuration: totalDuration,
+                dynamics: dynamics,
+                midiChannel: channel(for: track, in: preset),
+                completion: { eventIDs in
+                    self.eventsLock.lock()
+                    self.scheduledEvents.append(contentsOf: eventIDs)
+                    self.eventsLock.unlock()
+                }
+            )
         }
     }
 

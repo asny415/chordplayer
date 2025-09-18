@@ -557,10 +557,14 @@ struct ResourceChordButton: View {
 struct ResourcePatternButton: View {
     let pattern: GuitarPattern
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 4) {
             Text(pattern.name).font(.caption).fontWeight(.semibold)
-            Text("\(pattern.length / (pattern.resolution == .sixteenth ? 4 : 2)) beats").font(.caption2).foregroundColor(.secondary)
-        }.padding(4).frame(width: 120, height: 40).background(Material.thin, in: RoundedRectangle(cornerRadius: 6))
+            PlayingPatternView(pattern: pattern, color: .primary)
+                .frame(height: 30)
+        }
+        .padding(4)
+        .frame(width: 120, height: 60)
+        .background(Material.thin, in: RoundedRectangle(cornerRadius: 6))
     }
 }
 
