@@ -75,7 +75,7 @@ struct AccompanimentEditorView: View {
                         zoomLevel: $zoomLevel,
                         selectedEventId: $selectedEventId,
                         playbackStartTime: playbackStartTime
-                    )
+                    ).frame(height:160)
                 }
                 .frame(maxWidth: .infinity)
                 .onTapGesture {
@@ -519,7 +519,7 @@ struct SidePanelView: View {
                 }
             }
         }
-        .frame(minWidth: 280, idealWidth: 320, maxWidth: 450)
+        .frame(width: 200)
     }
 }
 
