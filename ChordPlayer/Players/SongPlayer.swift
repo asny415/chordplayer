@@ -245,18 +245,18 @@ class PresetArrangerPlayer: ObservableObject {
             switch segment.type {
             case .solo(let segmentId):
                 if let soloSegment = appData.getSoloSegment(for: segmentId) {
-                    scheduleSoloSegment(segment: soloSegment, startTime: segmentStartTime, volume: track.volume, pan: track.pan)
+                    scheduleSoloSegment(segment: soloSegment, startTime: segmentStartTime, track: track)
                 }
 
             case .accompaniment(let segmentId):
                 if let accompSegment = appData.getAccompanimentSegment(for: segmentId) {
-                    scheduleAccompanimentSegment(segment: accompSegment, startTime: segmentStartTime, volume: track.volume, pan: track.pan, preset: preset)
+                    scheduleAccompanimentSegment(segment: accompSegment, startTime: segmentStartTime, track: track, preset: preset)
                 }
             }
         }
     }
 
-    private func scheduleSoloSegment(segment: SoloSegment, startTime: TimeInterval, volume: Double, pan: Double) {
+    private func scheduleSoloSegment(segment: SoloSegment, startTime: TimeInterval, track: GuitarTrack) {
         // 这里简化实现，实际应该使用SoloPlayer的逻辑
         guard let preset = currentPreset else { return }
         let beatsToSeconds = 60.0 / preset.bpm
@@ -266,12 +266,12 @@ class PresetArrangerPlayer: ObservableObject {
             guard noteStartTime >= ProcessInfo.processInfo.systemUptime else { continue }
 
             let midiNote = 40 + note.string * 5 + note.fret // 简化的MIDI音符计算
-            let velocity = UInt8(min(127, max(1, Int(Double(note.velocity) * volume))))
+            let velocity = UInt8(min(127, max(1, Int(Double(note.velocity) * track.volume))))
 
             let eventId = midiManager.scheduleNoteOn(
                 note: UInt8(midiNote),
                 velocity: velocity,
-                channel: UInt8(appData.chordMidiChannel - 1),
+                channel: UInt8(track.midiChannel - 1),
                 scheduledUptimeMs: noteStartTime * 1000
             )
             scheduledEvents.append(eventId)
@@ -280,16 +280,16 @@ class PresetArrangerPlayer: ObservableObject {
             let offEventId = midiManager.scheduleNoteOff(
                 note: UInt8(midiNote),
                 velocity: 0,
-                channel: UInt8(appData.chordMidiChannel - 1),
+                channel: UInt8(track.midiChannel - 1),
                 scheduledUptimeMs: (noteStartTime + 0.5) * 1000
             )
             scheduledEvents.append(offEventId)
         }
     }
 
-    private func scheduleAccompanimentSegment(segment: AccompanimentSegment, startTime: TimeInterval, volume: Double, pan: Double, preset: Preset) {
+    private func scheduleAccompanimentSegment(segment: AccompanimentSegment, startTime: TimeInterval, track: GuitarTrack, preset: Preset) {
         // 这里应该使用ChordPlayer的逻辑来播放伴奏片段
         // 简化实现，只是占位
-        // 实际实现中应该调用chordPlayer.play(segment: segment)并调整时间偏移
+        // 实际实现中应该调用chordPlayer.play(segment: segment)并调整时间偏移和MIDI通道
     }
 }

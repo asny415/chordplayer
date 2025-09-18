@@ -180,6 +180,9 @@ struct SimplePresetArrangerView: View {
                 },
                 onUpdateLength: { newLength in
                     updateArrangementLength(newLength)
+                },
+                onAddTrack: {
+                    addGuitarTrack()
                 }
             )
             .padding()
@@ -209,6 +212,9 @@ struct SimplePresetArrangerView: View {
                     },
                     onDeleteSegment: { segmentId in
                         deleteSegment(segmentId)
+                    },
+                    onDeleteTrack: { trackId in
+                        removeGuitarTrack(withId: trackId)
                     }
                 )
                 .frame(minWidth: 600)
@@ -269,6 +275,20 @@ struct SimplePresetArrangerView: View {
         }
     }
 
+    private func addGuitarTrack() {
+        guard var preset = appData.preset else { return }
+        preset.arrangement.addGuitarTrack()
+        appData.updateArrangement(preset.arrangement)
+    }
+
+    private func removeGuitarTrack(withId id: UUID) {
+        guard var preset = appData.preset else { return }
+        // 安全检查，确保至少保留一个吉他轨道
+        guard preset.arrangement.guitarTracks.count > 1 else { return }
+        preset.arrangement.removeGuitarTrack(withId: id)
+        appData.updateArrangement(preset.arrangement)
+    }
+
     private func updateArrangementLength(_ newLength: Double) {
         guard var preset = appData.preset else { return }
         preset.arrangement.updateLength(newLength)
@@ -322,6 +342,7 @@ struct ArrangementToolbar: View {
     @Binding var zoomLevel: CGFloat
     let onPlay: () -> Void
     let onUpdateLength: (Double) -> Void
+    let onAddTrack: () -> Void
 
     var body: some View {
         HStack(spacing: 16) {
@@ -333,6 +354,13 @@ struct ArrangementToolbar: View {
                 }
             }
             .buttonStyle(.borderedProminent)
+
+            Button(action: onAddTrack) {
+                HStack {
+                    Image(systemName: "plus")
+                    Text("Add Guitar Track")
+                }
+            }
 
             Spacer()
 
@@ -372,6 +400,7 @@ struct ArrangementTimelineView: View {
     let onEditDrumSegment: ((DrumSegment) -> Void)?
     let onEditGuitarSegment: ((GuitarSegment) -> Void)?
     let onDeleteSegment: ((UUID) -> Void)?
+    let onDeleteTrack: ((UUID) -> Void)?
 
     @EnvironmentObject var appData: AppData
 
@@ -401,7 +430,8 @@ struct ArrangementTimelineView: View {
                             trackHeight: trackHeight,
                             zoomLevel: zoomLevel,
                             onEditGuitarSegment: onEditGuitarSegment,
-                            onDeleteSegment: onDeleteSegment
+                            onDeleteSegment: onDeleteSegment,
+                            onDeleteTrack: onDeleteTrack
                         )
                     }
                 }
@@ -562,6 +592,7 @@ struct ArrangementGuitarTrackView: View {
     let zoomLevel: CGFloat
     let onEditGuitarSegment: ((GuitarSegment) -> Void)?
     let onDeleteSegment: ((UUID) -> Void)?
+    let onDeleteTrack: ((UUID) -> Void)?
 
     @EnvironmentObject var appData: AppData
     @State private var isDragOver: Bool = false
@@ -571,9 +602,11 @@ struct ArrangementGuitarTrackView: View {
             // 轨道控制
             TrackControlView(
                 title: track.name,
+                subtitle: "CH: \(track.midiChannel)",
                 icon: "guitars",
                 iconColor: track.isMuted ? .secondary : .blue,
-                isMuted: track.isMuted
+                isMuted: track.isMuted,
+                onDelete: { onDeleteTrack?(track.id) }
             )
             .frame(width: 120)
 
@@ -631,9 +664,17 @@ struct ArrangementGuitarTrackView: View {
 // MARK: - 轨道控制视图
 struct TrackControlView: View {
     let title: String
+    var subtitle: String? = nil
     let icon: String
     let iconColor: Color
     let isMuted: Bool
+    var onDelete: (() -> Void)? = nil
+    @EnvironmentObject var appData: AppData
+
+    private var canDelete: Bool {
+        guard onDelete != nil else { return false }
+        return appData.preset?.arrangement.guitarTracks.count ?? 0 > 1
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -647,14 +688,25 @@ struct TrackControlView: View {
                     .fontWeight(.semibold)
                     .strikethrough(isMuted)
 
-                if isMuted {
-                    Text("Muted")
+                if let subtitle = subtitle {
+                    Text(subtitle)
                         .font(.caption2)
-                        .foregroundColor(.red)
+                        .foregroundColor(.secondary)
                 }
             }
 
             Spacer()
+
+            if let onDelete = onDelete {
+                Button(action: onDelete) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.body)
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .opacity(canDelete ? 1 : 0)
+                .disabled(!canDelete)
+            }
         }
         .padding(.horizontal, 8)
         .background(Color(NSColor.controlBackgroundColor))
