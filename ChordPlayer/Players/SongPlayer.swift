@@ -183,7 +183,8 @@ class PresetArrangerPlayer: ObservableObject {
             
             guard let drumPattern = appData.getDrumPattern(for: currentSegment.patternId) else { continue }
 
-            let segmentStartTime = currentTime + (max(currentSegment.startBeat, startBeat) - startBeat) * beatsToSeconds
+            let schedulingBuffer = 0.05 // 50ms buffer
+            let segmentStartTime = currentTime + (max(currentSegment.startBeat, startBeat) - startBeat) * beatsToSeconds + schedulingBuffer
             let segmentEffectiveDuration = (loopEndBeat - max(currentSegment.startBeat, startBeat)) * beatsToSeconds
             
             guard segmentEffectiveDuration > 0 else { continue }
@@ -241,7 +242,8 @@ class PresetArrangerPlayer: ObservableObject {
             guard segment.startBeat + segment.durationInBeats > startBeat &&
                   segment.startBeat < preset.arrangement.lengthInBeats else { continue }
 
-            let segmentStartTime = currentTime + (max(segment.startBeat, startBeat) - startBeat) * beatsToSeconds
+            let schedulingBuffer = 0.05 // 50ms buffer
+            let segmentStartTime = currentTime + (max(segment.startBeat, startBeat) - startBeat) * beatsToSeconds + schedulingBuffer
 
             switch segment.type {
             case .solo(let segmentId):
@@ -264,7 +266,6 @@ class PresetArrangerPlayer: ObservableObject {
 
         for note in segment.notes {
             let noteStartTime = startTime + note.startTime * beatsToSeconds
-            guard noteStartTime >= ProcessInfo.processInfo.systemUptime else { continue }
 
             let midiNote = self.midiNote(from: note.string, fret: note.fret)
             let velocity = UInt8(min(127, max(1, Int(Double(note.velocity) * track.volume))))
@@ -272,7 +273,7 @@ class PresetArrangerPlayer: ObservableObject {
             let eventId = midiManager.scheduleNoteOn(
                 note: UInt8(midiNote),
                 velocity: velocity,
-                channel: UInt8(track.midiChannel - 1),
+                channel: UInt8(channel(for: track, in: preset) - 1),
                 scheduledUptimeMs: noteStartTime * 1000
             )
             scheduledEvents.append(eventId)
@@ -281,7 +282,7 @@ class PresetArrangerPlayer: ObservableObject {
             let offEventId = midiManager.scheduleNoteOff(
                 note: UInt8(midiNote),
                 velocity: 0,
-                channel: UInt8(track.midiChannel - 1),
+                channel: UInt8(channel(for: track, in: preset) - 1),
                 scheduledUptimeMs: (noteStartTime + 0.5) * 1000
             )
             scheduledEvents.append(offEventId)
@@ -331,10 +332,17 @@ class PresetArrangerPlayer: ObservableObject {
                     scheduledUptime: scheduledUptime,
                     totalDuration: totalDuration,
                     dynamics: measure.dynamics,
-                    midiChannel: track.midiChannel
+                    midiChannel: channel(for: track, in: preset)
                 )
             }
         }
+    }
+
+    private func channel(for track: GuitarTrack, in preset: Preset) -> Int {
+        if let index = preset.arrangement.guitarTracks.firstIndex(where: { $0.id == track.id }) {
+            return appData.chordMidiChannel + index
+        }
+        return appData.chordMidiChannel // Fallback
     }
 
     private func midiNote(from string: Int, fret: Int) -> UInt8 {

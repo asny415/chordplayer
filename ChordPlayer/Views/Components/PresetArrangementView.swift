@@ -597,12 +597,17 @@ struct ArrangementGuitarTrackView: View {
     @EnvironmentObject var appData: AppData
     @State private var isDragOver: Bool = false
 
+    private var midiChannel: Int {
+        let trackIndex = appData.preset?.arrangement.guitarTracks.firstIndex(where: { $0.id == track.id }) ?? 0
+        return appData.chordMidiChannel + trackIndex
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // 轨道控制
             TrackControlView(
                 title: track.name,
-                subtitle: "CH: \(track.midiChannel)",
+                subtitle: "CH: \(midiChannel)",
                 icon: "guitars",
                 iconColor: track.isMuted ? .secondary : .blue,
                 isMuted: track.isMuted,

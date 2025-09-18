@@ -529,8 +529,8 @@ struct SongArrangement: Codable, Hashable, Equatable {
     var lastModified: Date = Date()
 
     init() {
-        // 默认添加一条吉他轨道，通道为1
-        self.guitarTracks.append(GuitarTrack(name: "Guitar 1", midiChannel: 1))
+        // 默认添加一条吉他轨道
+        self.guitarTracks.append(GuitarTrack(name: "Guitar 1"))
     }
 
     mutating func updateLength(_ newLength: Double) {
@@ -540,8 +540,7 @@ struct SongArrangement: Codable, Hashable, Equatable {
     }
 
     mutating func addGuitarTrack() {
-        let nextChannel = (guitarTracks.map { $0.midiChannel }.max() ?? 0) + 1
-        let newTrack = GuitarTrack(name: "Guitar \(guitarTracks.count + 1)", midiChannel: nextChannel)
+        let newTrack = GuitarTrack(name: "Guitar \(guitarTracks.count + 1)")
         guitarTracks.append(newTrack)
         lastModified = Date()
     }
@@ -588,16 +587,14 @@ struct DrumSegment: Codable, Identifiable, Hashable, Equatable {
 struct GuitarTrack: Codable, Identifiable, Hashable, Equatable {
     var id = UUID()
     var name: String
-    var midiChannel: Int
     var segments: [GuitarSegment] = []
     var isMuted: Bool = false
     var isSolo: Bool = false
     var volume: Double = 1.0
     var pan: Double = 0.0 // -1.0 (左) 到 1.0 (右)
 
-    init(name: String, midiChannel: Int) {
+    init(name: String) {
         self.name = name
-        self.midiChannel = midiChannel
     }
 
     mutating func addSegment(_ segment: GuitarSegment) {
