@@ -11,6 +11,7 @@ struct MelodicLyricEditorView: View {
     @State private var currentTechnique: PlayingTechnique = .normal
     @State private var gridSizeInSteps: Int = 4 // 16th notes
     @State private var zoomLevel: CGFloat = 1.0
+    @State private var isSyncingTechnique = false
 
     // Popover State
     @State private var newItemPopoverState: NewItemPopoverState? = nil
@@ -94,6 +95,8 @@ struct MelodicLyricEditorView: View {
             }.frame(maxWidth: .infinity, minHeight: 30).background(Color(NSColor.controlBackgroundColor))
         }
         .onKeyDown(perform: handleKeyDown)
+        .onChange(of: selectedItems, perform: syncTechniqueWithSelection)
+        .onChange(of: currentTechnique, perform: applyTechniqueToSelectedItems)
     }
     
     // MARK: - Private Methods
@@ -110,17 +113,19 @@ struct MelodicLyricEditorView: View {
     }
     
     private func createNewItem(word: String, pitch: Int, octave: Int, position: Int) {
-        let newItem = MelodicLyricItem(word: word, position: position, pitch: pitch, octave: octave, technique: currentTechnique)
+        let techniqueValue: PlayingTechnique? = currentTechnique == .normal ? nil : currentTechnique
+        let newItem = MelodicLyricItem(word: word, position: position, pitch: pitch, octave: octave, technique: techniqueValue)
         segment.items.append(newItem)
         segment.items.sort { $0.position < $1.position }
         newItemPopoverState = nil
     }
-    
-    private func updateItem(id: UUID, newWord: String, newPitch: Int, newOctave: Int) {
+
+    private func updateItem(id: UUID, newWord: String, newPitch: Int, newOctave: Int, newTechnique: PlayingTechnique) {
         guard let index = segment.items.firstIndex(where: { $0.id == id }) else { return }
         segment.items[index].word = newWord
         segment.items[index].pitch = newPitch
         segment.items[index].octave = newOctave
+        segment.items[index].technique = newTechnique == .normal ? nil : newTechnique
         editingItemState = nil
     }
     
@@ -137,13 +142,44 @@ struct MelodicLyricEditorView: View {
         segment.items.removeAll { selectedItems.contains($0.id) }
         selectedItems.removeAll()
     }
-    
+
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         if event.keyCode == 51 { // Backspace/Delete
             deleteSelectedItems()
             return true
         }
         return false
+    }
+
+    private func syncTechniqueWithSelection(_ selection: Set<UUID>) {
+        guard !selection.isEmpty else { return }
+        let techniques = segment.items.filter { selection.contains($0.id) }
+            .map { $0.technique ?? .normal }
+
+        guard let firstTechnique = techniques.first else {
+            if currentTechnique != .normal { currentTechnique = .normal }
+            return
+        }
+
+        let shouldResetToNormal = techniques.contains { $0 != firstTechnique }
+
+        let newTechnique: PlayingTechnique = shouldResetToNormal ? .normal : firstTechnique
+        if currentTechnique != newTechnique {
+            isSyncingTechnique = true
+            currentTechnique = newTechnique
+        }
+    }
+
+    private func applyTechniqueToSelectedItems(_ technique: PlayingTechnique) {
+        if isSyncingTechnique {
+            isSyncingTechnique = false
+            return
+        }
+        guard !selectedItems.isEmpty else { return }
+        for index in segment.items.indices {
+            guard selectedItems.contains(segment.items[index].id) else { continue }
+            segment.items[index].technique = technique == .normal ? nil : technique
+        }
     }
 }
 
@@ -183,19 +219,21 @@ struct NewItemPopover: View {
 
 struct EditItemPopover: View {
     let popoverState: EditItemPopoverState
-    let onUpdate: (UUID, String, Int, Int) -> Void
-    
+    let onUpdate: (UUID, String, Int, Int, PlayingTechnique) -> Void
+
     @State private var word: String
     @State private var pitch: Int
     @State private var octave: Int
+    @State private var technique: PlayingTechnique
     @FocusState private var isWordFieldFocused: Bool
 
-    init(popoverState: EditItemPopoverState, onUpdate: @escaping (UUID, String, Int, Int) -> Void) {
+    init(popoverState: EditItemPopoverState, onUpdate: @escaping (UUID, String, Int, Int, PlayingTechnique) -> Void) {
         self.popoverState = popoverState
         self.onUpdate = onUpdate
         _word = State(initialValue: popoverState.item.word)
         _pitch = State(initialValue: popoverState.item.pitch)
         _octave = State(initialValue: popoverState.item.octave)
+        _technique = State(initialValue: popoverState.item.technique ?? .normal)
     }
 
     var body: some View {
@@ -206,7 +244,13 @@ struct EditItemPopover: View {
                 Stepper("Pitch: \(pitch)", value: $pitch, in: 1...7)
                 Stepper("Octave: \(octave)", value: $octave, in: -2...2)
             }
-            Button("Update") { if !word.isEmpty { onUpdate(popoverState.item.id, word, pitch, octave) } }.keyboardShortcut(.defaultAction)
+            Picker("Technique", selection: $technique) {
+                ForEach(PlayingTechnique.allCases) { Text($0.chineseName).tag($0) }
+            }
+            Button("Update") {
+                guard !word.isEmpty else { return }
+                onUpdate(popoverState.item.id, word, pitch, octave, technique)
+            }.keyboardShortcut(.defaultAction)
         }.padding().frame(minWidth: 250)
     }
 }
@@ -355,5 +399,3 @@ struct MelodicLyricEditorView_Previews: PreviewProvider {
         MelodicLyricEditorView(segment: $mockSegment).frame(width: 800, height: 400)
     }
 }
-
-
