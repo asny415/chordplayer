@@ -73,7 +73,9 @@ struct PresetWorkspaceView: View {
                 Text("Error: Could not find segment to edit.")
             }
         }
-        .sheet(item: $lyricSegmentToEdit) { segment in
+        .sheet(item: $lyricSegmentToEdit, onDismiss: {
+            appData.saveChanges()
+        }) { segment in
             if let index = appData.preset?.melodicLyricSegments.firstIndex(where: { $0.id == segment.id }) {
                 let segmentBinding = Binding<MelodicLyricSegment>(
                     get: { appData.preset!.melodicLyricSegments[index] },
@@ -86,7 +88,6 @@ struct PresetWorkspaceView: View {
                         .toolbar {
                             ToolbarItem(placement: .primaryAction) {
                                 Button("Done") {
-                                    appData.saveChanges()
                                     lyricSegmentToEdit = nil
                                 }
                             }

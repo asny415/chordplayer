@@ -66,11 +66,13 @@ struct MelodicLyricSegmentsView: View {
         let count = appData.preset?.melodicLyricSegments.count ?? 0
         let newSegment = MelodicLyricSegment(name: "Lyric \(count + 1)", lengthInBars: 4)
         appData.preset!.melodicLyricSegments.append(newSegment)
+        appData.saveChanges()
         self.segmentToEdit = newSegment
     }
 
     private func deleteSegment(at offsets: IndexSet) {
         guard appData.preset != nil else { return }
         appData.preset!.melodicLyricSegments.remove(atOffsets: offsets)
+        appData.saveChanges()
     }
 }
