@@ -20,7 +20,7 @@ class SoloPlayer: ObservableObject, Quantizable {
         case playNote(note: SoloNote, offTime: Double)
         case slide(from: SoloNote, to: SoloNote, offTime: Double)
         case vibrato(note: SoloNote, offTime: Double)
-        case bend(note: SoloNote, offTime: Double)
+        case bend(from: SoloNote, to: SoloNote, offTime: Double)
     }
     
     // MIDI note number for open strings, from high E (string 0) to low E (string 5)
@@ -84,11 +84,19 @@ class SoloPlayer: ObservableObject, Quantizable {
                     }
                     actions.append(.slide(from: currentNote, to: slideTargetNote, offTime: slideOffTime))
 
+                } else if currentNote.technique == .bend,
+                          let bendTargetNote = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
+                    
+                    consumedNoteIDs.insert(bendTargetNote.id)
+                    var bendOffTime = segment.lengthInBeats
+                    if let targetIndex = notesSortedByTime.firstIndex(of: bendTargetNote),
+                       let nextNoteAfterBend = notesSortedByTime.dropFirst(targetIndex + 1).first(where: { $0.string == currentNote.string }) {
+                        bendOffTime = nextNoteAfterBend.startTime
+                    }
+                    actions.append(.bend(from: currentNote, to: bendTargetNote, offTime: bendOffTime))
+
                 } else if currentNote.technique == .vibrato {
                     actions.append(.vibrato(note: currentNote, offTime: noteOffTime))
-
-                } else if currentNote.technique == .bend {
-                    actions.append(.bend(note: currentNote, offTime: noteOffTime))
 
                 } else {
                     actions.append(.playNote(note: currentNote, offTime: noteOffTime))
@@ -172,32 +180,50 @@ class SoloPlayer: ObservableObject, Quantizable {
                     eventIDs.append(self.midiManager.scheduleNoteOff(note: midiNoteNumber, velocity: 0, scheduledUptimeMs: noteOffTimeMs))
                     eventIDs.append(self.midiManager.schedulePitchBend(value: 8192, scheduledUptimeMs: noteOffTimeMs + 1))
                     
-                case .bend(let note, let offTime):
-                    guard note.fret >= 0 else { continue }
-                    let midiNoteNumber = self.midiNote(from: note.string, fret: note.fret, transposition: transposition)
-                    let velocity = UInt8(note.velocity)
-                    let noteOnTimeMs = playbackStartTimeMs + (note.startTime * beatsToSeconds * 1000.0)
+                case .bend(let fromNote, let toNote, let offTime):
+                    guard fromNote.fret >= 0 else { continue }
+                    let startMidiNote = self.midiNote(from: fromNote.string, fret: fromNote.fret, transposition: transposition)
+                    let velocity = UInt8(fromNote.velocity)
+                    let noteOnTimeMs = playbackStartTimeMs + (fromNote.startTime * beatsToSeconds * 1000.0)
                     let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
 
-                    eventIDs.append(self.midiManager.scheduleNoteOn(note: midiNoteNumber, velocity: velocity, scheduledUptimeMs: noteOnTimeMs))
+                    // 1. Pluck the first note
+                    eventIDs.append(self.midiManager.scheduleNoteOn(note: startMidiNote, velocity: velocity, scheduledUptimeMs: noteOnTimeMs))
 
-                    let bendAmountSemitones = note.articulation?.bendAmount ?? 1.0
-                    if bendAmountSemitones > 0 {
-                        let bendDurationBeats = 0.1 / beatsToSeconds
+                    let intervalBeats = toNote.startTime - fromNote.startTime
+                    if intervalBeats > 0.1 { // Only perform bend if the interval is long enough
+                        let quarterInterval = intervalBeats / 4.0
+                        
+                        let bendUpStartTime = fromNote.startTime + quarterInterval       // Start at 25%
+                        let bendUpDuration = quarterInterval                           // Duration is 25%
+                        
+                        let releaseStartTime = bendUpStartTime + bendUpDuration          // Start at 50%
+                        let releaseDuration = quarterInterval                          // Duration is 25%
+
+                        let bendAmountSemitones = 1.0
                         let pitchBendRangeSemitones = 2.0
                         let finalPitchBendValue = 8192 + Int(bendAmountSemitones * (8191.0 / pitchBendRangeSemitones))
                         
-                        for step in 0...10 {
-                            let t = Double(step) / 10.0
-                            let bendTimeMs = playbackStartTimeMs + ((note.startTime + t * bendDurationBeats) * beatsToSeconds * 1000.0)
-                            if bendTimeMs < noteOffTimeMs {
-                                let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
-                                eventIDs.append(self.midiManager.schedulePitchBend(value: UInt16(intermediatePitch), scheduledUptimeMs: bendTimeMs))
-                            }
+                        let pitchBendSteps = 10
+
+                        // 2. Bend Up (Part 2)
+                        for step in 0...pitchBendSteps {
+                            let t = Double(step) / Double(pitchBendSteps)
+                            let bendTimeMs = playbackStartTimeMs + ((bendUpStartTime + t * bendUpDuration) * beatsToSeconds * 1000.0)
+                            let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
+                            eventIDs.append(self.midiManager.schedulePitchBend(value: UInt16(intermediatePitch), scheduledUptimeMs: bendTimeMs))
+                        }
+
+                        // 3. Bend Down / Release (Part 3)
+                        for step in 0...pitchBendSteps {
+                            let t = Double(step) / Double(pitchBendSteps)
+                            let bendTimeMs = playbackStartTimeMs + ((releaseStartTime + t * releaseDuration) * beatsToSeconds * 1000.0)
+                            let intermediatePitch = finalPitchBendValue - Int(Double(finalPitchBendValue - 8192) * t)
+                            eventIDs.append(self.midiManager.schedulePitchBend(value: UInt16(intermediatePitch), scheduledUptimeMs: bendTimeMs))
                         }
                     }
 
-                    eventIDs.append(self.midiManager.scheduleNoteOff(note: midiNoteNumber, velocity: 0, scheduledUptimeMs: noteOffTimeMs))
+                    eventIDs.append(self.midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, scheduledUptimeMs: noteOffTimeMs))
                     eventIDs.append(self.midiManager.schedulePitchBend(value: 8192, scheduledUptimeMs: noteOffTimeMs + 1))
                 }
             }
