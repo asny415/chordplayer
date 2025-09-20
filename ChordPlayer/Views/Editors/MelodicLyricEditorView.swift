@@ -55,9 +55,11 @@ struct MelodicLyricEditorView: View {
             // 3. Main Content Editor
             ScrollView([.horizontal]) {
                 ZStack(alignment: .topLeading) {
+                    // Layer 1: Background Grid
                     MelodicLyricGridBackground(
                         lengthInBars: segment.lengthInBars, beatsPerBar: 4, beatWidth: beatWidth,
-                        trackHeight: trackHeight, zoomLevel: zoomLevel, stepsPerBeat: 4
+                        trackHeight: trackHeight, zoomLevel: zoomLevel, stepsPerBeat: 4,
+                        gridSizeInSteps: gridSizeInSteps
                     )
 
                     ForEach(segment.items) { item in
@@ -217,7 +219,8 @@ struct MelodicLyricToolbar: View {
     @Binding var zoomLevel: CGFloat
     @Binding var segmentLengthInBars: Int
     @State private var showingSettings = false
-    private let gridOptions: [(String, Int)] = [("1/4", 16), ("1/8", 8), ("1/16", 4), ("1/32", 2)]
+    // Corrected grid options: Label -> Number of 16th-note steps
+    private let gridOptions: [(String, Int)] = [("1/4", 4), ("1/8", 2), ("1/16", 1)]
 
     var body: some View {
         HStack(spacing: 20) {
@@ -257,13 +260,13 @@ struct LyricSegmentSettingsView: View {
 }
 
 struct MelodicLyricGridBackground: View {
-    let lengthInBars: Int, beatsPerBar: Int, beatWidth: CGFloat, trackHeight: CGFloat, zoomLevel: CGFloat, stepsPerBeat: Int
+    let lengthInBars: Int, beatsPerBar: Int, beatWidth: CGFloat, trackHeight: CGFloat, zoomLevel: CGFloat, stepsPerBeat: Int, gridSizeInSteps: Int
     private var stepWidth: CGFloat { (beatWidth / CGFloat(stepsPerBeat)) * zoomLevel }
 
     var body: some View {
         Canvas { context, size in
             let totalSteps = lengthInBars * beatsPerBar * stepsPerBeat
-            for step in 0...totalSteps {
+            for step in stride(from: 0, through: totalSteps, by: gridSizeInSteps) {
                 let x = CGFloat(step) * stepWidth
                 let isBeatLine = step % stepsPerBeat == 0
                 let isBarLine = isBeatLine && (step / stepsPerBeat) % beatsPerBar == 0
