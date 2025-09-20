@@ -448,27 +448,3 @@ struct SegmentSettingsView: View {
         }
     }
 }
-
-// MARK: - KeyDown Handling
-extension View {
-    func onKeyDown(perform action: @escaping (NSEvent) -> Bool) -> some View {
-        self.background(KeyEventHandlingView(onKeyDown: action))
-    }
-}
-
-struct KeyEventHandlingView: NSViewRepresentable {
-    let onKeyDown: (NSEvent) -> Bool
-    func makeNSView(context: Context) -> NSView {
-        let view = KeyDownView(); view.onKeyDown = onKeyDown; return view
-    }
-    func updateNSView(_ nsView: NSView, context: Context) {}
-}
-
-class KeyDownView: NSView {
-    var onKeyDown: ((NSEvent) -> Bool)?
-    override var acceptsFirstResponder: Bool { true }
-    override func keyDown(with event: NSEvent) {
-        if let handler = onKeyDown, handler(event) { return }
-        super.keyDown(with: event)
-    }
-}
