@@ -153,7 +153,9 @@ struct SimplePresetArrangerView: View {
     @State private var showingResourcePanel: Bool = true
     @State private var editingDrumSegment: DrumSegment?
     @State private var editingGuitarSegment: GuitarSegment?
+    @State private var editingLyricsSegment: LyricsSegment?
     @State private var showingDurationEditor: Bool = false
+    @State private var showingLyricsEditor: Bool = false
 
     // 时间轴设置
     private let beatWidth: CGFloat = 60
@@ -181,8 +183,11 @@ struct SimplePresetArrangerView: View {
                 onUpdateLength: { newLength in
                     updateArrangementLength(newLength)
                 },
-                onAddTrack: {
+                onAddGuitarTrack: {
                     addGuitarTrack()
+                },
+                onAddLyricsTrack: {
+                    addLyricsTrack()
                 }
             )
             .padding()
@@ -209,6 +214,10 @@ struct SimplePresetArrangerView: View {
                     onEditGuitarSegment: { segment in
                         editingGuitarSegment = segment
                         showingDurationEditor = true
+                    },
+                    onEditLyricsSegment: { segment in
+                        editingLyricsSegment = segment
+                        showingLyricsEditor = true
                     },
                     onDeleteSegment: { segmentId in
                         deleteSegment(segmentId)
@@ -273,12 +282,36 @@ struct SimplePresetArrangerView: View {
                 )
             }
         }
+        .sheet(isPresented: $showingLyricsEditor) {
+            if let lyricsSegment = editingLyricsSegment {
+                LyricsSegmentEditorView(
+                    segment: lyricsSegment,
+                    onSave: { updatedSegment in
+                        updateLyricsSegment(updatedSegment)
+                        editingLyricsSegment = nil
+                        showingLyricsEditor = false
+                    },
+                    onCancel: {
+                        editingLyricsSegment = nil
+                        showingLyricsEditor = false
+                    }
+                )
+            }
+        }
     }
 
     private func addGuitarTrack() {
         guard var preset = appData.preset else { return }
         preset.arrangement.addGuitarTrack()
         appData.updateArrangement(preset.arrangement)
+    }
+
+    private func addLyricsTrack() {
+        guard var preset = appData.preset else { return }
+        var arrangement = preset.arrangement
+        guard arrangement.lyricsTrack.isVisible == false else { return }
+        arrangement.lyricsTrack.isVisible = true
+        appData.updateArrangement(arrangement)
     }
 
     private func removeGuitarTrack(withId id: UUID) {
@@ -307,8 +340,16 @@ struct SimplePresetArrangerView: View {
             arrangement.guitarTracks[i].segments.removeAll { $0.id == segmentId }
         }
 
+        // 从歌词轨道删除
+        arrangement.lyricsTrack.lyrics.removeAll { $0.id == segmentId }
+
         appData.updateArrangement(arrangement)
         selectedSegmentId = nil
+
+        if editingLyricsSegment?.id == segmentId {
+            editingLyricsSegment = nil
+            showingLyricsEditor = false
+        }
     }
 
     private func updateDrumSegmentDuration(_ segment: DrumSegment, newDuration: Double) {
@@ -333,6 +374,17 @@ struct SimplePresetArrangerView: View {
             }
         }
     }
+
+    private func updateLyricsSegment(_ updatedSegment: LyricsSegment) {
+        guard var preset = appData.preset else { return }
+        var arrangement = preset.arrangement
+
+        if let index = arrangement.lyricsTrack.lyrics.firstIndex(where: { $0.id == updatedSegment.id }) {
+            arrangement.lyricsTrack.lyrics[index] = updatedSegment
+            arrangement.lyricsTrack.lyrics.sort { $0.startBeat < $1.startBeat }
+            appData.updateArrangement(arrangement)
+        }
+    }
 }
 
 // MARK: - 工具栏
@@ -342,7 +394,8 @@ struct ArrangementToolbar: View {
     @Binding var zoomLevel: CGFloat
     let onPlay: () -> Void
     let onUpdateLength: (Double) -> Void
-    let onAddTrack: () -> Void
+    let onAddGuitarTrack: () -> Void
+    let onAddLyricsTrack: () -> Void
 
     var body: some View {
         HStack(spacing: 16) {
@@ -355,10 +408,19 @@ struct ArrangementToolbar: View {
             }
             .buttonStyle(.borderedProminent)
 
-            Button(action: onAddTrack) {
+            Menu {
+                Button(action: onAddGuitarTrack) {
+                    Label("Add Guitar Track", systemImage: "guitars")
+                }
+
+                Button(action: onAddLyricsTrack) {
+                    Label("Add Lyrics Track", systemImage: "text.quote")
+                }
+                .disabled(arrangement.lyricsTrack.isVisible)
+            } label: {
                 HStack {
                     Image(systemName: "plus")
-                    Text("Add Guitar Track")
+                    Text("Add Track")
                 }
             }
 
@@ -399,6 +461,7 @@ struct ArrangementTimelineView: View {
     let isPlaying: Bool
     let onEditDrumSegment: ((DrumSegment) -> Void)?
     let onEditGuitarSegment: ((GuitarSegment) -> Void)?
+    let onEditLyricsSegment: ((LyricsSegment) -> Void)?
     let onDeleteSegment: ((UUID) -> Void)?
     let onDeleteTrack: ((UUID) -> Void)?
 
@@ -432,6 +495,19 @@ struct ArrangementTimelineView: View {
                             onEditGuitarSegment: onEditGuitarSegment,
                             onDeleteSegment: onDeleteSegment,
                             onDeleteTrack: onDeleteTrack
+                        )
+                    }
+
+                    if arrangement.lyricsTrack.isVisible {
+                        ArrangementLyricsTrackView(
+                            track: arrangement.lyricsTrack,
+                            arrangement: arrangement,
+                            selectedSegmentId: $selectedSegmentId,
+                            beatWidth: beatWidth,
+                            trackHeight: trackHeight,
+                            zoomLevel: zoomLevel,
+                            onEditLyricsSegment: onEditLyricsSegment,
+                            onDeleteSegment: onDeleteSegment
                         )
                     }
                 }
@@ -666,6 +742,81 @@ struct ArrangementGuitarTrackView: View {
     }
 }
 
+struct ArrangementLyricsTrackView: View {
+    let track: LyricsTrack
+    let arrangement: SongArrangement
+    @Binding var selectedSegmentId: UUID?
+    let beatWidth: CGFloat
+    let trackHeight: CGFloat
+    let zoomLevel: CGFloat
+    let onEditLyricsSegment: ((LyricsSegment) -> Void)?
+    let onDeleteSegment: ((UUID) -> Void)?
+
+    @EnvironmentObject var appData: AppData
+    @State private var isDragOver: Bool = false
+
+    private var midiChannel: Int {
+        appData.chordMidiChannel + arrangement.guitarTracks.count
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            TrackControlView(
+                title: "Lyrics",
+                subtitle: "CH: \(midiChannel)",
+                icon: "text.quote",
+                iconColor: .purple,
+                isMuted: !track.isVisible
+            )
+            .frame(width: 120)
+
+            ZStack(alignment: .topLeading) {
+                Rectangle()
+                    .fill(Color.purple.opacity(isDragOver ? 0.18 : 0.08))
+                    .stroke(isDragOver ? Color.purple : Color.clear, lineWidth: 2)
+                    .frame(
+                        width: beatWidth * CGFloat(arrangement.lengthInBeats) * zoomLevel,
+                        height: trackHeight
+                    )
+
+                TrackGridView(
+                    arrangement: arrangement,
+                    beatWidth: beatWidth,
+                    trackHeight: trackHeight,
+                    zoomLevel: zoomLevel
+                )
+
+                ForEach(track.lyrics) { segment in
+                    LyricsSegmentView(
+                        segment: segment,
+                        isSelected: selectedSegmentId == segment.id,
+                        beatWidth: beatWidth,
+                        trackHeight: trackHeight,
+                        zoomLevel: zoomLevel,
+                        onEdit: onEditLyricsSegment,
+                        onDelete: { segment in
+                            onDeleteSegment?(segment.id)
+                        }
+                    )
+                    .offset(x: CGFloat(segment.startBeat) * beatWidth * zoomLevel)
+                    .onTapGesture {
+                        selectedSegmentId = segment.id
+                    }
+                }
+            }
+            .frame(height: trackHeight)
+            .onDrop(of: [.data, .text], delegate: EnhancedLyricsTrackDropDelegate(
+                track: track,
+                arrangement: arrangement,
+                beatWidth: beatWidth,
+                zoomLevel: zoomLevel,
+                isDragOver: $isDragOver,
+                appData: appData
+            ))
+        }
+    }
+}
+
 // MARK: - 轨道控制视图
 struct TrackControlView: View {
     let title: String
@@ -802,6 +953,23 @@ struct ArrangementResourcePanel: View {
                                 .italic()
                         }
                     }
+
+                    ResourceSection(title: "Lyrics Library", icon: "text.quote") {
+                        if let lyricSegments = appData.preset?.melodicLyricSegments, !lyricSegments.isEmpty {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 8) {
+                                ForEach(lyricSegments) { segment in
+                                    LyricsResourceButton(
+                                        segment: segment,
+                                        beatsPerMeasure: appData.preset?.timeSignature.beatsPerMeasure ?? 4
+                                    )
+                                }
+                            }
+                        } else {
+                            Text("No lyric segments available")
+                                .foregroundColor(.secondary)
+                                .italic()
+                        }
+                    }
                 }
             }
         }
@@ -890,5 +1058,94 @@ struct DurationEditorView: View {
         }
         .padding()
         .frame(width: 300, height: 200)
+    }
+}
+
+struct LyricsSegmentEditorView: View {
+    let segment: LyricsSegment
+    let onSave: (LyricsSegment) -> Void
+    let onCancel: () -> Void
+
+    @State private var text: String
+    @State private var durationInBeats: Double
+    @State private var durationText: String
+    @State private var language: String
+
+    init(segment: LyricsSegment, onSave: @escaping (LyricsSegment) -> Void, onCancel: @escaping () -> Void) {
+        self.segment = segment
+        self.onSave = onSave
+        self.onCancel = onCancel
+        _text = State(initialValue: segment.text)
+        _durationInBeats = State(initialValue: segment.durationInBeats)
+        _durationText = State(initialValue: String(format: "%.1f", segment.durationInBeats))
+        _language = State(initialValue: segment.language)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Edit Lyrics Segment")
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Lyrics Text")
+                    .font(.headline)
+                TextEditor(text: $text)
+                    .frame(height: 100)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3)))
+            }
+
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Duration (beats)")
+                        .font(.headline)
+                    TextField("Duration", text: $durationText)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit {
+                            if let value = Double(durationText), value > 0 {
+                                durationInBeats = value
+                            } else {
+                                durationText = String(format: "%.1f", durationInBeats)
+                            }
+                        }
+                    Stepper("", value: $durationInBeats, in: 0.25...64, step: 0.25)
+                        .onChange(of: durationInBeats) { _, newValue in
+                            durationText = String(format: "%.1f", newValue)
+                        }
+                    Text("Current: \(String(format: "%.1f", durationInBeats)) beats")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Language")
+                        .font(.headline)
+                    TextField("Language", text: $language)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 120)
+                }
+            }
+
+            Spacer()
+
+            HStack(spacing: 16) {
+                Button("Cancel", action: onCancel)
+
+                Button("Save") {
+                    let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let trimmedLanguage = language.trimmingCharacters(in: .whitespacesAndNewlines)
+                    var updated = segment
+                    updated.durationInBeats = durationInBeats
+                    updated.text = trimmedText
+                    if !trimmedLanguage.isEmpty {
+                        updated.language = trimmedLanguage
+                    }
+                    onSave(updated)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding()
+        .frame(minWidth: 420, minHeight: 360)
     }
 }

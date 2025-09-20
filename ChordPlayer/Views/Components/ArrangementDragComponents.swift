@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 // MARK: - 拖拽数据结构
 struct ArrangementDragData: Codable {
-    let type: String // "drum", "solo", "accompaniment"
+    let type: String // "drum", "solo", "accompaniment", "lyrics"
     let resourceId: UUID
     let name: String
     let defaultDuration: Double
@@ -23,6 +23,7 @@ extension ArrangementDragData: Transferable {
 enum SegmentType: Codable {
     case drum
     case guitar
+    case lyrics
 }
 
 struct SegmentDragData: Codable {
@@ -162,6 +163,61 @@ struct GuitarSegmentView: View {
     }
 }
 
+struct LyricsSegmentView: View {
+    let segment: LyricsSegment
+    let isSelected: Bool
+    let beatWidth: CGFloat
+    let trackHeight: CGFloat
+    let zoomLevel: CGFloat
+    let onEdit: ((LyricsSegment) -> Void)?
+    let onDelete: ((LyricsSegment) -> Void)?
+
+    private var displayText: String {
+        let trimmed = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Lyrics" : trimmed
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.purple.opacity(isSelected ? 0.75 : 0.55))
+                .stroke(isSelected ? Color.yellow : Color.clear, lineWidth: 2)
+
+            Text(displayText)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(.white)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+        }
+        .frame(
+            width: CGFloat(segment.durationInBeats) * beatWidth * zoomLevel,
+            height: trackHeight - 4
+        )
+        .contextMenu {
+            if let onEdit = onEdit {
+                Button("Edit Lyrics") {
+                    onEdit(segment)
+                }
+            }
+
+            if let onDelete = onDelete {
+                Button("Delete", role: .destructive) {
+                    onDelete(segment)
+                }
+            }
+        }
+        .draggable(SegmentDragData(
+            segmentId: segment.id,
+            segmentType: .lyrics,
+            originalStartBeat: segment.startBeat,
+            durationInBeats: segment.durationInBeats
+        ))
+    }
+}
+
 // MARK: - 资源按钮组件
 
 struct DrumPatternResourceButton: View {
@@ -253,6 +309,52 @@ struct AccompanimentResourceButton: View {
             resourceId: segment.id,
             name: segment.name,
             defaultDuration: Double(segment.lengthInMeasures * 4) // 假设4/4拍
+        ))
+    }
+}
+
+struct LyricsResourceButton: View {
+    let segment: MelodicLyricSegment
+    let beatsPerMeasure: Int
+
+    private var previewText: String {
+        let combined = segment.items.map { $0.word }.joined()
+        let trimmed = combined.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return segment.name
+        }
+        if trimmed.count > 18 {
+            let index = trimmed.index(trimmed.startIndex, offsetBy: 18)
+            return String(trimmed[..<index]) + "…"
+        }
+        return trimmed
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: "text.quote")
+                .font(.title2)
+                .foregroundColor(.purple)
+
+            Text(segment.name)
+                .font(.caption)
+                .fontWeight(.medium)
+                .multilineTextAlignment(.center)
+
+            Text(previewText)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(8)
+        .frame(width: 140, height: 90)
+        .background(Material.thin)
+        .cornerRadius(8)
+        .draggable(ArrangementDragData(
+            type: "lyrics",
+            resourceId: segment.id,
+            name: segment.name,
+            defaultDuration: Double(max(1, segment.lengthInBars)) * Double(max(1, beatsPerMeasure))
         ))
     }
 }
@@ -553,6 +655,106 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
                 arrangement.guitarTracks[targetTrackIndex].segments.append(segment)
                 appData.updateArrangement(arrangement)
             }
+        }
+    }
+}
+
+struct EnhancedLyricsTrackDropDelegate: DropDelegate {
+    let track: LyricsTrack
+    let arrangement: SongArrangement
+    let beatWidth: CGFloat
+    let zoomLevel: CGFloat
+    @Binding var isDragOver: Bool
+    let appData: AppData
+
+    func dropEntered(info: DropInfo) {
+        isDragOver = true
+    }
+
+    func dropExited(info: DropInfo) {
+        isDragOver = false
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        isDragOver = false
+
+        guard let provider = info.itemProviders(for: [UTType.text, UTType.data]).first else {
+            return false
+        }
+
+        let beatsPerMeasure = Double(appData.preset?.timeSignature.beatsPerMeasure ?? 4)
+
+        if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, _ in
+                guard let data = data,
+                      let segmentDragData = try? JSONDecoder().decode(SegmentDragData.self, from: data),
+                      segmentDragData.segmentType == .lyrics else { return }
+
+                DispatchQueue.main.async {
+                    let beat = info.location.x / (beatWidth * zoomLevel)
+                    let measure = beat / beatsPerMeasure
+                    let snappedMeasure = floor(measure)
+                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
+                    self.repositionLyricsSegment(segmentId: segmentDragData.segmentId, newStartBeat: snappedBeat, appData: self.appData)
+                }
+            }
+            return true
+        }
+
+        if provider.hasItemConformingToTypeIdentifier(UTType.data.identifier) {
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.data.identifier) { data, _ in
+                guard let data = data,
+                      let dragData = try? JSONDecoder().decode(ArrangementDragData.self, from: data),
+                      dragData.type == "lyrics" else { return }
+
+                DispatchQueue.main.async {
+                    let beat = info.location.x / (beatWidth * zoomLevel)
+                    let measure = beat / beatsPerMeasure
+                    let snappedMeasure = floor(measure)
+                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
+
+                    guard let melodicSegment = self.appData.getMelodicLyricSegment(for: dragData.resourceId) else { return }
+
+                    let durationBeats = Double(max(1, melodicSegment.lengthInBars)) * beatsPerMeasure
+                    let text = self.makeLyricText(from: melodicSegment)
+                    let language = track.lyrics.first?.language ?? "zh"
+                    let newSegment = LyricsSegment(
+                        startBeat: snappedBeat,
+                        durationInBeats: durationBeats,
+                        text: text,
+                        language: language
+                    )
+
+                    self.updateLyricsTrack(with: newSegment, appData: self.appData)
+                }
+            }
+            return true
+        }
+
+        return false
+    }
+
+    private func makeLyricText(from segment: MelodicLyricSegment) -> String {
+        let combined = segment.items.map { $0.word }.joined()
+        let trimmed = combined.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? segment.name : trimmed
+    }
+
+    private func updateLyricsTrack(with segment: LyricsSegment, appData: AppData) {
+        guard var preset = appData.preset else { return }
+        var arrangement = preset.arrangement
+        arrangement.lyricsTrack.isVisible = true
+        arrangement.lyricsTrack.addLyrics(segment)
+        appData.updateArrangement(arrangement)
+    }
+
+    private func repositionLyricsSegment(segmentId: UUID, newStartBeat: Double, appData: AppData) {
+        guard var preset = appData.preset else { return }
+        var arrangement = preset.arrangement
+
+        if let index = arrangement.lyricsTrack.lyrics.firstIndex(where: { $0.id == segmentId }) {
+            arrangement.lyricsTrack.lyrics[index].startBeat = newStartBeat
+            appData.updateArrangement(arrangement)
         }
     }
 }

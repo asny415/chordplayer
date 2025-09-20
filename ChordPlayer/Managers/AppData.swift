@@ -190,4 +190,9 @@ class AppData: ObservableObject {
         guard let id = id else { return nil }
         return preset?.accompanimentSegments.first(where: { $0.id == id })
     }
+
+    func getMelodicLyricSegment(for id: UUID?) -> MelodicLyricSegment? {
+        guard let id = id else { return nil }
+        return preset?.melodicLyricSegments.first(where: { $0.id == id })
+    }
 }

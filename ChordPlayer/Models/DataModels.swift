@@ -705,7 +705,7 @@ enum AnnotationType: String, Codable, CaseIterable, Hashable, Equatable, Identif
 
 struct LyricsTrack: Codable, Hashable, Equatable {
     var lyrics: [LyricsSegment] = []
-    var isVisible: Bool = true
+    var isVisible: Bool = false
     var fontSize: Double = 14.0
 
     mutating func addLyrics(_ lyrics: LyricsSegment) {
@@ -787,4 +787,3 @@ extension Array where Element: Hashable {
         }
     }
 }
-
