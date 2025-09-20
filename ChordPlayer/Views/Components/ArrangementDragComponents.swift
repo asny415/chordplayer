@@ -719,12 +719,13 @@ struct EnhancedLyricsTrackDropDelegate: DropDelegate {
                     let text = self.makeLyricText(from: melodicSegment)
                     let language = track.lyrics.first?.language ?? "zh"
                     let newSegment = LyricsSegment(
+                        id: dragData.resourceId, // Use the resource ID to create the link
                         startBeat: snappedBeat,
                         durationInBeats: durationBeats,
                         text: text,
                         language: language
                     )
-
+                    print("[DEBUG] DropDelegate: Creating LyricsSegment with ID \(newSegment.id) from resource \(dragData.resourceId)")
                     self.updateLyricsTrack(with: newSegment, appData: self.appData)
                 }
             }

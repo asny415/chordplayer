@@ -176,6 +176,34 @@ class PresetArrangerPlayer: ObservableObject {
                 scheduleGuitarEvents(track: guitarTrack, preset: preset, startBeat: startBeat, currentTime: currentTime, beatsToSeconds: beatsToSeconds)
             }
         }
+
+        // 安排旋律歌词事件 (通过 LyricsTrack 关联)
+        print("[DEBUG] SongPlayer: Checking lyrics track. IsVisible: \(preset.arrangement.lyricsTrack.isVisible)")
+        if preset.arrangement.lyricsTrack.isVisible {
+            print("[DEBUG] SongPlayer: Found \(preset.arrangement.lyricsTrack.lyrics.count) segments in lyrics track.")
+            for segment in preset.arrangement.lyricsTrack.lyrics {
+                print("[DEBUG] SongPlayer:   - Processing LyricsSegment with ID \(segment.id) at beat \(segment.startBeat)")
+                guard segment.startBeat + segment.durationInBeats > startBeat &&
+                      segment.startBeat < preset.arrangement.lengthInBeats else { continue }
+
+                // 使用 segment.id 在 melodicLyricSegments 中查找对应的旋律数据
+                if let melodicData = preset.melodicLyricSegments.first(where: { $0.id == segment.id }) {
+                    print("[DEBUG] SongPlayer:     Found matching MelodicLyricSegment: '\(melodicData.name)'. Scheduling for playback.")
+                    let segmentStartTime = currentTime + (max(segment.startBeat, startBeat) - startBeat) * beatsToSeconds
+                    
+                    // 创建一个临时的轨道对象来传递音量等信息
+                    var tempTrack = GuitarTrack(name: "Melody")
+                    tempTrack.volume = 1.0 // Or get from a future volume property on LyricsTrack
+                    
+                    // 分配一个临时的MIDI通道
+                    let tempChannel = appData.chordMidiChannel + preset.arrangement.guitarTracks.count
+
+                    scheduleMelodicLyricSegment(segment: melodicData, startTime: segmentStartTime, track: tempTrack, preset: preset, channel: tempChannel)
+                } else {
+                    print("[DEBUG] SongPlayer:     ERROR: No matching MelodicLyricSegment found for ID \(segment.id)")
+                }
+            }
+        }
     }
 
     private func scheduleDrumEvents(track: DrumTrack, preset: Preset, startBeat: Double, currentTime: TimeInterval, beatsToSeconds: Double) {
@@ -254,8 +282,7 @@ class PresetArrangerPlayer: ObservableObject {
             guard segment.startBeat + segment.durationInBeats > startBeat &&
                   segment.startBeat < preset.arrangement.lengthInBeats else { continue }
 
-            let schedulingBuffer = 0.05 // 50ms buffer
-            let segmentStartTime = currentTime + (max(segment.startBeat, startBeat) - startBeat) * beatsToSeconds + schedulingBuffer
+            let segmentStartTime = currentTime + (max(segment.startBeat, startBeat) - startBeat) * beatsToSeconds
 
             switch segment.type {
             case .solo(let segmentId):
@@ -302,6 +329,67 @@ class PresetArrangerPlayer: ObservableObject {
             scheduledEvents.append(eventId)
             scheduledEvents.append(offEventId)
             eventsLock.unlock()
+        }
+    }
+
+    private func scheduleMelodicLyricSegment(segment: MelodicLyricSegment, startTime: TimeInterval, track: GuitarTrack, preset: Preset, channel: Int) {
+        print("[DEBUG] SongPlayer:       Scheduling notes for '\(segment.name)'")
+        let beatsToSeconds = 60.0 / preset.bpm
+        let transposition = self.transposition(forKey: preset.key)
+        let sixteenthNoteDuration = beatsToSeconds / 4.0
+
+        // Base MIDI note for C4, plus transposition for the song's key
+        let baseMidiNote = 60 + transposition
+
+        // Map scale degrees (1-7) to MIDI note offsets from the root
+        let scaleOffsets: [Int: Int] = [
+            1: 0, // Do
+            2: 2, // Re
+            3: 4, // Mi
+            4: 5, // Fa
+            5: 7, // Sol
+            6: 9, // La
+            7: 11 // Si
+        ]
+
+        for item in segment.items {
+            guard item.pitch > 0, let scaleOffset = scaleOffsets[item.pitch] else { continue }
+
+            let noteStartTime = startTime + Double(item.position) * sixteenthNoteDuration
+            
+            // Assume a fixed duration for each note for now, e.g., one 16th note.
+            // A more complex implementation could determine duration based on the next note's position.
+            let noteDuration = sixteenthNoteDuration * 0.9 // Slightly shorter to avoid overlap
+
+            let octaveOffset = item.octave * 12
+            let midiNote = baseMidiNote + scaleOffset + octaveOffset
+            
+            let velocity = UInt8(min(127, max(1, Int(100 * track.volume))))
+            let midiChannel = UInt8(channel - 1)
+
+            print("[DEBUG] SongPlayer:         - Note: \(midiNote), Time: \(noteStartTime), Vel: \(velocity), Chan: \(midiChannel)")
+
+            if noteStartTime >= ProcessInfo.processInfo.systemUptime {
+                let noteOnId = midiManager.scheduleNoteOn(
+                    note: UInt8(midiNote),
+                    velocity: velocity,
+                    channel: midiChannel,
+                    scheduledUptimeMs: noteStartTime * 1000
+                )
+                let noteOffId = midiManager.scheduleNoteOff(
+                    note: UInt8(midiNote),
+                    velocity: 0,
+                    channel: midiChannel,
+                    scheduledUptimeMs: (noteStartTime + noteDuration) * 1000
+                )
+                
+                eventsLock.lock()
+                scheduledEvents.append(noteOnId)
+                scheduledEvents.append(noteOffId)
+                eventsLock.unlock()
+            } else {
+                print("[DEBUG] SongPlayer:         - SKIPPING NOTE! Scheduled time \(noteStartTime) is in the past. Current time is \(ProcessInfo.processInfo.systemUptime)")
+            }
         }
     }
 

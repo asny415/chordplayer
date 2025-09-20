@@ -126,7 +126,7 @@ class MidiManager: ObservableObject {
                     } else if case .pitchBend(_) = ev.type {
                         errorString = "pitch bend"
                     }
-                    print("[MidiManager] ERROR sending MIDI message: \(status) for \(errorString)")
+                    print("[MdiManager] ERROR sending MIDI message: \(status) for \(errorString)")
                 }
             } else {
                 if case .note(_, let note, _) = ev.type {

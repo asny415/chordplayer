@@ -193,6 +193,8 @@ class AppData: ObservableObject {
 
     func getMelodicLyricSegment(for id: UUID?) -> MelodicLyricSegment? {
         guard let id = id else { return nil }
-        return preset?.melodicLyricSegments.first(where: { $0.id == id })
+        let segment = preset?.melodicLyricSegments.first(where: { $0.id == id })
+        print("[DEBUG] getMelodicLyricSegment for id \(id): \(segment != nil ? "Found" : "Not Found")")
+        return segment
     }
 }

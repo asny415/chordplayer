@@ -725,7 +725,8 @@ struct LyricsSegment: Codable, Identifiable, Hashable, Equatable {
     var text: String
     var language: String = "zh" // 支持多语言歌词
 
-    init(startBeat: Double, durationInBeats: Double, text: String, language: String = "zh") {
+    init(id: UUID = UUID(), startBeat: Double, durationInBeats: Double, text: String, language: String = "zh") {
+        self.id = id
         self.startBeat = startBeat
         self.durationInBeats = durationInBeats
         self.text = text
