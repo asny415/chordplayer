@@ -6,6 +6,7 @@ import AppKit
 
 struct MelodicLyricEditorView: View {
     @EnvironmentObject private var appData: AppData
+    @EnvironmentObject private var midiManager: MidiManager
     @Binding var segment: MelodicLyricSegment
 
     // Editor State
@@ -17,6 +18,7 @@ struct MelodicLyricEditorView: View {
     @State private var editingWord: String = ""
     @State private var isTechniqueUpdateInternal = false
     @State private var keyMonitor: Any?
+    @State private var lastPreviewNote: UInt8?
 
     // In-place name editing state
     @State private var isEditingName = false
@@ -136,7 +138,10 @@ struct MelodicLyricEditorView: View {
         }
         .onChange(of: gridSizeInSteps) { _ in alignSelectionToGrid() }
         .onAppear { registerKeyMonitor() }
-        .onDisappear { unregisterKeyMonitor() }
+        .onDisappear {
+            stopPreview()
+            unregisterKeyMonitor()
+        }
         .onChange(of: isEditingName) { editing in
             if !editing { persistSegment() }
         }
@@ -199,9 +204,12 @@ struct MelodicLyricEditorView: View {
         if pitch == 0 {
             segment.items[index].octave = 0
             segment.items[index].technique = nil
+            stopPreview()
+        } else {
+            previewPitch(pitch: pitch, octave: segment.items[index].octave)
         }
-        moveSelection(by: stepStride)
         persistSegment()
+        moveSelection(by: stepStride)
     }
 
     private func toggleTechnique(_ technique: PlayingTechnique) {
@@ -259,11 +267,13 @@ struct MelodicLyricEditorView: View {
         var octave = segment.items[targetIndex].octave + direction
         octave = min(max(octave, -2), 2)
         segment.items[targetIndex].octave = octave
+        previewPitch(pitch: segment.items[targetIndex].pitch, octave: octave)
         persistSegment()
     }
 
     private func removeItem(at step: Int) {
         segment.items.removeAll { $0.position == step }
+        stopPreview()
         persistSegment()
     }
 
@@ -415,6 +425,52 @@ struct MelodicLyricEditorView: View {
 
     private func persistSegment() {
         appData.saveChanges()
+    }
+
+    private func previewPitch(pitch: Int, octave: Int) {
+        stopPreview()
+        guard let midiNote = midiNoteNumber(for: pitch, octave: octave) else { return }
+        let channel = UInt8(max(0, min(15, appData.chordMidiChannel - 1)))
+        midiManager.sendNoteOn(note: midiNote, velocity: 100, channel: channel)
+        lastPreviewNote = midiNote
+        let scheduledNote = midiNote
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak midiManager = midiManager] in
+            guard self.lastPreviewNote == scheduledNote else { return }
+            midiManager?.sendNoteOff(note: scheduledNote, velocity: 0, channel: channel)
+            if self.lastPreviewNote == scheduledNote {
+                self.lastPreviewNote = nil
+            }
+        }
+    }
+
+    private func stopPreview() {
+        guard let note = lastPreviewNote else { return }
+        let channel = UInt8(max(0, min(15, appData.chordMidiChannel - 1)))
+        midiManager.sendNoteOff(note: note, velocity: 0, channel: channel)
+        lastPreviewNote = nil
+    }
+
+    private func midiNoteNumber(for pitch: Int, octave: Int) -> UInt8? {
+        guard pitch >= 1 && pitch <= 7 else { return nil }
+        let scaleOffsets = [0, 2, 4, 5, 7, 9, 11]
+        let baseC = 60
+        let key = appData.preset?.key ?? "C"
+        let transpose = transposition(forKey: key)
+        let midiValue = baseC + transpose + scaleOffsets[pitch - 1] + octave * 12
+        guard midiValue >= 0 && midiValue <= 127 else { return nil }
+        return UInt8(midiValue)
+    }
+
+    private func transposition(forKey key: String) -> Int {
+        let keyMap: [String: Int] = [
+            "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
+            "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9,
+            "A#": 10, "Bb": 10, "B": 11
+        ]
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let uppercased = trimmed.uppercased()
+        let simplified = uppercased.hasSuffix("M") && uppercased.count > 1 ? String(uppercased.dropLast()) : uppercased
+        return keyMap[simplified] ?? 0
     }
 
 }
@@ -574,6 +630,7 @@ struct MelodicLyricEditorView_Previews: PreviewProvider {
         let appData = AppData(midiManager: midiManager)
         appData.preset?.melodicLyricSegments = [mockSegment]
         return MelodicLyricEditorView(segment: $mockSegment)
+            .environmentObject(midiManager)
             .environmentObject(appData)
             .frame(width: 800, height: 400)
     }
