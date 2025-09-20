@@ -1,5 +1,6 @@
 
 import SwiftUI
+import AppKit
 
 // MARK: - Main Editor View
 
@@ -14,6 +15,7 @@ struct MelodicLyricEditorView: View {
     @State private var editingWordStep: Int? = nil
     @State private var editingWord: String = ""
     @State private var isTechniqueUpdateInternal = false
+    @State private var keyMonitor: Any?
 
     // In-place name editing state
     @State private var isEditingName = false
@@ -126,10 +128,11 @@ struct MelodicLyricEditorView: View {
             .padding(.vertical, 6)
             .background(Color(NSColor.controlBackgroundColor))
         }
-        .onKeyDown(perform: handleKeyDown)
         .onChange(of: currentTechnique, perform: techniqueSelectionChanged)
         .onChange(of: segment.lengthInBars) { _ in clampSelectedStep() }
         .onChange(of: gridSizeInSteps) { _ in alignSelectionToGrid() }
+        .onAppear { registerKeyMonitor() }
+        .onDisappear { unregisterKeyMonitor() }
     }
 
     // MARK: - Private Methods
@@ -237,9 +240,11 @@ struct MelodicLyricEditorView: View {
     }
 
     private func adjustPitch(direction: Int) {
-        guard direction != 0, let index = itemIndex(at: selectedStep) else { return }
-        var pitch = segment.items[index].pitch
-        var octave = segment.items[index].octave
+        guard direction != 0 else { return }
+        let defaultPitch = direction > 0 ? 1 : 1
+        let (targetIndex, _) = ensureItem(at: selectedStep, defaultPitch: defaultPitch)
+        var pitch = segment.items[targetIndex].pitch
+        var octave = segment.items[targetIndex].octave
 
         if pitch == 0 {
             if direction > 0 {
@@ -258,8 +263,8 @@ struct MelodicLyricEditorView: View {
             }
         }
 
-        segment.items[index].pitch = pitch
-        segment.items[index].octave = octave
+        segment.items[targetIndex].pitch = pitch
+        segment.items[targetIndex].octave = octave
     }
 
     private func removeItem(at step: Int) {
@@ -391,6 +396,20 @@ struct MelodicLyricEditorView: View {
         }
 
         return false
+    }
+
+    private func registerKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            handleKeyDown(event) ? nil : event
+        }
+    }
+
+    private func unregisterKeyMonitor() {
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
+        }
     }
 
 }
