@@ -7,23 +7,25 @@ struct MelodicLyricEditorView: View {
     @Binding var segment: MelodicLyricSegment
 
     // Editor State
-    @State private var selectedItems: Set<UUID> = []
     @State private var currentTechnique: PlayingTechnique = .normal
-    @State private var gridSizeInSteps: Int = 4 // 16th notes
+    @State private var gridSizeInSteps: Int = 1 // 16th notes by default
     @State private var zoomLevel: CGFloat = 1.0
-    @State private var isSyncingTechnique = false
-
-    // Popover State
-    @State private var newItemPopoverState: NewItemPopoverState? = nil
-    @State private var editingItemState: EditItemPopoverState? = nil
+    @State private var selectedStep: Int = 0
+    @State private var editingWordStep: Int? = nil
+    @State private var editingWord: String = ""
+    @State private var isTechniqueUpdateInternal = false
 
     // In-place name editing state
     @State private var isEditingName = false
     @FocusState private var isNameFieldFocused: Bool
+    @FocusState private var isInlineEditorFocused: Bool
 
     // Layout constants
     private let beatWidth: CGFloat = 120
-    private var stepWidth: CGFloat { (beatWidth / 4) * zoomLevel }
+    private let beatsPerBar: Int = 4
+    private let stepsPerBeat: Int = 4
+    private var totalSteps: Int { segment.lengthInBars * beatsPerBar * stepsPerBeat }
+    private var stepWidth: CGFloat { (beatWidth / CGFloat(stepsPerBeat)) * zoomLevel }
     private let trackHeight: CGFloat = 120
 
     var body: some View {
@@ -61,38 +63,63 @@ struct MelodicLyricEditorView: View {
                 ZStack(alignment: .topLeading) {
                     // Layer 1: Background Grid
                     MelodicLyricGridBackground(
-                        lengthInBars: segment.lengthInBars, beatsPerBar: 4, beatWidth: beatWidth,
-                        trackHeight: trackHeight, zoomLevel: zoomLevel, stepsPerBeat: 4,
+                        lengthInBars: segment.lengthInBars, beatsPerBar: beatsPerBar, beatWidth: beatWidth,
+                        trackHeight: trackHeight, zoomLevel: zoomLevel, stepsPerBeat: stepsPerBeat,
                         gridSizeInSteps: gridSizeInSteps
                     )
 
+                    if totalSteps > 0 {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
+                            .frame(width: selectionHighlightWidth, height: trackHeight - 8)
+                            .offset(x: highlightOffsetX(), y: 4)
+                            .animation(.easeInOut(duration: 0.12), value: selectedStep)
+                    }
+
                     ForEach(segment.items) { item in
-                        MelodicLyricCellView(item: item, isSelected: selectedItems.contains(item.id), stepWidth: stepWidth)
-                            .offset(x: CGFloat(item.position) * stepWidth)
-                            .onTapGesture { selectItem(item.id) }
-                            .onTapGesture(count: 2) { self.editingItemState = .init(item: item) }
+                        MelodicLyricCellView(
+                            item: item,
+                            isSelected: item.position == selectedStep,
+                            stepWidth: stepWidth
+                        )
+                        .offset(x: CGFloat(item.position) * stepWidth)
+                        .onTapGesture {
+                            selectStep(item.position)
+                        }
+                        .onTapGesture(count: 2) {
+                            selectStep(item.position)
+                            startWordEditing()
+                        }
+                    }
+
+                    if let editingStep = editingWordStep {
+                        let editorWidth = max(stepWidth * CGFloat(max(gridSizeInSteps, 1)) - 8, 100)
+                        let editorHeight: CGFloat = 28
+                        TextField("Lyric", text: $editingWord)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: editorWidth, height: editorHeight)
+                            .focused($isInlineEditorFocused)
+                            .onSubmit { commitWordEditing() }
+                            .offset(
+                                x: inlineEditorOffsetX(for: editingStep, width: editorWidth),
+                                y: inlineEditorOffsetY(height: editorHeight)
+                            )
                     }
                 }
-                .frame(width: CGFloat(segment.lengthInBars * 4) * beatWidth * zoomLevel, height: trackHeight)
+                .frame(width: CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel, height: trackHeight)
                 .padding(.vertical, 12)
                 .contentShape(Rectangle())
                 .onTapGesture { location in handleBackgroundTap(at: location) }
             }
             .background(Color(NSColor.textBackgroundColor))
-            .popover(item: $newItemPopoverState) { state in
-                NewItemPopover(popoverState: state, onCreate: createNewItem)
-            }
-            .popover(item: $editingItemState) { state in
-                EditItemPopover(popoverState: state, onUpdate: updateItem)
-            }
             
             Divider()
             
             // 4. Status Bar
             HStack(spacing: 0) {
-                Text("Selected: \(selectedItems.count) items").padding(.horizontal)
+                Text(cellStatusDescription).padding(.horizontal)
                 Spacer()
-                Text("Length: \(segment.lengthInBars) bars").padding(.horizontal)
+                Text(itemStatusDescription).padding(.horizontal)
                 Spacer()
                 Text("Items: \(segment.items.count)").padding(.horizontal)
             }
@@ -100,164 +127,272 @@ struct MelodicLyricEditorView: View {
             .background(Color(NSColor.controlBackgroundColor))
         }
         .onKeyDown(perform: handleKeyDown)
-        .onChange(of: selectedItems, perform: syncTechniqueWithSelection)
-        .onChange(of: currentTechnique, perform: applyTechniqueToSelectedItems)
+        .onChange(of: currentTechnique, perform: techniqueSelectionChanged)
+        .onChange(of: segment.lengthInBars) { _ in clampSelectedStep() }
+        .onChange(of: gridSizeInSteps) { _ in alignSelectionToGrid() }
     }
-    
+
     // MARK: - Private Methods
 
     private func handleBackgroundTap(at location: CGPoint) {
-        selectedItems.removeAll()
-        let totalSteps = segment.lengthInBars * 4 * 4
-        let tappedStep = Int(location.x / stepWidth)
-        
-        guard tappedStep >= 0 && tappedStep < totalSteps else { return }
-        
-        let snappedStep = (tappedStep / gridSizeInSteps) * gridSizeInSteps
-        self.newItemPopoverState = NewItemPopoverState(id: UUID(), position: snappedStep)
+        guard totalSteps > 0 else { return }
+        let rawStep = Int(location.x / stepWidth)
+        let clamped = min(max(rawStep, 0), totalSteps - 1)
+        let snapped = snapStep(clamped)
+        selectStep(snapped)
     }
-    
-    private func createNewItem(word: String, pitch: Int, octave: Int, position: Int) {
-        let techniqueValue: PlayingTechnique? = currentTechnique == .normal ? nil : currentTechnique
-        let newItem = MelodicLyricItem(word: word, position: position, pitch: pitch, octave: octave, technique: techniqueValue)
+
+    private func selectStep(_ step: Int) {
+        let snapped = snapStep(step)
+        selectedStep = snapped
+        editingWordStep = nil
+        isInlineEditorFocused = false
+    }
+
+    private func snapStep(_ step: Int) -> Int {
+        guard totalSteps > 0 else { return 0 }
+        let stride = stepStride
+        guard stride > 0 else { return min(max(step, 0), totalSteps - 1) }
+        let clamped = min(max(step, 0), totalSteps - 1)
+        return (clamped / stride) * stride
+    }
+
+    private var stepStride: Int { max(gridSizeInSteps, 1) }
+
+    private func itemIndex(at step: Int) -> Int? {
+        segment.items.firstIndex { $0.position == step }
+    }
+
+    private func ensureItem(at step: Int, defaultPitch: Int? = nil, defaultOctave: Int = 0) -> (index: Int, isNew: Bool) {
+        if let existing = itemIndex(at: step) {
+            return (existing, false)
+        }
+        let pitchValue = defaultPitch ?? 0
+        let techniqueValue = currentTechnique == .normal ? nil : currentTechnique
+        let newItem = MelodicLyricItem(
+            word: "",
+            position: step,
+            pitch: pitchValue,
+            octave: defaultOctave,
+            technique: techniqueValue
+        )
         segment.items.append(newItem)
         segment.items.sort { $0.position < $1.position }
-        newItemPopoverState = nil
+        let index = segment.items.firstIndex { $0.id == newItem.id } ?? segment.items.count - 1
+        return (index, true)
     }
 
-    private func updateItem(id: UUID, newWord: String, newPitch: Int, newOctave: Int, newTechnique: PlayingTechnique) {
-        guard let index = segment.items.firstIndex(where: { $0.id == id }) else { return }
-        segment.items[index].word = newWord
-        segment.items[index].pitch = newPitch
-        segment.items[index].octave = newOctave
-        segment.items[index].technique = newTechnique == .normal ? nil : newTechnique
-        editingItemState = nil
+    private func handlePitchInput(_ pitch: Int) {
+        guard totalSteps > 0 else { return }
+        let (index, _) = ensureItem(at: selectedStep, defaultPitch: pitch)
+        segment.items[index].pitch = pitch
+        if pitch == 0 {
+            segment.items[index].octave = 0
+            segment.items[index].technique = nil
+        }
+        moveSelection(by: stepStride)
     }
-    
-    private func selectItem(_ itemID: UUID, addToSelection: Bool = false) {
-        if addToSelection {
-            if selectedItems.contains(itemID) { selectedItems.remove(itemID) } else { selectedItems.insert(itemID) }
+
+    private func toggleTechnique(_ technique: PlayingTechnique) {
+        guard let index = itemIndex(at: selectedStep) else { return }
+        let currentValue = segment.items[index].technique
+        let newValue: PlayingTechnique? = currentValue == technique ? nil : technique
+        segment.items[index].technique = newValue
+        isTechniqueUpdateInternal = true
+        currentTechnique = newValue ?? .normal
+    }
+
+    private func startWordEditing() {
+        guard totalSteps > 0 else { return }
+        editingWordStep = selectedStep
+        if let index = itemIndex(at: selectedStep) {
+            editingWord = segment.items[index].word
         } else {
-            selectedItems = [itemID]
+            editingWord = ""
         }
-    }
-    
-    private func deleteSelectedItems() {
-        guard !selectedItems.isEmpty else { return }
-        segment.items.removeAll { selectedItems.contains($0.id) }
-        selectedItems.removeAll()
+        isInlineEditorFocused = true
     }
 
-    private func handleKeyDown(_ event: NSEvent) -> Bool {
-        if event.keyCode == 51 { // Backspace/Delete
-            deleteSelectedItems()
-            return true
-        }
-        return false
+    private func commitWordEditing() {
+        guard let step = editingWordStep else { return }
+        let (index, _) = ensureItem(at: step)
+        segment.items[index].word = editingWord
+        editingWordStep = nil
+        isInlineEditorFocused = false
+        moveSelection(by: stepStride)
     }
 
-    private func syncTechniqueWithSelection(_ selection: Set<UUID>) {
-        guard !selection.isEmpty else { return }
-        let techniques = segment.items.filter { selection.contains($0.id) }
-            .map { $0.technique ?? .normal }
+    private func cancelWordEditing() {
+        editingWordStep = nil
+        isInlineEditorFocused = false
+    }
 
-        guard let firstTechnique = techniques.first else {
-            if currentTechnique != .normal { currentTechnique = .normal }
+    private func moveSelection(by delta: Int) {
+        guard totalSteps > 0 else {
+            selectedStep = 0
             return
         }
-
-        let shouldResetToNormal = techniques.contains { $0 != firstTechnique }
-
-        let newTechnique: PlayingTechnique = shouldResetToNormal ? .normal : firstTechnique
-        if currentTechnique != newTechnique {
-            isSyncingTechnique = true
-            currentTechnique = newTechnique
-        }
+        let newValue = selectedStep + delta
+        selectedStep = snapStep(newValue)
     }
 
-    private func applyTechniqueToSelectedItems(_ technique: PlayingTechnique) {
-        if isSyncingTechnique {
-            isSyncingTechnique = false
+    private func adjustPitch(direction: Int) {
+        guard direction != 0, let index = itemIndex(at: selectedStep) else { return }
+        var pitch = segment.items[index].pitch
+        var octave = segment.items[index].octave
+
+        if pitch == 0 {
+            if direction > 0 {
+                pitch = 1
+            } else {
+                return
+            }
+        } else {
+            pitch += direction
+            if pitch > 7 {
+                pitch = 1
+                octave = min(octave + 1, 2)
+            } else if pitch < 1 {
+                pitch = 7
+                octave = max(octave - 1, -2)
+            }
+        }
+
+        segment.items[index].pitch = pitch
+        segment.items[index].octave = octave
+    }
+
+    private func removeItem(at step: Int) {
+        segment.items.removeAll { $0.position == step }
+    }
+
+    private func techniqueSelectionChanged(_ technique: PlayingTechnique) {
+        if isTechniqueUpdateInternal {
+            isTechniqueUpdateInternal = false
             return
         }
-        guard !selectedItems.isEmpty else { return }
-        for index in segment.items.indices {
-            guard selectedItems.contains(segment.items[index].id) else { continue }
+        if let index = itemIndex(at: selectedStep) {
             segment.items[index].technique = technique == .normal ? nil : technique
         }
     }
-}
 
-// MARK: - Popover State & Views
-
-struct NewItemPopoverState: Identifiable {
-    var id: UUID
-    var position: Int
-}
-
-struct EditItemPopoverState: Identifiable {
-    var id: UUID { item.id }
-    var item: MelodicLyricItem
-}
-
-struct NewItemPopover: View {
-    let popoverState: NewItemPopoverState
-    let onCreate: (String, Int, Int, Int) -> Void
-    
-    @State private var word: String = ""
-    @State private var pitch: Int = 5
-    @State private var octave: Int = 0
-    @FocusState private var isWordFieldFocused: Bool
-
-    var body: some View {
-        VStack(spacing: 15) {
-            Text("New Lyric at step \(popoverState.position)").font(.headline)
-            TextField("Lyric Word", text: $word).textFieldStyle(.roundedBorder).focused($isWordFieldFocused).onAppear { isWordFieldFocused = true }
-            HStack {
-                Stepper("Pitch: \(pitch)", value: $pitch, in: 1...7)
-                Stepper("Octave: \(octave)", value: $octave, in: -2...2)
-            }
-            Button("Create") { if !word.isEmpty { onCreate(word, pitch, octave, popoverState.position) } }.keyboardShortcut(.defaultAction)
-        }.padding().frame(minWidth: 250)
-    }
-}
-
-struct EditItemPopover: View {
-    let popoverState: EditItemPopoverState
-    let onUpdate: (UUID, String, Int, Int, PlayingTechnique) -> Void
-
-    @State private var word: String
-    @State private var pitch: Int
-    @State private var octave: Int
-    @State private var technique: PlayingTechnique
-    @FocusState private var isWordFieldFocused: Bool
-
-    init(popoverState: EditItemPopoverState, onUpdate: @escaping (UUID, String, Int, Int, PlayingTechnique) -> Void) {
-        self.popoverState = popoverState
-        self.onUpdate = onUpdate
-        _word = State(initialValue: popoverState.item.word)
-        _pitch = State(initialValue: popoverState.item.pitch)
-        _octave = State(initialValue: popoverState.item.octave)
-        _technique = State(initialValue: popoverState.item.technique ?? .normal)
+    private func clampSelectedStep() {
+        selectedStep = snapStep(selectedStep)
     }
 
-    var body: some View {
-        VStack(spacing: 15) {
-            Text("Edit Lyric").font(.headline)
-            TextField("Lyric Word", text: $word).textFieldStyle(.roundedBorder).focused($isWordFieldFocused).onAppear { isWordFieldFocused = true }
-            HStack {
-                Stepper("Pitch: \(pitch)", value: $pitch, in: 1...7)
-                Stepper("Octave: \(octave)", value: $octave, in: -2...2)
-            }
-            Picker("Technique", selection: $technique) {
-                ForEach(PlayingTechnique.allCases) { Text($0.chineseName).tag($0) }
-            }
-            Button("Update") {
-                guard !word.isEmpty else { return }
-                onUpdate(popoverState.item.id, word, pitch, octave, technique)
-            }.keyboardShortcut(.defaultAction)
-        }.padding().frame(minWidth: 250)
+    private func alignSelectionToGrid() {
+        selectedStep = snapStep(selectedStep)
     }
+
+    private var selectionHighlightWidth: CGFloat {
+        max(stepWidth * CGFloat(stepStride) - 4, stepWidth * 0.6)
+    }
+
+    private func highlightOffsetX() -> CGFloat {
+        let snapped = snapStep(selectedStep)
+        let cellWidth = stepWidth * CGFloat(stepStride)
+        let base = CGFloat(snapped) * stepWidth
+        let inset = max((cellWidth - selectionHighlightWidth) / 2, 0)
+        return base + inset
+    }
+
+    private func inlineEditorOffsetX(for step: Int, width: CGFloat) -> CGFloat {
+        let snapped = snapStep(step)
+        let cellWidth = stepWidth * CGFloat(stepStride)
+        let base = CGFloat(snapped) * stepWidth
+        let inset = max((cellWidth - width) / 2, 0)
+        return base + inset
+    }
+
+    private func inlineEditorOffsetY(height: CGFloat) -> CGFloat {
+        max((trackHeight - height) / 2, 4)
+    }
+
+    private var selectedItem: MelodicLyricItem? {
+        itemIndex(at: selectedStep).map { segment.items[$0] }
+    }
+
+    private var cellStatusDescription: String {
+        guard totalSteps > 0 else { return "No cells" }
+        let stepsPerMeasure = beatsPerBar * stepsPerBeat
+        let bar = selectedStep / stepsPerMeasure + 1
+        let beat = (selectedStep % stepsPerMeasure) / stepsPerBeat + 1
+        let subdivision = (selectedStep % stepsPerBeat) + 1
+        return "Cell: Bar \(bar) Beat \(beat) Step \(subdivision)"
+    }
+
+    private var itemStatusDescription: String {
+        guard let item = selectedItem else { return "Empty cell" }
+        let wordDisplay = item.word.isEmpty ? "Word: -" : "Word: \(item.word)"
+        let pitchDisplay = item.pitch == 0 ? "Rest" : "Pitch \(item.pitch) Oct \(item.octave)"
+        let techniqueDisplay = item.technique?.chineseName ?? "普通"
+        return "\(wordDisplay) | \(pitchDisplay) | \(techniqueDisplay)"
+    }
+
+    private func handleKeyDown(_ event: NSEvent) -> Bool {
+        if editingWordStep != nil {
+            switch event.keyCode {
+            case 53: // Escape
+                cancelWordEditing()
+                return true
+            case 36, 76: // Return or Enter
+                commitWordEditing()
+                return true
+            default:
+                return false
+            }
+        }
+
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let characters = event.charactersIgnoringModifiers ?? ""
+
+        if characters.count == 1 && modifiers.isDisjoint(with: [.command, .option, .control]) {
+            let char = characters.first!
+            if let digit = char.wholeNumberValue, (0...7).contains(digit) {
+                handlePitchInput(digit)
+                return true
+            }
+            switch char {
+            case "/":
+                toggleTechnique(.slide)
+                return true
+            case "^":
+                toggleTechnique(.bend)
+                return true
+            case "~":
+                toggleTechnique(.vibrato)
+                return true
+            default:
+                break
+            }
+        }
+
+        switch event.keyCode {
+        case 36, 76: // Return or Enter
+            startWordEditing()
+            return true
+        case 123: // Left arrow
+            moveSelection(by: -stepStride)
+            return true
+        case 124: // Right arrow
+            moveSelection(by: stepStride)
+            return true
+        case 125: // Down arrow
+            adjustPitch(direction: -1)
+            return true
+        case 126: // Up arrow
+            adjustPitch(direction: 1)
+            return true
+        case 51: // Delete
+            removeItem(at: selectedStep)
+            return true
+        default:
+            break
+        }
+
+        return false
+    }
+
 }
 
 // MARK: - Subviews
