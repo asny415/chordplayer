@@ -124,7 +124,7 @@ class SoloPlayer: ObservableObject, Quantizable {
                     if slideDurationBeats > 0 {
                         let pitchBendSteps = max(2, Int(slideDurationBeats * beatsToSeconds * 50))
                         let fretDifference = toNote.fret - fromNote.fret
-                        let pitchBendRangeSemitones = 12.0
+                        let pitchBendRangeSemitones = 2.0
                         let finalPitchBendValue = 8192 + Int(Double(fretDifference) * (8191.0 / pitchBendRangeSemitones))
 
                         for step in 0...pitchBendSteps {
@@ -152,7 +152,7 @@ class SoloPlayer: ObservableObject, Quantizable {
                         let vibratoRateHz = 5.5
                         let vibratoIntensity = note.articulation?.vibratoIntensity ?? 0.5
                         let maxBendSemitones = 0.4
-                        let pitchBendRangeSemitones = 12.0
+                        let pitchBendRangeSemitones = 2.0
                         let maxPitchBendAmount = (maxBendSemitones / pitchBendRangeSemitones) * 8191.0 * vibratoIntensity
                         let totalCycles = vibratoDurationBeats * beatsToSeconds * vibratoRateHz
                         let totalSteps = Int(totalCycles * 12.0)
@@ -184,7 +184,7 @@ class SoloPlayer: ObservableObject, Quantizable {
                     let bendAmountSemitones = note.articulation?.bendAmount ?? 1.0
                     if bendAmountSemitones > 0 {
                         let bendDurationBeats = 0.1 / beatsToSeconds
-                        let pitchBendRangeSemitones = 12.0
+                        let pitchBendRangeSemitones = 2.0
                         let finalPitchBendValue = 8192 + Int(bendAmountSemitones * (8191.0 / pitchBendRangeSemitones))
                         
                         for step in 0...10 {
