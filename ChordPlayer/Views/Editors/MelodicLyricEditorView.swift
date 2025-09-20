@@ -475,8 +475,8 @@ struct MelodicLyricEditorView: View {
         enum MusicalAction {
             case playNote(item: MelodicLyricItem, offTimeMs: Double)
             case slide(from: MelodicLyricItem, to: MelodicLyricItem, offTimeMs: Double)
-            case vibrato(item: MelodicLyricItem, offTimeMs: Double)
-            case bend(item: MelodicLyricItem, offTimeMs: Double)
+            case vibrato(from: MelodicLyricItem, to: MelodicLyricItem, offTimeMs: Double)
+            case bend(from: MelodicLyricItem, to: MelodicLyricItem, offTimeMs: Double)
         }
 
         let msPerBeat = 60_000.0 / bpm
@@ -495,21 +495,28 @@ struct MelodicLyricEditorView: View {
             let nextItemPosition = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 })?.position ?? totalStepsInSegment
             let noteOffTimeMs = Double(nextItemPosition) * msPerStep
 
-            switch currentItem.technique {
-            case .slide:
-                if let slideTargetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
-                    consumedItemIDs.insert(slideTargetItem.id)
-                    let slideTargetNextPos = itemsSortedByTime.firstIndex(of: slideTargetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? totalStepsInSegment
-                    let slideOffTimeMs = Double(slideTargetNextPos) * msPerStep
-                    actions.append(.slide(from: currentItem, to: slideTargetItem, offTimeMs: slideOffTimeMs))
-                } else {
-                    actions.append(.playNote(item: currentItem, offTimeMs: noteOffTimeMs))
-                }
-            case .vibrato:
-                actions.append(.vibrato(item: currentItem, offTimeMs: noteOffTimeMs))
-            case .bend:
-                actions.append(.bend(item: currentItem, offTimeMs: noteOffTimeMs))
-            default:
+            if currentItem.technique == .slide,
+               let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
+                consumedItemIDs.insert(targetItem.id)
+                let offPosition = itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? totalStepsInSegment
+                let offTimeMs = Double(offPosition) * msPerStep
+                actions.append(.slide(from: currentItem, to: targetItem, offTimeMs: offTimeMs))
+
+            } else if currentItem.technique == .vibrato,
+                      let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
+                consumedItemIDs.insert(targetItem.id)
+                let offPosition = itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? totalStepsInSegment
+                let offTimeMs = Double(offPosition) * msPerStep
+                actions.append(.vibrato(from: currentItem, to: targetItem, offTimeMs: offTimeMs))
+
+            } else if currentItem.technique == .bend,
+                      let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
+                consumedItemIDs.insert(targetItem.id)
+                let offPosition = itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? totalStepsInSegment
+                let offTimeMs = Double(offPosition) * msPerStep
+                actions.append(.bend(from: currentItem, to: targetItem, offTimeMs: offTimeMs))
+            
+            } else {
                 actions.append(.playNote(item: currentItem, offTimeMs: noteOffTimeMs))
             }
         }
@@ -549,7 +556,8 @@ struct MelodicLyricEditorView: View {
                 let slideDurationMs = Double(toItem.position - fromItem.position) * msPerStep
                 if slideDurationMs > 0 {
                     let semitoneDiff = Int(endMidi) - Int(startMidi)
-                    let finalBend = 8192 + Int((Double(semitoneDiff) / 12.0) * 8191.0)
+                    let pitchBendRangeSemitones = 2.0
+                    let finalBend = 8192 + Int((Double(semitoneDiff) / pitchBendRangeSemitones) * 8191.0)
                     let steps = max(2, Int(slideDurationMs / 20))
                     for i in 0...steps {
                         let t = Double(i) / Double(steps)
@@ -560,21 +568,22 @@ struct MelodicLyricEditorView: View {
                 }
                 midiManager.schedulePitchBend(value: 8192, channel: channel, scheduledUptimeMs: noteOffTime + 1)
 
-            case .vibrato(let item, let offTimeMs):
-                guard let midiNote = midiNoteNumber(for: item.pitch, octave: item.octave) else { continue }
+            case .vibrato(let fromItem, let toItem, let offTimeMs):
+                guard let midiNote = midiNoteNumber(for: fromItem.pitch, octave: fromItem.octave) else { continue }
                 note = midiNote
-                let noteOnTime = startTimeMs + Double(item.position) * msPerStep
+                let noteOnTime = startTimeMs + Double(fromItem.position) * msPerStep
                 let noteOffTime = startTimeMs + offTimeMs * 0.98
                 onId = midiManager.scheduleNoteOn(note: midiNote, velocity: 100, channel: channel, scheduledUptimeMs: noteOnTime)
                 offId = midiManager.scheduleNoteOff(note: midiNote, velocity: 0, channel: channel, scheduledUptimeMs: noteOffTime)
 
                 let durationMs = noteOffTime - noteOnTime
                 if durationMs > 100 {
-                    let rateHz = 5.5
-                    let maxBendSemitones = 0.25
-                    let maxBend = (maxBendSemitones / 12.0) * 8191.0
-                    let cycles = durationMs / 1000.0 * rateHz
-                    let steps = Int(cycles * 12.0)
+                    let vibratoRateHz = 5.0
+                    let maxBendSemitones = 0.4
+                    let pitchBendRangeSemitones = 2.0
+                    let maxBend = (maxBendSemitones / pitchBendRangeSemitones) * 8191.0
+                    let cycles = durationMs / 1000.0 * vibratoRateHz
+                    let steps = Int(cycles * 20.0)
                     if steps > 0 {
                         for i in 0...steps {
                             let t_dur = Double(i) / Double(steps)
@@ -587,22 +596,44 @@ struct MelodicLyricEditorView: View {
                 }
                 midiManager.schedulePitchBend(value: 8192, channel: channel, scheduledUptimeMs: noteOffTime + 1)
 
-            case .bend(let item, let offTimeMs):
-                guard let midiNote = midiNoteNumber(for: item.pitch, octave: item.octave) else { continue }
-                note = midiNote
-                let noteOnTime = startTimeMs + Double(item.position) * msPerStep
+            case .bend(let fromItem, let toItem, let offTimeMs):
+                guard let startMidiNote = midiNoteNumber(for: fromItem.pitch, octave: fromItem.octave) else { continue }
+                note = startMidiNote
+                let noteOnTime = startTimeMs + Double(fromItem.position) * msPerStep
                 let noteOffTime = startTimeMs + offTimeMs * 0.98
-                onId = midiManager.scheduleNoteOn(note: midiNote, velocity: 100, channel: channel, scheduledUptimeMs: noteOnTime)
-                offId = midiManager.scheduleNoteOff(note: midiNote, velocity: 0, channel: channel, scheduledUptimeMs: noteOffTime)
+                onId = midiManager.scheduleNoteOn(note: startMidiNote, velocity: 100, channel: channel, scheduledUptimeMs: noteOnTime)
+                offId = midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, channel: channel, scheduledUptimeMs: noteOffTime)
 
-                let bendDurationMs = 100.0
-                if (noteOffTime - noteOnTime) > bendDurationMs {
-                    let finalBend = 8192 + Int((1.0 / 12.0) * 8191.0) // 1 semitone bend
-                    for i in 0...10 {
-                        let t = Double(i) / 10.0
-                        let bendTime = noteOnTime + t * bendDurationMs
-                        let value = 8192 + Int(Double(finalBend - 8192) * t)
-                        midiManager.schedulePitchBend(value: UInt16(value), channel: channel, scheduledUptimeMs: bendTime)
+                let intervalMs = Double(toItem.position - fromItem.position) * msPerStep
+                if intervalMs > 100 {
+                    let quarterIntervalMs = intervalMs / 4.0
+                    
+                    let bendUpStartTime = noteOnTime + quarterIntervalMs
+                    let bendUpDuration = quarterIntervalMs
+                    
+                    let releaseStartTime = bendUpStartTime + bendUpDuration
+                    let releaseDuration = quarterIntervalMs
+
+                    let bendAmountSemitones = 1.0
+                    let pitchBendRangeSemitones = 2.0
+                    let finalPitchBendValue = 8192 + Int(bendAmountSemitones * (8191.0 / pitchBendRangeSemitones))
+                    
+                    let pitchBendSteps = 10
+
+                    // Bend Up
+                    for step in 0...pitchBendSteps {
+                        let t = Double(step) / Double(pitchBendSteps)
+                        let bendTime = bendUpStartTime + t * bendUpDuration
+                        let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
+                        midiManager.schedulePitchBend(value: UInt16(intermediatePitch), channel: channel, scheduledUptimeMs: bendTime)
+                    }
+
+                    // Bend Down (Release)
+                    for step in 0...pitchBendSteps {
+                        let t = Double(step) / Double(pitchBendSteps)
+                        let bendTime = releaseStartTime + t * releaseDuration
+                        let intermediatePitch = finalPitchBendValue - Int(Double(finalPitchBendValue - 8192) * t)
+                        midiManager.schedulePitchBend(value: UInt16(intermediatePitch), channel: channel, scheduledUptimeMs: bendTime)
                     }
                 }
                 midiManager.schedulePitchBend(value: 8192, channel: channel, scheduledUptimeMs: noteOffTime + 1)
