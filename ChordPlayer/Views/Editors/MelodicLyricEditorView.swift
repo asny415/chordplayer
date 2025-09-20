@@ -27,6 +27,7 @@ struct MelodicLyricEditorView: View {
 
     // Player
     @State private var melodicLyricPlayer: MelodicLyricPlayer?
+    @State private var editorMidiChannel: Int = 1
     
     // In-place name editing state
     @State private var isEditingName = false
@@ -71,6 +72,7 @@ struct MelodicLyricEditorView: View {
                 gridSizeInSteps: $gridSizeInSteps,
                 zoomLevel: $zoomLevel,
                 segmentLengthInBars: $segment.lengthInBars,
+                midiChannel: $editorMidiChannel,
                 isPlayingSegment: isPlayingSegment,
                 onTogglePlayback: toggleSegmentPlayback
             ).padding().background(Color(NSColor.controlBackgroundColor))
@@ -489,7 +491,7 @@ struct MelodicLyricEditorView: View {
         let bpm = preset.bpm
         guard bpm > 0 else { return }
 
-        let channel = appData.chordMidiChannel
+        let channel = sanitizedEditorMidiChannel
         let startTime = ProcessInfo.processInfo.systemUptime + 0.08 // 80ms buffer
 
         let eventIDs = player.schedulePlayback(
@@ -573,7 +575,7 @@ struct MelodicLyricEditorView: View {
         guard midiValue >= 0 && midiValue <= 127 else { return }
         let midiNote = UInt8(midiValue)
         
-        let channel = UInt8(max(0, min(15, appData.chordMidiChannel - 1)))
+        let channel = UInt8(max(0, min(15, sanitizedEditorMidiChannel - 1)))
         midiManager.sendNoteOn(note: midiNote, velocity: 100, channel: channel)
         lastPreviewNote = midiNote
         let scheduledNote = midiNote
@@ -588,7 +590,7 @@ struct MelodicLyricEditorView: View {
 
     private func stopPreview() {
         guard let note = lastPreviewNote else { return }
-        let channel = UInt8(max(0, min(15, appData.chordMidiChannel - 1)))
+        let channel = UInt8(max(0, min(15, sanitizedEditorMidiChannel - 1)))
         midiManager.sendNoteOff(note: note, velocity: 0, channel: channel)
         lastPreviewNote = nil
     }
@@ -596,6 +598,10 @@ struct MelodicLyricEditorView: View {
     private func cancelProgressTasks() {
         playbackProgressTasks.forEach { $0.cancel() }
         playbackProgressTasks.removeAll()
+    }
+
+    private var sanitizedEditorMidiChannel: Int {
+        min(max(editorMidiChannel, 1), 16)
     }
 }
 
@@ -606,6 +612,7 @@ struct MelodicLyricToolbar: View {
     @Binding var gridSizeInSteps: Int
     @Binding var zoomLevel: CGFloat
     @Binding var segmentLengthInBars: Int
+    @Binding var midiChannel: Int
     @State private var showingSettings = false
     let isPlayingSegment: Bool
     let onTogglePlayback: () -> Void
@@ -637,7 +644,7 @@ struct MelodicLyricToolbar: View {
             Button(action: { showingSettings = true }) {
                 Image(systemName: "gearshape.fill")
             }.buttonStyle(.bordered).popover(isPresented: $showingSettings, arrowEdge: .bottom) {
-                LyricSegmentSettingsView(lengthInBars: $segmentLengthInBars)
+                LyricSegmentSettingsView(lengthInBars: $segmentLengthInBars, midiChannel: $midiChannel)
             }
         }.pickerStyle(.menu)
     }
@@ -645,12 +652,24 @@ struct MelodicLyricToolbar: View {
 
 struct LyricSegmentSettingsView: View {
     @Binding var lengthInBars: Int
+    @Binding var midiChannel: Int
+    private let midiChannels = Array(1...16)
     var body: some View {
         VStack(spacing: 12) {
             Text("Segment Properties").font(.headline)
             HStack {
                 Text("Length (bars):")
                 TextField("Length", value: $lengthInBars, format: .number).frame(width: 60)
+            }
+            HStack {
+                Text("MIDI Channel:")
+                Picker("MIDI Channel", selection: $midiChannel) {
+                    ForEach(midiChannels, id: \.self) { channel in
+                        Text("Channel \(channel)").tag(channel)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 140)
             }
         }.padding()
     }
