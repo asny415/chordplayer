@@ -20,11 +20,14 @@ struct MelodicLyricEditorView: View {
     @State private var keyMonitor: Any?
     @State private var lastPreviewNote: UInt8?
     @State private var isPlayingSegment = false
-    @State private var scheduledPlaybackNotes: [ScheduledPlaybackNote] = []
+    @State private var scheduledPlaybackEvents: [UUID] = []
     @State private var playbackCompletionTask: DispatchWorkItem?
     @State private var playbackProgress: Double = 0.0
     @State private var playbackProgressTasks: [DispatchWorkItem] = []
 
+    // Player
+    @State private var melodicLyricPlayer: MelodicLyricPlayer?
+    
     // In-place name editing state
     @State private var isEditingName = false
     @FocusState private var isNameFieldFocused: Bool
@@ -37,6 +40,10 @@ struct MelodicLyricEditorView: View {
     private var totalSteps: Int { segment.lengthInBars * beatsPerBar * stepsPerBeat }
     private var stepWidth: CGFloat { (beatWidth / CGFloat(stepsPerBeat)) * zoomLevel }
     private let trackHeight: CGFloat = 120
+
+    init(segment: Binding<MelodicLyricSegment>) {
+        self._segment = segment
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -154,7 +161,12 @@ struct MelodicLyricEditorView: View {
             persistSegment()
         }
         .onChange(of: gridSizeInSteps) { _ in alignSelectionToGrid() }
-        .onAppear { registerKeyMonitor() }
+        .onAppear { 
+            registerKeyMonitor()
+            if melodicLyricPlayer == nil {
+                melodicLyricPlayer = MelodicLyricPlayer(midiManager: midiManager)
+            }
+        }
         .onDisappear {
             stopSegmentPlayback()
             stopPreview()
@@ -470,210 +482,56 @@ struct MelodicLyricEditorView: View {
     }
 
     private func startSegmentPlayback() {
-        guard let preset = appData.preset else { return }
+        guard let preset = appData.preset, let player = melodicLyricPlayer else { return }
         stopSegmentPlayback()
         stopPreview()
 
         let bpm = preset.bpm
         guard bpm > 0 else { return }
 
-        // --- Begin Technique-Aware Playback Logic ---
+        let channel = appData.chordMidiChannel
+        let startTime = ProcessInfo.processInfo.systemUptime + 0.08 // 80ms buffer
 
-        enum MusicalAction {
-            case playNote(item: MelodicLyricItem, offTimeMs: Double)
-            case slide(from: MelodicLyricItem, to: MelodicLyricItem, offTimeMs: Double)
-            case vibrato(from: MelodicLyricItem, to: MelodicLyricItem, offTimeMs: Double)
-            case bend(from: MelodicLyricItem, to: MelodicLyricItem, offTimeMs: Double)
-        }
+        let eventIDs = player.schedulePlayback(
+            segment: segment,
+            preset: preset,
+            channel: channel,
+            volume: 1.0, // Editor playback uses full volume
+            startTime: startTime
+        )
 
-        let msPerBeat = 60_000.0 / bpm
-        let msPerStep = msPerBeat / Double(stepsPerBeat)
-        let totalStepsInSegment = self.totalSteps
+        guard !eventIDs.isEmpty else { return }
+        
+        self.scheduledPlaybackEvents = eventIDs
+        self.isPlayingSegment = true
 
-        let itemsSortedByTime = segment.items.sorted { $0.position < $1.position }
-        var consumedItemIDs = Set<UUID>()
-        var actions: [MusicalAction] = []
-
-        // 1. Build MusicalAction list
-        for i in 0..<itemsSortedByTime.count {
-            let currentItem = itemsSortedByTime[i]
-            if consumedItemIDs.contains(currentItem.id) || currentItem.pitch == 0 { continue }
-
-            let nextItemPosition = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 })?.position ?? totalStepsInSegment
-            let noteOffTimeMs = Double(nextItemPosition) * msPerStep
-
-            if currentItem.technique == .slide,
-               let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
-                consumedItemIDs.insert(targetItem.id)
-                let offPosition = itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? totalStepsInSegment
-                let offTimeMs = Double(offPosition) * msPerStep
-                actions.append(.slide(from: currentItem, to: targetItem, offTimeMs: offTimeMs))
-
-            } else if currentItem.technique == .vibrato,
-                      let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
-                consumedItemIDs.insert(targetItem.id)
-                let offPosition = itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? totalStepsInSegment
-                let offTimeMs = Double(offPosition) * msPerStep
-                actions.append(.vibrato(from: currentItem, to: targetItem, offTimeMs: offTimeMs))
-
-            } else if currentItem.technique == .bend,
-                      let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
-                consumedItemIDs.insert(targetItem.id)
-                let offPosition = itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? totalStepsInSegment
-                let offTimeMs = Double(offPosition) * msPerStep
-                actions.append(.bend(from: currentItem, to: targetItem, offTimeMs: offTimeMs))
-            
-            } else {
-                actions.append(.playNote(item: currentItem, offTimeMs: noteOffTimeMs))
-            }
-        }
-
-        guard !actions.isEmpty else { return }
-
-        // 2. Schedule MIDI events from actions
-        let channel = UInt8(max(0, min(15, appData.chordMidiChannel - 1)))
-        let startTimeMs = ProcessInfo.processInfo.systemUptime * 1000.0 + 80.0
-        var scheduled: [ScheduledPlaybackNote] = []
-
-        for action in actions {
-            var onId: UUID? = nil
-            var offId: UUID? = nil
-            var note: UInt8 = 0
-
-            switch action {
-            case .playNote(let item, let offTimeMs):
-                guard let midiNote = midiNoteNumber(for: item.pitch, octave: item.octave) else { continue }
-                note = midiNote
-                let noteOnTime = startTimeMs + Double(item.position) * msPerStep
-                let noteOffTime = startTimeMs + offTimeMs * 0.98
-                if noteOffTime > noteOnTime {
-                    onId = midiManager.scheduleNoteOn(note: midiNote, velocity: 100, channel: channel, scheduledUptimeMs: noteOnTime)
-                    offId = midiManager.scheduleNoteOff(note: midiNote, velocity: 0, channel: channel, scheduledUptimeMs: noteOffTime)
-                }
-
-            case .slide(let fromItem, let toItem, let offTimeMs):
-                guard let startMidi = midiNoteNumber(for: fromItem.pitch, octave: fromItem.octave),
-                      let endMidi = midiNoteNumber(for: toItem.pitch, octave: toItem.octave) else { continue }
-                note = startMidi
-                let noteOnTime = startTimeMs + Double(fromItem.position) * msPerStep
-                let noteOffTime = startTimeMs + offTimeMs * 0.98
-                onId = midiManager.scheduleNoteOn(note: startMidi, velocity: 100, channel: channel, scheduledUptimeMs: noteOnTime)
-                offId = midiManager.scheduleNoteOff(note: startMidi, velocity: 0, channel: channel, scheduledUptimeMs: noteOffTime)
-
-                let slideDurationMs = Double(toItem.position - fromItem.position) * msPerStep
-                if slideDurationMs > 0 {
-                    let semitoneDiff = Int(endMidi) - Int(startMidi)
-                    let pitchBendRangeSemitones = 2.0
-                    let finalBend = 8192 + Int((Double(semitoneDiff) / pitchBendRangeSemitones) * 8191.0)
-                    let steps = max(2, Int(slideDurationMs / 20))
-                    for i in 0...steps {
-                        let t = Double(i) / Double(steps)
-                        let bendTime = noteOnTime + t * slideDurationMs
-                        let value = 8192 + Int(Double(finalBend - 8192) * t)
-                        midiManager.schedulePitchBend(value: UInt16(value), channel: channel, scheduledUptimeMs: bendTime)
-                    }
-                }
-                midiManager.schedulePitchBend(value: 8192, channel: channel, scheduledUptimeMs: noteOffTime + 1)
-
-            case .vibrato(let fromItem, let toItem, let offTimeMs):
-                guard let midiNote = midiNoteNumber(for: fromItem.pitch, octave: fromItem.octave) else { continue }
-                note = midiNote
-                let noteOnTime = startTimeMs + Double(fromItem.position) * msPerStep
-                let noteOffTime = startTimeMs + offTimeMs * 0.98
-                onId = midiManager.scheduleNoteOn(note: midiNote, velocity: 100, channel: channel, scheduledUptimeMs: noteOnTime)
-                offId = midiManager.scheduleNoteOff(note: midiNote, velocity: 0, channel: channel, scheduledUptimeMs: noteOffTime)
-
-                let durationMs = noteOffTime - noteOnTime
-                if durationMs > 100 {
-                    let vibratoRateHz = 5.0
-                    let maxBendSemitones = 0.4
-                    let pitchBendRangeSemitones = 2.0
-                    let maxBend = (maxBendSemitones / pitchBendRangeSemitones) * 8191.0
-                    let cycles = durationMs / 1000.0 * vibratoRateHz
-                    let steps = Int(cycles * 20.0)
-                    if steps > 0 {
-                        for i in 0...steps {
-                            let t_dur = Double(i) / Double(steps)
-                            let t_ang = t_dur * cycles * 2 * .pi
-                            let bend = 8192 + Int(sin(t_ang) * maxBend)
-                            let bendTime = noteOnTime + t_dur * durationMs
-                            midiManager.schedulePitchBend(value: UInt16(bend), channel: channel, scheduledUptimeMs: bendTime)
-                        }
-                    }
-                }
-                midiManager.schedulePitchBend(value: 8192, channel: channel, scheduledUptimeMs: noteOffTime + 1)
-
-            case .bend(let fromItem, let toItem, let offTimeMs):
-                guard let startMidiNote = midiNoteNumber(for: fromItem.pitch, octave: fromItem.octave) else { continue }
-                note = startMidiNote
-                let noteOnTime = startTimeMs + Double(fromItem.position) * msPerStep
-                let noteOffTime = startTimeMs + offTimeMs * 0.98
-                onId = midiManager.scheduleNoteOn(note: startMidiNote, velocity: 100, channel: channel, scheduledUptimeMs: noteOnTime)
-                offId = midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, channel: channel, scheduledUptimeMs: noteOffTime)
-
-                let intervalMs = Double(toItem.position - fromItem.position) * msPerStep
-                if intervalMs > 100 {
-                    let quarterIntervalMs = intervalMs / 4.0
-                    
-                    let bendUpStartTime = noteOnTime + quarterIntervalMs
-                    let bendUpDuration = quarterIntervalMs
-                    
-                    let releaseStartTime = bendUpStartTime + bendUpDuration
-                    let releaseDuration = quarterIntervalMs
-
-                    let bendAmountSemitones = 1.0
-                    let pitchBendRangeSemitones = 2.0
-                    let finalPitchBendValue = 8192 + Int(bendAmountSemitones * (8191.0 / pitchBendRangeSemitones))
-                    
-                    let pitchBendSteps = 10
-
-                    // Bend Up
-                    for step in 0...pitchBendSteps {
-                        let t = Double(step) / Double(pitchBendSteps)
-                        let bendTime = bendUpStartTime + t * bendUpDuration
-                        let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
-                        midiManager.schedulePitchBend(value: UInt16(intermediatePitch), channel: channel, scheduledUptimeMs: bendTime)
-                    }
-
-                    // Bend Down (Release)
-                    for step in 0...pitchBendSteps {
-                        let t = Double(step) / Double(pitchBendSteps)
-                        let bendTime = releaseStartTime + t * releaseDuration
-                        let intermediatePitch = finalPitchBendValue - Int(Double(finalPitchBendValue - 8192) * t)
-                        midiManager.schedulePitchBend(value: UInt16(intermediatePitch), channel: channel, scheduledUptimeMs: bendTime)
-                    }
-                }
-                midiManager.schedulePitchBend(value: 8192, channel: channel, scheduledUptimeMs: noteOffTime + 1)
-            }
-            scheduled.append(ScheduledPlaybackNote(note: note, channel: channel, onEventId: onId, offEventId: offId))
-        }
-
-        guard !scheduled.isEmpty else { return }
-        scheduledPlaybackNotes = scheduled
-        isPlayingSegment = true
-
-        // 3. UI Update and Completion Handling (remains mostly the same)
+        // --- UI Update and Completion Handling ---
         playbackProgress = 0.0
         cancelProgressTasks()
-        let totalDurationMs = Double(totalSteps) * msPerStep
+        
+        let stepsPerBeat = 4
+        let msPerBeat = 60_000.0 / bpm
+        let msPerStep = msPerBeat / Double(stepsPerBeat)
+        let totalStepsInSegment = segment.lengthInBars * preset.timeSignature.beatsPerMeasure * stepsPerBeat
+        let totalDurationMs = Double(totalStepsInSegment) * msPerStep
+
         let completionTask = DispatchWorkItem { stopSegmentPlayback(sendNoteOff: false) }
         playbackCompletionTask = completionTask
         DispatchQueue.main.asyncAfter(deadline: .now() + totalDurationMs / 1000.0 + 0.25, execute: completionTask)
 
         var tasks: [DispatchWorkItem] = []
         let now = ProcessInfo.processInfo.systemUptime * 1000.0
-        for step in 0...totalSteps {
-            let stepTimeMs = startTimeMs + Double(step) * msPerStep
+        for step in 0...totalStepsInSegment {
+            let stepTimeMs = startTime * 1000.0 + Double(step) * msPerStep
             let delaySeconds = max(0, (stepTimeMs - now) / 1000.0)
             let task = DispatchWorkItem {
                 guard isPlayingSegment else { return }
-                playbackProgress = min(max(Double(step) / Double(totalSteps), 0.0), 1.0)
+                playbackProgress = min(max(Double(step) / Double(totalStepsInSegment), 0.0), 1.0)
             }
             tasks.append(task)
             DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds, execute: task)
         }
         playbackProgressTasks = tasks
-        // --- End Technique-Aware Playback Logic ---
     }
 
     private func stopSegmentPlayback(sendNoteOff: Bool = true) {
@@ -681,15 +539,17 @@ struct MelodicLyricEditorView: View {
         playbackCompletionTask = nil
         cancelProgressTasks()
 
+        // Cancel all MIDI events scheduled by the player for this segment
+        for eventID in scheduledPlaybackEvents {
+            midiManager.cancelScheduledEvent(id: eventID)
+        }
+        
+        // If immediate stop is needed, send a panic message to turn off all notes on the relevant channels.
         if sendNoteOff {
-            for entry in scheduledPlaybackNotes {
-                if let onId = entry.onEventId { midiManager.cancelScheduledEvent(id: onId) }
-                if let offId = entry.offEventId { midiManager.cancelScheduledEvent(id: offId) }
-                midiManager.sendNoteOff(note: entry.note, velocity: 0, channel: entry.channel)
-            }
+            midiManager.sendPanic()
         }
 
-        scheduledPlaybackNotes.removeAll()
+        scheduledPlaybackEvents.removeAll()
         isPlayingSegment = false
         playbackProgress = 0.0
         stopPreview()
@@ -697,7 +557,22 @@ struct MelodicLyricEditorView: View {
 
     private func previewPitch(pitch: Int, octave: Int) {
         stopPreview()
-        guard let midiNote = midiNoteNumber(for: pitch, octave: octave) else { return }
+        
+        // Re-implement midiNoteNumber logic directly for preview purposes
+        guard pitch >= 1 && pitch <= 7 else { return }
+        let scaleOffsets = [0, 2, 4, 5, 7, 9, 11]
+        let baseC = 60
+        let key = appData.preset?.key ?? "C"
+        let keyMap: [String: Int] = [
+            "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
+            "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9,
+            "A#": 10, "Bb": 10, "B": 11
+        ]
+        let transpose = keyMap[key] ?? 0
+        let midiValue = baseC + transpose + scaleOffsets[pitch - 1] + octave * 12
+        guard midiValue >= 0 && midiValue <= 127 else { return }
+        let midiNote = UInt8(midiValue)
+        
         let channel = UInt8(max(0, min(15, appData.chordMidiChannel - 1)))
         midiManager.sendNoteOn(note: midiNote, velocity: 100, channel: channel)
         lastPreviewNote = midiNote
@@ -718,39 +593,9 @@ struct MelodicLyricEditorView: View {
         lastPreviewNote = nil
     }
 
-    private func midiNoteNumber(for pitch: Int, octave: Int) -> UInt8? {
-        guard pitch >= 1 && pitch <= 7 else { return nil }
-        let scaleOffsets = [0, 2, 4, 5, 7, 9, 11]
-        let baseC = 60
-        let key = appData.preset?.key ?? "C"
-        let transpose = transposition(forKey: key)
-        let midiValue = baseC + transpose + scaleOffsets[pitch - 1] + octave * 12
-        guard midiValue >= 0 && midiValue <= 127 else { return nil }
-        return UInt8(midiValue)
-    }
-
-    private func transposition(forKey key: String) -> Int {
-        let keyMap: [String: Int] = [
-            "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
-            "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9,
-            "A#": 10, "Bb": 10, "B": 11
-        ]
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        let uppercased = trimmed.uppercased()
-        let simplified = uppercased.hasSuffix("M") && uppercased.count > 1 ? String(uppercased.dropLast()) : uppercased
-        return keyMap[simplified] ?? 0
-    }
-
     private func cancelProgressTasks() {
         playbackProgressTasks.forEach { $0.cancel() }
         playbackProgressTasks.removeAll()
-    }
-
-    private struct ScheduledPlaybackNote {
-        let note: UInt8
-        let channel: UInt8
-        let onEventId: UUID?
-        let offEventId: UUID?
     }
 }
 

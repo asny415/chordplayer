@@ -8,6 +8,8 @@ class PresetArrangerPlayer: ObservableObject {
     var chordPlayer: ChordPlayer
     var drumPlayer: DrumPlayer
     var soloPlayer: SoloPlayer
+    var melodicLyricPlayer: MelodicLyricPlayer
+
 
     // Playback State
     @Published var isPlaying: Bool = false
@@ -29,6 +31,7 @@ class PresetArrangerPlayer: ObservableObject {
         self.chordPlayer = chordPlayer
         self.drumPlayer = drumPlayer
         self.soloPlayer = soloPlayer
+        self.melodicLyricPlayer = MelodicLyricPlayer(midiManager: midiManager)
     }
 
     // MARK: - Playback Control
@@ -333,183 +336,17 @@ class PresetArrangerPlayer: ObservableObject {
     }
 
     private func scheduleMelodicLyricSegment(segment: MelodicLyricSegment, startTime: TimeInterval, track: GuitarTrack, preset: Preset, channel: Int) {
+        let eventIDs = melodicLyricPlayer.schedulePlayback(
+            segment: segment,
+            preset: preset,
+            channel: channel,
+            volume: track.volume,
+            startTime: startTime
+        )
         
-        enum MusicalAction {
-            case playNote(item: MelodicLyricItem, offTime: Double)
-            case slide(from: MelodicLyricItem, to: MelodicLyricItem, offTime: Double)
-            case vibrato(from: MelodicLyricItem, to: MelodicLyricItem, offTime: Double)
-            case bend(from: MelodicLyricItem, to: MelodicLyricItem, offTime: Double)
-        }
-
-        let beatsToSeconds = 60.0 / preset.bpm
-        let transposition = self.transposition(forKey: preset.key)
-        let sixteenthNoteDurationInBeats = 0.25
-        let segmentDurationInBeats = Double(segment.lengthInBars * preset.timeSignature.beatsPerMeasure)
-
-        let itemsSortedByTime = segment.items.sorted { $0.position < $1.position }
-        var consumedItemIDs = Set<UUID>()
-        var actions: [MusicalAction] = []
-
-        for i in 0..<itemsSortedByTime.count {
-            let currentItem = itemsSortedByTime[i]
-            if consumedItemIDs.contains(currentItem.id) || currentItem.pitch == 0 { continue }
-
-            var noteOffPosition = segmentDurationInBeats / sixteenthNoteDurationInBeats
-            if let nextItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
-                noteOffPosition = Double(nextItem.position)
-            }
-            let noteOffTime = noteOffPosition * sixteenthNoteDurationInBeats
-
-            if currentItem.technique == .slide,
-               let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
-                consumedItemIDs.insert(targetItem.id)
-                let offPosition = itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? Int(segmentDurationInBeats / sixteenthNoteDurationInBeats)
-                let offTime = Double(offPosition) * sixteenthNoteDurationInBeats
-                actions.append(.slide(from: currentItem, to: targetItem, offTime: offTime))
-
-            } else if currentItem.technique == .vibrato,
-                      let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
-                consumedItemIDs.insert(targetItem.id)
-                let offPosition = itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? Int(segmentDurationInBeats / sixteenthNoteDurationInBeats)
-                let offTime = Double(offPosition) * sixteenthNoteDurationInBeats
-                actions.append(.vibrato(from: currentItem, to: targetItem, offTime: offTime))
-
-            } else if currentItem.technique == .bend,
-                      let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
-                consumedItemIDs.insert(targetItem.id)
-                let offPosition = itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? Int(segmentDurationInBeats / sixteenthNoteDurationInBeats)
-                let offTime = Double(offPosition) * sixteenthNoteDurationInBeats
-                actions.append(.bend(from: currentItem, to: targetItem, offTime: offTime))
-            
-            } else {
-                actions.append(.playNote(item: currentItem, offTime: noteOffTime))
-            }
-        }
-
-        for action in actions {
-            var eventIDs: [UUID] = []
-            let midiChannel = UInt8(channel - 1)
-            let velocity = UInt8(min(127, max(1, Int(100 * track.volume))))
-
-            switch action {
-            case .playNote(let item, let offTime):
-                guard let midiNote = midiNote(for: item, transposition: transposition) else { continue }
-                let noteOnTimeMs = (startTime + Double(item.position) * sixteenthNoteDurationInBeats * beatsToSeconds) * 1000
-                let noteOffTimeMs = (startTime + offTime * beatsToSeconds) * 1000
-
-                if noteOffTimeMs > noteOnTimeMs {
-                    eventIDs.append(midiManager.scheduleNoteOn(note: midiNote, velocity: velocity, channel: midiChannel, scheduledUptimeMs: noteOnTimeMs))
-                    eventIDs.append(midiManager.scheduleNoteOff(note: midiNote, velocity: 0, channel: midiChannel, scheduledUptimeMs: noteOffTimeMs))
-                }
-
-            case .slide(let fromItem, let toItem, let offTime):
-                guard let startMidiNote = midiNote(for: fromItem, transposition: transposition),
-                      let endMidiNote = midiNote(for: toItem, transposition: transposition) else { continue }
-                
-                let noteOnTime = startTime + Double(fromItem.position) * sixteenthNoteDurationInBeats * beatsToSeconds
-                let noteOffTimeAbsolute = startTime + offTime * beatsToSeconds
-
-                eventIDs.append(midiManager.scheduleNoteOn(note: startMidiNote, velocity: velocity, channel: midiChannel, scheduledUptimeMs: noteOnTime * 1000))
-
-                let slideDurationBeats = Double(toItem.position - fromItem.position) * sixteenthNoteDurationInBeats
-                if slideDurationBeats > 0 {
-                    let slideDurationSeconds = slideDurationBeats * beatsToSeconds
-                    let pitchBendSteps = max(2, Int(slideDurationSeconds * 50))
-                    let semitoneDifference = Int(endMidiNote) - Int(startMidiNote)
-                    let pitchBendRangeSemitones = 2.0
-                    let finalPitchBendValue = 8192 + Int(Double(semitoneDifference) * (8191.0 / pitchBendRangeSemitones))
-
-                    for step in 0...pitchBendSteps {
-                        let t = Double(step) / Double(pitchBendSteps)
-                        let bendTimeMs = (noteOnTime + t * slideDurationSeconds) * 1000
-                        let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
-                        eventIDs.append(midiManager.schedulePitchBend(value: UInt16(intermediatePitch), channel: midiChannel, scheduledUptimeMs: bendTimeMs))
-                    }
-                }
-                
-                eventIDs.append(midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, channel: midiChannel, scheduledUptimeMs: noteOffTimeAbsolute * 1000))
-                eventIDs.append(midiManager.schedulePitchBend(value: 8192, channel: midiChannel, scheduledUptimeMs: (noteOffTimeAbsolute + 0.01) * 1000))
-
-
-            case .vibrato(let fromItem, let toItem, let offTime):
-                guard let midiNote = midiNote(for: fromItem, transposition: transposition) else { continue }
-                let noteOnTime = startTime + Double(fromItem.position) * sixteenthNoteDurationInBeats * beatsToSeconds
-                let noteOffTimeAbsolute = startTime + offTime * beatsToSeconds
-
-                eventIDs.append(midiManager.scheduleNoteOn(note: midiNote, velocity: velocity, channel: midiChannel, scheduledUptimeMs: noteOnTime * 1000))
-
-                let vibratoDurationSeconds = noteOffTimeAbsolute - noteOnTime
-                if vibratoDurationSeconds > 0.1 {
-                    let vibratoRateHz = 5.0
-                    let maxBendSemitones = 0.4
-                    let pitchBendRangeSemitones = 2.0
-                    let maxPitchBendAmount = (maxBendSemitones / pitchBendRangeSemitones) * 8191.0
-                    let totalCycles = vibratoDurationSeconds * vibratoRateHz
-                    let totalSteps = Int(totalCycles * 20.0)
-
-                    if totalSteps > 0 {
-                        for step in 0...totalSteps {
-                            let t_duration = Double(step) / Double(totalSteps)
-                            let t_angle = t_duration * totalCycles * 2.0 * .pi
-                            let sineValue = sin(t_angle)
-                            let pitchBendValue = 8192 + Int(sineValue * maxPitchBendAmount)
-                            let bendTimeMs = (noteOnTime + t_duration * vibratoDurationSeconds) * 1000
-                            eventIDs.append(midiManager.schedulePitchBend(value: UInt16(pitchBendValue), channel: midiChannel, scheduledUptimeMs: bendTimeMs))
-                        }
-                    }
-                }
-
-                eventIDs.append(midiManager.scheduleNoteOff(note: midiNote, velocity: 0, channel: midiChannel, scheduledUptimeMs: noteOffTimeAbsolute * 1000))
-                eventIDs.append(midiManager.schedulePitchBend(value: 8192, channel: midiChannel, scheduledUptimeMs: (noteOffTimeAbsolute + 0.01) * 1000))
-
-            case .bend(let fromItem, let toItem, let offTime):
-                guard let startMidiNote = midiNote(for: fromItem, transposition: transposition) else { continue }
-                let noteOnTime = startTime + Double(fromItem.position) * sixteenthNoteDurationInBeats * beatsToSeconds
-                let noteOffTimeAbsolute = startTime + offTime * beatsToSeconds
-
-                eventIDs.append(midiManager.scheduleNoteOn(note: startMidiNote, velocity: velocity, channel: midiChannel, scheduledUptimeMs: noteOnTime * 1000))
-
-                let intervalBeats = Double(toItem.position - fromItem.position) * sixteenthNoteDurationInBeats
-                if intervalBeats > 0.1 {
-                    let quarterIntervalBeats = intervalBeats / 4.0
-                    
-                    let bendUpStartTimeBeats = Double(fromItem.position) * sixteenthNoteDurationInBeats + quarterIntervalBeats
-                    let bendUpDurationBeats = quarterIntervalBeats
-                    
-                    let releaseStartTimeBeats = bendUpStartTimeBeats + bendUpDurationBeats
-                    let releaseDurationBeats = quarterIntervalBeats
-
-                    let bendAmountSemitones = 1.0
-                    let pitchBendRangeSemitones = 2.0
-                    let finalPitchBendValue = 8192 + Int(bendAmountSemitones * (8191.0 / pitchBendRangeSemitones))
-                    
-                    let pitchBendSteps = 10
-
-                    // Bend Up
-                    for step in 0...pitchBendSteps {
-                        let t = Double(step) / Double(pitchBendSteps)
-                        let bendTimeMs = (startTime + (bendUpStartTimeBeats + t * bendUpDurationBeats) * beatsToSeconds) * 1000
-                        let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
-                        eventIDs.append(midiManager.schedulePitchBend(value: UInt16(intermediatePitch), channel: midiChannel, scheduledUptimeMs: bendTimeMs))
-                    }
-
-                    // Bend Down (Release)
-                    for step in 0...pitchBendSteps {
-                        let t = Double(step) / Double(pitchBendSteps)
-                        let bendTimeMs = (startTime + (releaseStartTimeBeats + t * releaseDurationBeats) * beatsToSeconds) * 1000
-                        let intermediatePitch = finalPitchBendValue - Int(Double(finalPitchBendValue - 8192) * t)
-                        eventIDs.append(midiManager.schedulePitchBend(value: UInt16(intermediatePitch), channel: midiChannel, scheduledUptimeMs: bendTimeMs))
-                    }
-                }
-
-                eventIDs.append(midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, channel: midiChannel, scheduledUptimeMs: noteOffTimeAbsolute * 1000))
-                eventIDs.append(midiManager.schedulePitchBend(value: 8192, channel: midiChannel, scheduledUptimeMs: (noteOffTimeAbsolute + 0.01) * 1000))
-            }
-            
-            self.eventsLock.lock()
-            self.scheduledEvents.append(contentsOf: eventIDs)
-            self.eventsLock.unlock()
-        }
+        self.eventsLock.lock()
+        self.scheduledEvents.append(contentsOf: eventIDs)
+        self.eventsLock.unlock()
     }
 
     private func midiNote(for item: MelodicLyricItem, transposition: Int) -> UInt8? {
