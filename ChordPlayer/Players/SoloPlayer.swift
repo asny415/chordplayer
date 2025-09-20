@@ -19,7 +19,7 @@ class SoloPlayer: ObservableObject, Quantizable {
     private enum MusicalAction {
         case playNote(note: SoloNote, offTime: Double)
         case slide(from: SoloNote, to: SoloNote, offTime: Double)
-        case vibrato(note: SoloNote, offTime: Double)
+        case vibrato(from: SoloNote, to: SoloNote, offTime: Double)
         case bend(from: SoloNote, to: SoloNote, offTime: Double)
     }
     
@@ -84,6 +84,17 @@ class SoloPlayer: ObservableObject, Quantizable {
                     }
                     actions.append(.slide(from: currentNote, to: slideTargetNote, offTime: slideOffTime))
 
+                } else if currentNote.technique == .vibrato,
+                          let vibratoTargetNote = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
+
+                    consumedNoteIDs.insert(vibratoTargetNote.id)
+                    var vibratoOffTime = segment.lengthInBeats
+                    if let targetIndex = notesSortedByTime.firstIndex(of: vibratoTargetNote),
+                       let nextNoteAfterVibrato = notesSortedByTime.dropFirst(targetIndex + 1).first(where: { $0.string == currentNote.string }) {
+                        vibratoOffTime = nextNoteAfterVibrato.startTime
+                    }
+                    actions.append(.vibrato(from: currentNote, to: vibratoTargetNote, offTime: vibratoOffTime))
+
                 } else if currentNote.technique == .bend,
                           let bendTargetNote = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
                     
@@ -94,9 +105,6 @@ class SoloPlayer: ObservableObject, Quantizable {
                         bendOffTime = nextNoteAfterBend.startTime
                     }
                     actions.append(.bend(from: currentNote, to: bendTargetNote, offTime: bendOffTime))
-
-                } else if currentNote.technique == .vibrato {
-                    actions.append(.vibrato(note: currentNote, offTime: noteOffTime))
 
                 } else {
                     actions.append(.playNote(note: currentNote, offTime: noteOffTime))
@@ -146,24 +154,24 @@ class SoloPlayer: ObservableObject, Quantizable {
                     eventIDs.append(self.midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, scheduledUptimeMs: noteOffTimeMs))
                     eventIDs.append(self.midiManager.schedulePitchBend(value: 8192, scheduledUptimeMs: noteOffTimeMs + 1))
 
-                case .vibrato(let note, let offTime):
-                    guard note.fret >= 0 else { continue }
-                    let midiNoteNumber = self.midiNote(from: note.string, fret: note.fret, transposition: transposition)
-                    let velocity = UInt8(note.velocity)
-                    let noteOnTimeMs = playbackStartTimeMs + (note.startTime * beatsToSeconds * 1000.0)
+                case .vibrato(let fromNote, let toNote, let offTime):
+                    guard fromNote.fret >= 0 else { continue }
+                    let midiNoteNumber = self.midiNote(from: fromNote.string, fret: fromNote.fret, transposition: transposition)
+                    let velocity = UInt8(fromNote.velocity)
+                    let noteOnTimeMs = playbackStartTimeMs + (fromNote.startTime * beatsToSeconds * 1000.0)
                     let noteOffTimeMs = playbackStartTimeMs + (offTime * beatsToSeconds * 1000.0)
 
                     eventIDs.append(self.midiManager.scheduleNoteOn(note: midiNoteNumber, velocity: velocity, scheduledUptimeMs: noteOnTimeMs))
 
-                    let vibratoDurationBeats = offTime - note.startTime
+                    let vibratoDurationBeats = offTime - fromNote.startTime
                     if vibratoDurationBeats > 0.1 {
-                        let vibratoRateHz = 5.5
-                        let vibratoIntensity = note.articulation?.vibratoIntensity ?? 0.5
+                        let vibratoRateHz = 5.0 // 5Hz as per user's 200ms cycle
+                        let vibratoIntensity = fromNote.articulation?.vibratoIntensity ?? 0.5
                         let maxBendSemitones = 0.4
                         let pitchBendRangeSemitones = 2.0
                         let maxPitchBendAmount = (maxBendSemitones / pitchBendRangeSemitones) * 8191.0 * vibratoIntensity
                         let totalCycles = vibratoDurationBeats * beatsToSeconds * vibratoRateHz
-                        let totalSteps = Int(totalCycles * 12.0)
+                        let totalSteps = Int(totalCycles * 20.0) // Increased steps for smoother vibrato
 
                         if totalSteps > 0 {
                             for step in 0...totalSteps {
@@ -171,7 +179,7 @@ class SoloPlayer: ObservableObject, Quantizable {
                                 let t_angle = t_duration * totalCycles * 2.0 * .pi
                                 let sineValue = sin(t_angle)
                                 let pitchBendValue = 8192 + Int(sineValue * maxPitchBendAmount)
-                                let bendTimeMs = playbackStartTimeMs + ((note.startTime + t_duration * vibratoDurationBeats) * beatsToSeconds * 1000.0)
+                                let bendTimeMs = playbackStartTimeMs + ((fromNote.startTime + t_duration * vibratoDurationBeats) * beatsToSeconds * 1000.0)
                                 eventIDs.append(self.midiManager.schedulePitchBend(value: UInt16(pitchBendValue), scheduledUptimeMs: bendTimeMs))
                             }
                         }
