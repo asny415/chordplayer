@@ -22,6 +22,8 @@ struct MelodicLyricEditorView: View {
     @State private var isPlayingSegment = false
     @State private var scheduledPlaybackNotes: [ScheduledPlaybackNote] = []
     @State private var playbackCompletionTask: DispatchWorkItem?
+    @State private var playbackProgress: Double = 0.0
+    @State private var playbackProgressTasks: [DispatchWorkItem] = []
 
     // In-place name editing state
     @State private var isEditingName = false
@@ -77,6 +79,15 @@ struct MelodicLyricEditorView: View {
                         trackHeight: trackHeight, zoomLevel: zoomLevel, stepsPerBeat: stepsPerBeat,
                         gridSizeInSteps: gridSizeInSteps
                     )
+
+                    if isPlayingSegment {
+                        let indicatorX = playbackIndicatorOffsetX()
+                        Rectangle()
+                            .fill(Color.red.opacity(0.8))
+                            .frame(width: 2, height: trackHeight)
+                            .offset(x: indicatorX)
+                            .animation(.linear(duration: 0.05), value: playbackProgress)
+                    }
 
                     if totalSteps > 0 {
                         RoundedRectangle(cornerRadius: 6)
@@ -331,6 +342,11 @@ struct MelodicLyricEditorView: View {
         itemIndex(at: selectedStep).map { segment.items[$0] }
     }
 
+    private func playbackIndicatorOffsetX() -> CGFloat {
+        let totalWidth = CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel
+        return CGFloat(playbackProgress) * totalWidth
+    }
+
     private var cellStatusDescription: String {
         guard totalSteps > 0 else { return "No cells" }
         let stepsPerMeasure = beatsPerBar * stepsPerBeat
@@ -479,6 +495,8 @@ struct MelodicLyricEditorView: View {
 
         scheduledPlaybackNotes = scheduled
         isPlayingSegment = true
+        playbackProgress = 0.0
+        cancelProgressTasks()
 
         let totalDurationMs = Double(totalSteps) * msPerStep
         let completionTask = DispatchWorkItem {
@@ -486,11 +504,31 @@ struct MelodicLyricEditorView: View {
         }
         playbackCompletionTask = completionTask
         DispatchQueue.main.asyncAfter(deadline: .now() + totalDurationMs / 1000.0 + 0.25, execute: completionTask)
+
+        // Drive progress updates aligned to step timing.
+        var tasks: [DispatchWorkItem] = []
+        let now = ProcessInfo.processInfo.systemUptime * 1000.0
+        let totalStepsDouble = Double(totalSteps)
+
+        for step in 0...totalSteps {
+            let stepTimeMs = startTimeMs + Double(step) * msPerStep
+            let delaySeconds = max(0, (stepTimeMs - now) / 1000.0)
+
+            let task = DispatchWorkItem {
+                guard isPlayingSegment else { return }
+                playbackProgress = min(max(Double(step) / totalStepsDouble, 0.0), 1.0)
+            }
+            tasks.append(task)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds, execute: task)
+        }
+
+        playbackProgressTasks = tasks
     }
 
     private func stopSegmentPlayback(sendNoteOff: Bool = true) {
         playbackCompletionTask?.cancel()
         playbackCompletionTask = nil
+        cancelProgressTasks()
 
         if sendNoteOff {
             for entry in scheduledPlaybackNotes {
@@ -502,6 +540,7 @@ struct MelodicLyricEditorView: View {
 
         scheduledPlaybackNotes.removeAll()
         isPlayingSegment = false
+        playbackProgress = 0.0
         stopPreview()
     }
 
@@ -549,6 +588,11 @@ struct MelodicLyricEditorView: View {
         let uppercased = trimmed.uppercased()
         let simplified = uppercased.hasSuffix("M") && uppercased.count > 1 ? String(uppercased.dropLast()) : uppercased
         return keyMap[simplified] ?? 0
+    }
+
+    private func cancelProgressTasks() {
+        playbackProgressTasks.forEach { $0.cancel() }
+        playbackProgressTasks.removeAll()
     }
 
     private struct ScheduledPlaybackNote {
