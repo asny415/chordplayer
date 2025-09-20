@@ -19,6 +19,9 @@ struct MelodicLyricEditorView: View {
     @State private var isTechniqueUpdateInternal = false
     @State private var keyMonitor: Any?
     @State private var lastPreviewNote: UInt8?
+    @State private var isPlayingSegment = false
+    @State private var scheduledPlaybackNotes: [ScheduledPlaybackNote] = []
+    @State private var playbackCompletionTask: DispatchWorkItem?
 
     // In-place name editing state
     @State private var isEditingName = false
@@ -58,7 +61,9 @@ struct MelodicLyricEditorView: View {
                 currentTechnique: $currentTechnique,
                 gridSizeInSteps: $gridSizeInSteps,
                 zoomLevel: $zoomLevel,
-                segmentLengthInBars: $segment.lengthInBars
+                segmentLengthInBars: $segment.lengthInBars,
+                isPlayingSegment: isPlayingSegment,
+                onTogglePlayback: toggleSegmentPlayback
             ).padding().background(Color(NSColor.controlBackgroundColor))
             
             Divider()
@@ -134,11 +139,13 @@ struct MelodicLyricEditorView: View {
         .onChange(of: currentTechnique, perform: techniqueSelectionChanged)
         .onChange(of: segment.lengthInBars) { _ in
             clampSelectedStep()
+            stopSegmentPlayback()
             persistSegment()
         }
         .onChange(of: gridSizeInSteps) { _ in alignSelectionToGrid() }
         .onAppear { registerKeyMonitor() }
         .onDisappear {
+            stopSegmentPlayback()
             stopPreview()
             unregisterKeyMonitor()
         }
@@ -427,6 +434,77 @@ struct MelodicLyricEditorView: View {
         appData.saveChanges()
     }
 
+    private func toggleSegmentPlayback() {
+        if isPlayingSegment {
+            stopSegmentPlayback()
+        } else {
+            startSegmentPlayback()
+        }
+    }
+
+    private func startSegmentPlayback() {
+        guard let preset = appData.preset else { return }
+        stopSegmentPlayback()
+        stopPreview()
+
+        let bpm = preset.bpm
+        guard bpm > 0 else { return }
+        let msPerBeat = 60_000.0 / bpm
+        let msPerStep = msPerBeat / Double(stepsPerBeat)
+        let totalSteps = self.totalSteps
+        guard totalSteps > 0 else { return }
+
+        let sortedItems = segment.items.sorted { $0.position < $1.position }
+        let channel = UInt8(max(0, min(15, appData.chordMidiChannel - 1)))
+        let startTimeMs = ProcessInfo.processInfo.systemUptime * 1000.0 + 80.0
+
+        var scheduled: [ScheduledPlaybackNote] = []
+
+        for (index, item) in sortedItems.enumerated() {
+            guard item.pitch != 0 else { continue }
+            guard let midiNote = midiNoteNumber(for: item.pitch, octave: item.octave) else { continue }
+            let clampedPosition = min(max(item.position, 0), totalSteps - 1)
+            let nextPosition = sortedItems.dropFirst(index + 1).first(where: { $0.position > clampedPosition })?.position ?? totalSteps
+            let durationSteps = max(1, nextPosition - clampedPosition)
+
+            let noteOnTime = startTimeMs + Double(clampedPosition) * msPerStep
+            let noteOffTime = noteOnTime + Double(durationSteps) * msPerStep * 0.95
+
+            let onId = midiManager.scheduleNoteOn(note: midiNote, velocity: 100, channel: channel, scheduledUptimeMs: noteOnTime)
+            let offId = midiManager.scheduleNoteOff(note: midiNote, velocity: 0, channel: channel, scheduledUptimeMs: noteOffTime)
+            scheduled.append(ScheduledPlaybackNote(note: midiNote, channel: channel, onEventId: onId, offEventId: offId))
+        }
+
+        guard !scheduled.isEmpty else { return }
+
+        scheduledPlaybackNotes = scheduled
+        isPlayingSegment = true
+
+        let totalDurationMs = Double(totalSteps) * msPerStep
+        let completionTask = DispatchWorkItem {
+            stopSegmentPlayback(sendNoteOff: false)
+        }
+        playbackCompletionTask = completionTask
+        DispatchQueue.main.asyncAfter(deadline: .now() + totalDurationMs / 1000.0 + 0.25, execute: completionTask)
+    }
+
+    private func stopSegmentPlayback(sendNoteOff: Bool = true) {
+        playbackCompletionTask?.cancel()
+        playbackCompletionTask = nil
+
+        if sendNoteOff {
+            for entry in scheduledPlaybackNotes {
+                if let onId = entry.onEventId { midiManager.cancelScheduledEvent(id: onId) }
+                if let offId = entry.offEventId { midiManager.cancelScheduledEvent(id: offId) }
+                midiManager.sendNoteOff(note: entry.note, velocity: 0, channel: entry.channel)
+            }
+        }
+
+        scheduledPlaybackNotes.removeAll()
+        isPlayingSegment = false
+        stopPreview()
+    }
+
     private func previewPitch(pitch: Int, octave: Int) {
         stopPreview()
         guard let midiNote = midiNoteNumber(for: pitch, octave: octave) else { return }
@@ -434,11 +512,11 @@ struct MelodicLyricEditorView: View {
         midiManager.sendNoteOn(note: midiNote, velocity: 100, channel: channel)
         lastPreviewNote = midiNote
         let scheduledNote = midiNote
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak midiManager = midiManager] in
-            guard self.lastPreviewNote == scheduledNote else { return }
-            midiManager?.sendNoteOff(note: scheduledNote, velocity: 0, channel: channel)
-            if self.lastPreviewNote == scheduledNote {
-                self.lastPreviewNote = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            guard lastPreviewNote == scheduledNote else { return }
+            midiManager.sendNoteOff(note: scheduledNote, velocity: 0, channel: channel)
+            if lastPreviewNote == scheduledNote {
+                lastPreviewNote = nil
             }
         }
     }
@@ -473,6 +551,12 @@ struct MelodicLyricEditorView: View {
         return keyMap[simplified] ?? 0
     }
 
+    private struct ScheduledPlaybackNote {
+        let note: UInt8
+        let channel: UInt8
+        let onEventId: UUID?
+        let offEventId: UUID?
+    }
 }
 
 // MARK: - Subviews
@@ -483,11 +567,20 @@ struct MelodicLyricToolbar: View {
     @Binding var zoomLevel: CGFloat
     @Binding var segmentLengthInBars: Int
     @State private var showingSettings = false
+    let isPlayingSegment: Bool
+    let onTogglePlayback: () -> Void
     // Corrected grid options: Label -> Number of 16th-note steps
     private let gridOptions: [(String, Int)] = [("1/4", 4), ("1/8", 2), ("1/16", 1)]
 
     var body: some View {
         HStack(spacing: 20) {
+            Button(action: onTogglePlayback) {
+                Label(isPlayingSegment ? "Stop" : "Play", systemImage: isPlayingSegment ? "stop.circle.fill" : "play.circle.fill")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.borderedProminent)
+            .help(isPlayingSegment ? "Stop segment preview" : "Play segment preview")
+
             Spacer()
             Picker("Technique", selection: $currentTechnique) {
                 ForEach(PlayingTechnique.allCases) { Text($0.chineseName).tag($0) }
