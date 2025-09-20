@@ -385,6 +385,10 @@ struct MelodicLyricEditorView: View {
             return false
         }
 
+        if let textView = NSApp.keyWindow?.firstResponder as? NSTextView, textView.isEditable {
+            return false
+        }
+
         if characters.count == 1 && modifiers.isDisjoint(with: [.command, .option, .control]) {
             let char = characters.first!
             if let digit = char.wholeNumberValue, (0...7).contains(digit) {
