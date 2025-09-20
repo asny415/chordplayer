@@ -347,6 +347,10 @@ struct MelodicLyricEditorView: View {
 
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let characters = event.charactersIgnoringModifiers ?? ""
+        // Allow default behaviour when the title field is being edited to preserve standard text editing keys.
+        if isEditingName {
+            return false
+        }
 
         if characters.count == 1 && modifiers.isDisjoint(with: [.command, .option, .control]) {
             let char = characters.first!
