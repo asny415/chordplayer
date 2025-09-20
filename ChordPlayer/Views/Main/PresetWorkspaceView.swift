@@ -6,6 +6,7 @@ struct PresetWorkspaceView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     @State private var segmentToEdit: SoloSegment?
+    @State private var lyricSegmentToEdit: MelodicLyricSegment?
 
     var body: some View {
         ScrollView {
@@ -39,6 +40,10 @@ struct PresetWorkspaceView: View {
                     AccompanimentSegmentsView()
                 }
 
+                GroupBox {
+                    MelodicLyricSegmentsView(segmentToEdit: $lyricSegmentToEdit)
+                }
+
             }
             .padding()
         }
@@ -59,6 +64,30 @@ struct PresetWorkspaceView: View {
                                 Button("Done") {
                                     appData.saveChanges()
                                     segmentToEdit = nil
+                                }
+                            }
+                        }
+                }
+                .frame(minWidth: 800, minHeight: 600)
+            } else {
+                Text("Error: Could not find segment to edit.")
+            }
+        }
+        .sheet(item: $lyricSegmentToEdit) { segment in
+            if let index = appData.preset?.melodicLyricSegments.firstIndex(where: { $0.id == segment.id }) {
+                let segmentBinding = Binding<MelodicLyricSegment>(
+                    get: { appData.preset!.melodicLyricSegments[index] },
+                    set: { appData.preset!.melodicLyricSegments[index] = $0 }
+                )
+                
+                NavigationStack {
+                    MelodicLyricEditorView(segment: segmentBinding)
+                        .navigationTitle("Edit: \(segment.name)")
+                        .toolbar {
+                            ToolbarItem(placement: .primaryAction) {
+                                Button("Done") {
+                                    appData.saveChanges()
+                                    lyricSegmentToEdit = nil
                                 }
                             }
                         }
