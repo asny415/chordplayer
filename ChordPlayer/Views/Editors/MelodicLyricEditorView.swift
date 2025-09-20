@@ -5,6 +5,7 @@ import AppKit
 // MARK: - Main Editor View
 
 struct MelodicLyricEditorView: View {
+    @EnvironmentObject private var appData: AppData
     @Binding var segment: MelodicLyricSegment
 
     // Editor State
@@ -129,10 +130,16 @@ struct MelodicLyricEditorView: View {
             .background(Color(NSColor.controlBackgroundColor))
         }
         .onChange(of: currentTechnique, perform: techniqueSelectionChanged)
-        .onChange(of: segment.lengthInBars) { _ in clampSelectedStep() }
+        .onChange(of: segment.lengthInBars) { _ in
+            clampSelectedStep()
+            persistSegment()
+        }
         .onChange(of: gridSizeInSteps) { _ in alignSelectionToGrid() }
         .onAppear { registerKeyMonitor() }
         .onDisappear { unregisterKeyMonitor() }
+        .onChange(of: isEditingName) { editing in
+            if !editing { persistSegment() }
+        }
     }
 
     // MARK: - Private Methods
@@ -194,6 +201,7 @@ struct MelodicLyricEditorView: View {
             segment.items[index].technique = nil
         }
         moveSelection(by: stepStride)
+        persistSegment()
     }
 
     private func toggleTechnique(_ technique: PlayingTechnique) {
@@ -203,6 +211,7 @@ struct MelodicLyricEditorView: View {
         segment.items[index].technique = newValue
         isTechniqueUpdateInternal = true
         currentTechnique = newValue ?? .normal
+        persistSegment()
     }
 
     private func startWordEditing() {
@@ -223,6 +232,7 @@ struct MelodicLyricEditorView: View {
         editingWordStep = nil
         isInlineEditorFocused = false
         moveSelection(by: stepStride)
+        persistSegment()
     }
 
     private func cancelWordEditing() {
@@ -241,34 +251,20 @@ struct MelodicLyricEditorView: View {
 
     private func adjustPitch(direction: Int) {
         guard direction != 0 else { return }
-        let defaultPitch = direction > 0 ? 1 : 1
-        let (targetIndex, _) = ensureItem(at: selectedStep, defaultPitch: defaultPitch)
-        var pitch = segment.items[targetIndex].pitch
-        var octave = segment.items[targetIndex].octave
-
-        if pitch == 0 {
-            if direction > 0 {
-                pitch = 1
-            } else {
-                return
-            }
-        } else {
-            pitch += direction
-            if pitch > 7 {
-                pitch = 1
-                octave = min(octave + 1, 2)
-            } else if pitch < 1 {
-                pitch = 7
-                octave = max(octave - 1, -2)
-            }
+        let (targetIndex, _) = ensureItem(at: selectedStep, defaultPitch: 1)
+        if segment.items[targetIndex].pitch == 0 {
+            // Promote rest to a default pitch before changing octave.
+            segment.items[targetIndex].pitch = 1
         }
-
-        segment.items[targetIndex].pitch = pitch
+        var octave = segment.items[targetIndex].octave + direction
+        octave = min(max(octave, -2), 2)
         segment.items[targetIndex].octave = octave
+        persistSegment()
     }
 
     private func removeItem(at step: Int) {
         segment.items.removeAll { $0.position == step }
+        persistSegment()
     }
 
     private func techniqueSelectionChanged(_ technique: PlayingTechnique) {
@@ -278,6 +274,7 @@ struct MelodicLyricEditorView: View {
         }
         if let index = itemIndex(at: selectedStep) {
             segment.items[index].technique = technique == .normal ? nil : technique
+            persistSegment()
         }
     }
 
@@ -412,6 +409,10 @@ struct MelodicLyricEditorView: View {
         }
     }
 
+    private func persistSegment() {
+        appData.saveChanges()
+    }
+
 }
 
 // MARK: - Subviews
@@ -500,27 +501,26 @@ struct MelodicLyricCellView: View {
     }
 
     var body: some View {
+        let textColor = isSelected ? Color.white : Color.primary
         VStack(spacing: 2) {
-            // Octave dots (top)
-            OctaveView(octave: item.octave)
-                .foregroundColor(isSelected ? .white : .primary)
+            OctaveDotsRow(count: max(item.octave, 0), color: textColor)
 
-            // Pitch number and technique
             HStack(spacing: 1) {
                 Text("\(item.pitch)")
                     .font(.system(size: pitchFontSize, weight: .bold, design: .monospaced))
-                
+
                 if let technique = item.technique {
                     Text(technique.symbol)
                         .font(.system(size: techniqueFontSize))
                 }
             }
-            .foregroundColor(isSelected ? .white : .primary)
+            .foregroundColor(textColor)
 
-            // Lyric word
+            OctaveDotsRow(count: max(-item.octave, 0), color: textColor)
+
             Text(item.word)
                 .font(.system(size: wordFontSize, weight: .regular))
-                .foregroundColor(isSelected ? .white : .primary)
+                .foregroundColor(textColor)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
@@ -531,12 +531,23 @@ struct MelodicLyricCellView: View {
     }
 }
 
-struct OctaveView: View {
-    let octave: Int
+struct OctaveDotsRow: View {
+    let count: Int
+    let color: Color
+
     var body: some View {
-        HStack(spacing: 2) {
-            if octave > 0 { ForEach(0..<octave, id: \.self) { _ in Circle().fill().frame(width: 4, height: 4) } }
-        }.frame(height: 8)
+        Group {
+            if count > 0 {
+                HStack(spacing: 2) {
+                    ForEach(0..<count, id: \.self) { _ in
+                        Circle().fill(color).frame(width: 4, height: 4)
+                    }
+                }
+            } else {
+                Color.clear.frame(height: 4)
+            }
+        }
+        .frame(height: 8)
     }
 }
 
@@ -555,6 +566,11 @@ struct MelodicLyricEditorView_Previews: PreviewProvider {
     }()
 
     static var previews: some View {
-        MelodicLyricEditorView(segment: $mockSegment).frame(width: 800, height: 400)
+        let midiManager = MidiManager()
+        let appData = AppData(midiManager: midiManager)
+        appData.preset?.melodicLyricSegments = [mockSegment]
+        return MelodicLyricEditorView(segment: $mockSegment)
+            .environmentObject(appData)
+            .frame(width: 800, height: 400)
     }
 }
