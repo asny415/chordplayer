@@ -61,7 +61,7 @@ struct MelodicLyricEditorView: View {
                     )
 
                     ForEach(segment.items) { item in
-                        MelodicLyricCellView(item: item, isSelected: selectedItems.contains(item.id))
+                        MelodicLyricCellView(item: item, isSelected: selectedItems.contains(item.id), stepWidth: stepWidth)
                             .offset(x: CGFloat(item.position) * stepWidth)
                             .onTapGesture { selectItem(item.id) }
                             .onTapGesture(count: 2) { self.editingItemState = .init(item: item) }
@@ -278,19 +278,50 @@ struct MelodicLyricGridBackground: View {
 struct MelodicLyricCellView: View {
     let item: MelodicLyricItem
     let isSelected: Bool
+    let stepWidth: CGFloat
+
+    // Dynamically calculate font sizes based on the cell's width
+    private var pitchFontSize: CGFloat {
+        return max(8, min(24, stepWidth * 0.6))
+    }
+
+    private var wordFontSize: CGFloat {
+        return max(6, min(16, stepWidth * 0.4))
+    }
+
+    private var techniqueFontSize: CGFloat {
+        return max(5, min(12, stepWidth * 0.3))
+    }
 
     var body: some View {
         VStack(spacing: 2) {
-            OctaveView(octave: item.octave).foregroundColor(isSelected ? .white : .primary)
+            // Octave dots (top)
+            OctaveView(octave: item.octave)
+                .foregroundColor(isSelected ? .white : .primary)
+
+            // Pitch number and technique
             HStack(spacing: 1) {
-                Text("\(item.pitch)").font(.system(size: 24, weight: .bold, design: .monospaced))
-                if let technique = item.technique { Text(technique.symbol).font(.caption) }
-            }.foregroundColor(isSelected ? .white : .primary)
-            Text(item.word).font(.headline).foregroundColor(isSelected ? .white : .primary)
+                Text("\(item.pitch)")
+                    .font(.system(size: pitchFontSize, weight: .bold, design: .monospaced))
+                
+                if let technique = item.technique {
+                    Text(technique.symbol)
+                        .font(.system(size: techniqueFontSize))
+                }
+            }
+            .foregroundColor(isSelected ? .white : .primary)
+
+            // Lyric word
+            Text(item.word)
+                .font(.system(size: wordFontSize, weight: .regular))
+                .foregroundColor(isSelected ? .white : .primary)
         }
-        .padding(.horizontal, 8).padding(.vertical, 4)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
         .background(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor))
-        .cornerRadius(6).shadow(radius: 1, y: 1).frame(minWidth: 40)
+        .cornerRadius(6)
+        .shadow(radius: 1, y: 1)
+        .frame(width: stepWidth - 2) // Leave a small gap between cells
     }
 }
 
