@@ -180,6 +180,13 @@ struct MelodicLyricEditorView: View {
         selectedStep = snapped
         editingWordStep = nil
         isInlineEditorFocused = false
+
+        let selectedItem = itemIndex(at: snapped).map { segment.items[$0] }
+        let newTechnique = selectedItem?.technique ?? .normal
+        if currentTechnique != newTechnique {
+            isTechniqueUpdateInternal = true
+            currentTechnique = newTechnique
+        }
     }
 
     private func snapStep(_ step: Int) -> Int {
