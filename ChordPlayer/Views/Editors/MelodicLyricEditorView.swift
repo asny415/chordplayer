@@ -41,7 +41,10 @@ struct MelodicLyricEditorView: View {
                         .onTapGesture(count: 2) { isEditingName = true; isNameFieldFocused = true }
                 }
                 Spacer()
-            }.padding()
+            }
+            .padding(.top, 12)
+            .padding(.horizontal)
+            .padding(.bottom, 4)
 
             // 2. Toolbar
             MelodicLyricToolbar(
@@ -71,7 +74,7 @@ struct MelodicLyricEditorView: View {
                     }
                 }
                 .frame(width: CGFloat(segment.lengthInBars * 4) * beatWidth * zoomLevel, height: trackHeight)
-                .padding(.vertical, 20)
+                .padding(.vertical, 12)
                 .contentShape(Rectangle())
                 .onTapGesture { location in handleBackgroundTap(at: location) }
             }
@@ -86,13 +89,15 @@ struct MelodicLyricEditorView: View {
             Divider()
             
             // 4. Status Bar
-            HStack {
+            HStack(spacing: 0) {
                 Text("Selected: \(selectedItems.count) items").padding(.horizontal)
                 Spacer()
                 Text("Length: \(segment.lengthInBars) bars").padding(.horizontal)
                 Spacer()
                 Text("Items: \(segment.items.count)").padding(.horizontal)
-            }.frame(maxWidth: .infinity, minHeight: 30).background(Color(NSColor.controlBackgroundColor))
+            }
+            .padding(.vertical, 6)
+            .background(Color(NSColor.controlBackgroundColor))
         }
         .onKeyDown(perform: handleKeyDown)
         .onChange(of: selectedItems, perform: syncTechniqueWithSelection)
