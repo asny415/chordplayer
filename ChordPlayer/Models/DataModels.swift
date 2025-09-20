@@ -256,6 +256,7 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
     var drumPatterns: [DrumPattern]
     var soloSegments: [SoloSegment] = []
     var accompanimentSegments: [AccompanimentSegment] = []
+    var melodicLyricSegments: [MelodicLyricSegment] = []
 
     // Song Arrangement - 歌曲编排功能
     var arrangement: SongArrangement = SongArrangement()
@@ -279,6 +280,7 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
          drumPatterns: [DrumPattern] = [],
          soloSegments: [SoloSegment] = [],
          accompanimentSegments: [AccompanimentSegment] = [],
+         melodicLyricSegments: [MelodicLyricSegment] = [],
          arrangement: SongArrangement = SongArrangement(),
          activePlayingPatternId: UUID? = nil,
          activeDrumPatternId: UUID? = nil,
@@ -297,6 +299,7 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
         self.drumPatterns = drumPatterns
         self.soloSegments = soloSegments
         self.accompanimentSegments = accompanimentSegments
+        self.melodicLyricSegments = melodicLyricSegments
         self.arrangement = arrangement
         self.activePlayingPatternId = activePlayingPatternId
         self.activeDrumPatternId = activeDrumPatternId
@@ -727,6 +730,51 @@ struct LyricsSegment: Codable, Identifiable, Hashable, Equatable {
         self.durationInBeats = durationInBeats
         self.text = text
         self.language = language
+    }
+}
+
+// MARK: - Melodic Lyric Models
+
+/// 代表歌词中的一个字或词及其音乐属性
+struct MelodicLyricItem: Identifiable, Codable, Hashable {
+    /// 唯一标识符
+    var id = UUID()
+    
+    /// 歌词文字，可以为空字符串表示休止或间奏
+    var word: String
+    
+    /// 段内位置，以16分音符为单位的偏移量
+    var position: Int
+    
+    /// 音高 (1-7 分别代表 Do, Re, Mi, Fa, Sol, La, Si)。0可以用来表示休止。
+    var pitch: Int
+    
+    /// 八度偏移量 (-2, -1, 0, 1, 2)
+    var octave: Int
+    
+    /// 可选的演奏技巧 (复用已有的 PlayingTechnique 枚举)
+    var technique: PlayingTechnique?
+}
+
+/// 代表一个完整的旋律歌词片段
+struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
+    /// 唯一标识符
+    var id = UUID()
+    
+    /// 片段名称，例如 "Verse 1", "Chorus"
+    var name: String
+    
+    /// 片段的小节数，例如 2, 4, 8
+    var lengthInBars: Int
+    
+    /// 组成该片段的歌词单元数组
+    var items: [MelodicLyricItem]
+
+    init(id: UUID = UUID(), name: String, lengthInBars: Int, items: [MelodicLyricItem] = []) {
+        self.id = id
+        self.name = name
+        self.lengthInBars = lengthInBars
+        self.items = items
     }
 }
 
