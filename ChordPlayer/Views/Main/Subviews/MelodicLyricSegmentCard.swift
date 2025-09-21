@@ -7,6 +7,7 @@ struct MelodicLyricSegmentCard: View {
     let isActive: Bool // You might need this later to show selection
     let onEdit: () -> Void
     let onDelete: () -> Void
+    let onDuplicate: () -> Void
 
     @State private var showingDeleteConfirmation = false
 
@@ -70,6 +71,7 @@ struct MelodicLyricSegmentCard: View {
         }
         .contextMenu {
             Button("Edit", action: onEdit)
+            Button("Duplicate", action: onDuplicate)
             Divider()
             Button("Delete", role: .destructive) {
                 showingDeleteConfirmation = true

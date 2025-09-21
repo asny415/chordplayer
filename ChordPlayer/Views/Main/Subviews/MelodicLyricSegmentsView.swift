@@ -32,7 +32,8 @@ struct MelodicLyricSegmentsView: View {
                             segment: segment,
                             isActive: false, // Placeholder for now
                             onEdit: { self.segmentToEdit = segment },
-                            onDelete: { deleteSegment(at: IndexSet(integer: index)) }
+                            onDelete: { deleteSegment(at: IndexSet(integer: index)) },
+                            onDuplicate: { duplicateSegment(segment: segment) }
                         )
                     }
                 }
@@ -73,6 +74,17 @@ struct MelodicLyricSegmentsView: View {
     private func deleteSegment(at offsets: IndexSet) {
         guard appData.preset != nil else { return }
         appData.preset!.melodicLyricSegments.remove(atOffsets: offsets)
+        appData.saveChanges()
+    }
+    
+    private func duplicateSegment(segment: MelodicLyricSegment) {
+        guard appData.preset != nil, let index = appData.preset!.melodicLyricSegments.firstIndex(where: { $0.id == segment.id }) else { return }
+        
+        var newSegment = segment
+        newSegment.id = UUID()
+        newSegment.name = "\(segment.name) 2"
+        
+        appData.preset!.melodicLyricSegments.insert(newSegment, at: index + 1)
         appData.saveChanges()
     }
 }
