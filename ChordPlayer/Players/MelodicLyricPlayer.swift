@@ -106,30 +106,65 @@ class MelodicLyricPlayer {
             case .slide(let fromItem, let toItem, let offTime):
                 guard let startMidiNote = midiNote(for: fromItem, transposition: transposition),
                       let endMidiNote = midiNote(for: toItem, transposition: transposition) else { continue }
-                
-                let noteOnTime = startTime + Double(fromItem.position) * sixteenthNoteDurationInBeats * beatsToSeconds
-                let noteOffTimeAbsolute = startTime + offTime * beatsToSeconds
 
+                let semitoneDifference = Int(endMidiNote) - Int(startMidiNote)
+                let pitchBendRangeSemitones = 2.0
+
+                let noteOnTime = startTime + Double(fromItem.position) * sixteenthNoteDurationInBeats * beatsToSeconds
+                let slideTargetTime = startTime + Double(toItem.position) * sixteenthNoteDurationInBeats * beatsToSeconds
+                let finalNoteOffTime = startTime + offTime * beatsToSeconds
+
+                // Pluck the first note
                 eventIDs.append(midiManager.scheduleNoteOn(note: startMidiNote, velocity: velocity, channel: midiChannel, scheduledUptimeMs: noteOnTime * 1000))
 
-                let slideDurationBeats = Double(toItem.position - fromItem.position) * sixteenthNoteDurationInBeats
-                if slideDurationBeats > 0 {
-                    let slideDurationSeconds = slideDurationBeats * beatsToSeconds
-                    let pitchBendSteps = max(2, Int(slideDurationSeconds * 50))
-                    let semitoneDifference = Int(endMidiNote) - Int(startMidiNote)
-                    let pitchBendRangeSemitones = 2.0 // Standard pitch bend range
-                    let finalPitchBendValue = 8192 + Int(Double(semitoneDifference) * (8191.0 / pitchBendRangeSemitones))
+                if abs(Double(semitoneDifference)) > pitchBendRangeSemitones {
+                    // --- Bend to max, then play target note ---
+                    let slideDurationSeconds = slideTargetTime - noteOnTime
+                    if slideDurationSeconds > 0 {
+                        let direction = semitoneDifference > 0 ? 1.0 : -1.0
+                        let maxBendInSemitones = direction * pitchBendRangeSemitones
+                        // This simplifies to 8192 +/- 8191
+                        let finalPitchBendValue = 8192 + Int(maxBendInSemitones * (8191.0 / pitchBendRangeSemitones))
 
-                    for step in 0...pitchBendSteps {
-                        let t = Double(step) / Double(pitchBendSteps)
-                        let bendTimeMs = (noteOnTime + t * slideDurationSeconds) * 1000
-                        let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
-                        eventIDs.append(midiManager.schedulePitchBend(value: UInt16(intermediatePitch), channel: midiChannel, scheduledUptimeMs: bendTimeMs))
+                        let pitchBendSteps = max(2, Int(slideDurationSeconds * 50))
+                        for step in 0...pitchBendSteps {
+                            let t = Double(step) / Double(pitchBendSteps)
+                            let bendTimeMs = (noteOnTime + t * slideDurationSeconds) * 1000
+                            let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
+                            let clampedPitch = max(0, min(16383, intermediatePitch))
+                            eventIDs.append(midiManager.schedulePitchBend(value: UInt16(clampedPitch), channel: midiChannel, scheduledUptimeMs: bendTimeMs))
+                        }
                     }
+
+                    // At the end of the "slide", turn off the first note and play the target note
+                    eventIDs.append(midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, channel: midiChannel, scheduledUptimeMs: slideTargetTime * 1000))
+                    eventIDs.append(midiManager.schedulePitchBend(value: 8192, channel: midiChannel, scheduledUptimeMs: slideTargetTime * 1000)) // Reset bend
+                    
+                    if slideTargetTime < finalNoteOffTime {
+                        eventIDs.append(midiManager.scheduleNoteOn(note: endMidiNote, velocity: velocity, channel: midiChannel, scheduledUptimeMs: slideTargetTime * 1000))
+                        eventIDs.append(midiManager.scheduleNoteOff(note: endMidiNote, velocity: 0, channel: midiChannel, scheduledUptimeMs: finalNoteOffTime * 1000))
+                    }
+
+                } else {
+                    // --- Normal smooth pitch bend ---
+                    let slideDurationSeconds = slideTargetTime - noteOnTime
+                    if slideDurationSeconds > 0 {
+                        let finalPitchBendValue = 8192 + Int(Double(semitoneDifference) * (8191.0 / pitchBendRangeSemitones))
+                        let pitchBendSteps = max(2, Int(slideDurationSeconds * 50))
+                        for step in 0...pitchBendSteps {
+                            let t = Double(step) / Double(pitchBendSteps)
+                            let bendTimeMs = (noteOnTime + t * slideDurationSeconds) * 1000
+                            let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
+                            let clampedPitch = max(0, min(16383, intermediatePitch))
+                            eventIDs.append(midiManager.schedulePitchBend(value: UInt16(clampedPitch), channel: midiChannel, scheduledUptimeMs: bendTimeMs))
+                        }
+                    }
+                    
+                    // The bent note (startMidiNote) is held until the final off time
+                    eventIDs.append(midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, channel: midiChannel, scheduledUptimeMs: finalNoteOffTime * 1000))
+                    // Reset bend slightly after the note is off
+                    eventIDs.append(midiManager.schedulePitchBend(value: 8192, channel: midiChannel, scheduledUptimeMs: (finalNoteOffTime + 0.01) * 1000))
                 }
-                
-                eventIDs.append(midiManager.scheduleNoteOff(note: startMidiNote, velocity: 0, channel: midiChannel, scheduledUptimeMs: noteOffTimeAbsolute * 1000))
-                eventIDs.append(midiManager.schedulePitchBend(value: 8192, channel: midiChannel, scheduledUptimeMs: (noteOffTimeAbsolute + 0.01) * 1000))
 
 
             case .vibrato(let fromItem, _, let offTime):

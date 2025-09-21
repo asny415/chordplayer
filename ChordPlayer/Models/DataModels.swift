@@ -527,7 +527,7 @@ struct SongArrangement: Codable, Hashable, Equatable {
     var drumTrack: DrumTrack = DrumTrack()
     var guitarTracks: [GuitarTrack] = []
     var annotationTrack: AnnotationTrack = AnnotationTrack()
-    var lyricsTrack: LyricsTrack = LyricsTrack()
+    var lyricsTracks: [LyricsTrack] = []
 
     var lastModified: Date = Date()
 
@@ -550,6 +550,17 @@ struct SongArrangement: Codable, Hashable, Equatable {
 
     mutating func removeGuitarTrack(withId id: UUID) {
         guitarTracks.removeAll { $0.id == id }
+        lastModified = Date()
+    }
+    
+    mutating func addLyricsTrack() {
+        let newTrack = LyricsTrack(name: "Lyrics \(lyricsTracks.count + 1)")
+        lyricsTracks.append(newTrack)
+        lastModified = Date()
+    }
+
+    mutating func removeLyricsTrack(withId id: UUID) {
+        lyricsTracks.removeAll { $0.id == id }
         lastModified = Date()
     }
 }
@@ -703,11 +714,18 @@ enum AnnotationType: String, Codable, CaseIterable, Hashable, Equatable, Identif
 
 // MARK: - Lyrics Track Models
 
-struct LyricsTrack: Codable, Hashable, Equatable {
+struct LyricsTrack: Codable, Identifiable, Hashable, Equatable {
+    var id = UUID()
+    var name: String
     var lyrics: [LyricsSegment] = []
-    var isVisible: Bool = false
+    var isMuted: Bool = false
+    var volume: Double = 1.0
     var fontSize: Double = 14.0
 
+    init(name: String) {
+        self.name = name
+    }
+    
     mutating func addLyrics(_ lyrics: LyricsSegment) {
         self.lyrics.append(lyrics)
         self.lyrics.sort { $0.startBeat < $1.startBeat }

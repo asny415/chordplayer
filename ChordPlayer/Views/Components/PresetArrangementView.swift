@@ -70,11 +70,12 @@ struct PresetArrangementView: View {
                         }
                     }
 
-                    if !preset.arrangement.lyricsTrack.lyrics.isEmpty {
+                    let totalLyricSegments = preset.arrangement.lyricsTracks.flatMap { $0.lyrics }.count
+                    if totalLyricSegments > 0 {
                         HStack {
                             Image(systemName: "text.justify")
                                 .foregroundColor(.gray)
-                            Text("Lyrics segments: \(preset.arrangement.lyricsTrack.lyrics.count)")
+                            Text("Lyrics segments: \(totalLyricSegments)")
                                 .font(.subheadline)
                         }
                     }
@@ -97,6 +98,21 @@ struct PresetArrangementView: View {
                                 .strikethrough(track.isMuted)
                             Spacer()
                             Text("\(track.segments.count) segments")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    
+                    ForEach(preset.arrangement.lyricsTracks) { track in
+                        HStack {
+                            Image(systemName: "text.quote")
+                                .foregroundColor(track.isMuted ? .secondary : .purple)
+                            Text(track.name)
+                                .font(.subheadline)
+                                .strikethrough(track.isMuted)
+                            Spacer()
+                            Text("\(track.lyrics.count) segments")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -224,6 +240,9 @@ struct SimplePresetArrangerView: View {
                     },
                     onDeleteTrack: { trackId in
                         removeGuitarTrack(withId: trackId)
+                    },
+                    onDeleteLyricsTrack: { trackId in
+                        removeLyricsTrack(withId: trackId)
                     }
                 )
                 .frame(minWidth: 600)
@@ -308,10 +327,8 @@ struct SimplePresetArrangerView: View {
 
     private func addLyricsTrack() {
         guard var preset = appData.preset else { return }
-        var arrangement = preset.arrangement
-        guard arrangement.lyricsTrack.isVisible == false else { return }
-        arrangement.lyricsTrack.isVisible = true
-        appData.updateArrangement(arrangement)
+        preset.arrangement.addLyricsTrack()
+        appData.updateArrangement(preset.arrangement)
     }
 
     private func removeGuitarTrack(withId id: UUID) {
@@ -319,6 +336,12 @@ struct SimplePresetArrangerView: View {
         // 安全检查，确保至少保留一个吉他轨道
         guard preset.arrangement.guitarTracks.count > 1 else { return }
         preset.arrangement.removeGuitarTrack(withId: id)
+        appData.updateArrangement(preset.arrangement)
+    }
+    
+    private func removeLyricsTrack(withId id: UUID) {
+        guard var preset = appData.preset else { return }
+        preset.arrangement.removeLyricsTrack(withId: id)
         appData.updateArrangement(preset.arrangement)
     }
 
@@ -341,7 +364,9 @@ struct SimplePresetArrangerView: View {
         }
 
         // 从歌词轨道删除
-        arrangement.lyricsTrack.lyrics.removeAll { $0.id == segmentId }
+        for i in 0..<arrangement.lyricsTracks.count {
+            arrangement.lyricsTracks[i].lyrics.removeAll { $0.id == segmentId }
+        }
 
         appData.updateArrangement(arrangement)
         selectedSegmentId = nil
@@ -379,10 +404,13 @@ struct SimplePresetArrangerView: View {
         guard var preset = appData.preset else { return }
         var arrangement = preset.arrangement
 
-        if let index = arrangement.lyricsTrack.lyrics.firstIndex(where: { $0.id == updatedSegment.id }) {
-            arrangement.lyricsTrack.lyrics[index] = updatedSegment
-            arrangement.lyricsTrack.lyrics.sort { $0.startBeat < $1.startBeat }
-            appData.updateArrangement(arrangement)
+        for trackIndex in 0..<arrangement.lyricsTracks.count {
+            if let segmentIndex = arrangement.lyricsTracks[trackIndex].lyrics.firstIndex(where: { $0.id == updatedSegment.id }) {
+                arrangement.lyricsTracks[trackIndex].lyrics[segmentIndex] = updatedSegment
+                arrangement.lyricsTracks[trackIndex].lyrics.sort { $0.startBeat < $1.startBeat }
+                appData.updateArrangement(arrangement)
+                break
+            }
         }
     }
 }
@@ -416,7 +444,6 @@ struct ArrangementToolbar: View {
                 Button(action: onAddLyricsTrack) {
                     Label("Add Lyrics Track", systemImage: "text.quote")
                 }
-                .disabled(arrangement.lyricsTrack.isVisible)
             } label: {
                 HStack {
                     Image(systemName: "plus")
@@ -464,6 +491,7 @@ struct ArrangementTimelineView: View {
     let onEditLyricsSegment: ((LyricsSegment) -> Void)?
     let onDeleteSegment: ((UUID) -> Void)?
     let onDeleteTrack: ((UUID) -> Void)?
+    let onDeleteLyricsTrack: ((UUID) -> Void)?
 
     @EnvironmentObject var appData: AppData
 
@@ -498,16 +526,17 @@ struct ArrangementTimelineView: View {
                         )
                     }
 
-                    if arrangement.lyricsTrack.isVisible {
+                    ForEach(arrangement.lyricsTracks) { track in
                         ArrangementLyricsTrackView(
-                            track: arrangement.lyricsTrack,
+                            track: track,
                             arrangement: arrangement,
                             selectedSegmentId: $selectedSegmentId,
                             beatWidth: beatWidth,
                             trackHeight: trackHeight,
                             zoomLevel: zoomLevel,
                             onEditLyricsSegment: onEditLyricsSegment,
-                            onDeleteSegment: onDeleteSegment
+                            onDeleteSegment: onDeleteSegment,
+                            onDeleteTrack: onDeleteLyricsTrack
                         )
                     }
                 }
@@ -751,22 +780,26 @@ struct ArrangementLyricsTrackView: View {
     let zoomLevel: CGFloat
     let onEditLyricsSegment: ((LyricsSegment) -> Void)?
     let onDeleteSegment: ((UUID) -> Void)?
+    let onDeleteTrack: ((UUID) -> Void)?
 
     @EnvironmentObject var appData: AppData
     @State private var isDragOver: Bool = false
 
     private var midiChannel: Int {
-        appData.chordMidiChannel + arrangement.guitarTracks.count
+        let guitarTrackCount = appData.preset?.arrangement.guitarTracks.count ?? 0
+        let lyricsTrackIndex = appData.preset?.arrangement.lyricsTracks.firstIndex(where: { $0.id == track.id }) ?? 0
+        return appData.chordMidiChannel + guitarTrackCount + lyricsTrackIndex
     }
 
     var body: some View {
         HStack(spacing: 0) {
             TrackControlView(
-                title: "Lyrics",
+                title: track.name,
                 subtitle: "CH: \(midiChannel)",
                 icon: "text.quote",
                 iconColor: .purple,
-                isMuted: !track.isVisible
+                isMuted: track.isMuted,
+                onDelete: { onDeleteTrack?(track.id) }
             )
             .frame(width: 120)
 
@@ -828,8 +861,7 @@ struct TrackControlView: View {
     @EnvironmentObject var appData: AppData
 
     private var canDelete: Bool {
-        guard onDelete != nil else { return false }
-        return appData.preset?.arrangement.guitarTracks.count ?? 0 > 1
+        return onDelete != nil
     }
 
     var body: some View {

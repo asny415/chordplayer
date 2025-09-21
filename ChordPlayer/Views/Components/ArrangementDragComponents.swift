@@ -725,7 +725,6 @@ struct EnhancedLyricsTrackDropDelegate: DropDelegate {
                         text: text,
                         language: language
                     )
-                    print("[DEBUG] DropDelegate: Creating LyricsSegment with ID \(newSegment.id) from resource \(dragData.resourceId)")
                     self.updateLyricsTrack(with: newSegment, appData: self.appData)
                 }
             }
@@ -743,19 +742,34 @@ struct EnhancedLyricsTrackDropDelegate: DropDelegate {
 
     private func updateLyricsTrack(with segment: LyricsSegment, appData: AppData) {
         guard var preset = appData.preset else { return }
-        var arrangement = preset.arrangement
-        arrangement.lyricsTrack.isVisible = true
-        arrangement.lyricsTrack.addLyrics(segment)
-        appData.updateArrangement(arrangement)
+        if let trackIndex = preset.arrangement.lyricsTracks.firstIndex(where: { $0.id == self.track.id }) {
+            preset.arrangement.lyricsTracks[trackIndex].addLyrics(segment)
+            appData.updateArrangement(preset.arrangement)
+        }
     }
 
     private func repositionLyricsSegment(segmentId: UUID, newStartBeat: Double, appData: AppData) {
         guard var preset = appData.preset else { return }
         var arrangement = preset.arrangement
+        var segmentToMove: LyricsSegment?
 
-        if let index = arrangement.lyricsTrack.lyrics.firstIndex(where: { $0.id == segmentId }) {
-            arrangement.lyricsTrack.lyrics[index].startBeat = newStartBeat
-            appData.updateArrangement(arrangement)
+        // Find and remove the segment from its original track
+        for i in 0..<arrangement.lyricsTracks.count {
+            if let j = arrangement.lyricsTracks[i].lyrics.firstIndex(where: { $0.id == segmentId }) {
+                segmentToMove = arrangement.lyricsTracks[i].lyrics.remove(at: j)
+                break
+            }
+        }
+
+        if var segment = segmentToMove {
+            segment.startBeat = newStartBeat
+            
+            // Add the segment to the new target track
+            if let targetTrackIndex = arrangement.lyricsTracks.firstIndex(where: { $0.id == self.track.id }) {
+                arrangement.lyricsTracks[targetTrackIndex].lyrics.append(segment)
+                arrangement.lyricsTracks[targetTrackIndex].lyrics.sort { $0.startBeat < $1.startBeat }
+                appData.updateArrangement(arrangement)
+            }
         }
     }
 }

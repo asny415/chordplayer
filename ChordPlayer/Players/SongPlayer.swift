@@ -180,30 +180,24 @@ class PresetArrangerPlayer: ObservableObject {
             }
         }
 
-        // 安排旋律歌词事件 (通过 LyricsTrack 关联)
-        print("[DEBUG] SongPlayer: Checking lyrics track. IsVisible: \(preset.arrangement.lyricsTrack.isVisible)")
-        if preset.arrangement.lyricsTrack.isVisible {
-            print("[DEBUG] SongPlayer: Found \(preset.arrangement.lyricsTrack.lyrics.count) segments in lyrics track.")
-            for segment in preset.arrangement.lyricsTrack.lyrics {
-                print("[DEBUG] SongPlayer:   - Processing LyricsSegment with ID \(segment.id) at beat \(segment.startBeat)")
+        // 安排旋律歌词事件
+        for (trackIndex, lyricsTrack) in preset.arrangement.lyricsTracks.enumerated() where !lyricsTrack.isMuted {
+            for segment in lyricsTrack.lyrics {
                 guard segment.startBeat + segment.durationInBeats > startBeat &&
                       segment.startBeat < preset.arrangement.lengthInBeats else { continue }
 
                 // 使用 segment.id 在 melodicLyricSegments 中查找对应的旋律数据
                 if let melodicData = preset.melodicLyricSegments.first(where: { $0.id == segment.id }) {
-                    print("[DEBUG] SongPlayer:     Found matching MelodicLyricSegment: '\(melodicData.name)'. Scheduling for playback.")
                     let segmentStartTime = currentTime + (max(segment.startBeat, startBeat) - startBeat) * beatsToSeconds
                     
                     // 创建一个临时的轨道对象来传递音量等信息
-                    var tempTrack = GuitarTrack(name: "Melody")
-                    tempTrack.volume = 1.0 // Or get from a future volume property on LyricsTrack
+                    var tempTrack = GuitarTrack(name: lyricsTrack.name)
+                    tempTrack.volume = lyricsTrack.volume
                     
-                    // 分配一个临时的MIDI通道
-                    let tempChannel = appData.chordMidiChannel + preset.arrangement.guitarTracks.count
+                    // 根据轨道索引分配唯一的MIDI通道
+                    let midiChannel = appData.chordMidiChannel + preset.arrangement.guitarTracks.count + trackIndex
 
-                    scheduleMelodicLyricSegment(segment: melodicData, startTime: segmentStartTime, track: tempTrack, preset: preset, channel: tempChannel)
-                } else {
-                    print("[DEBUG] SongPlayer:     ERROR: No matching MelodicLyricSegment found for ID \(segment.id)")
+                    scheduleMelodicLyricSegment(segment: melodicData, startTime: segmentStartTime, track: tempTrack, preset: preset, channel: midiChannel)
                 }
             }
         }
