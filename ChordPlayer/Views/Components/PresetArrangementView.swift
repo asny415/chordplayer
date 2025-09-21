@@ -956,7 +956,7 @@ struct ArrangementResourcePanel: View {
 
                     ResourceSection(title: "Lyrics Library", icon: "text.quote") {
                         if let lyricSegments = appData.preset?.melodicLyricSegments, !lyricSegments.isEmpty {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 8) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 8) {
                                 ForEach(lyricSegments) { segment in
                                     LyricsResourceButton(
                                         segment: segment,
