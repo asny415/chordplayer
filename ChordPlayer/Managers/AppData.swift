@@ -119,6 +119,7 @@ class AppData: ObservableObject {
     }
     
     func updateSoloSegment(_ segment: SoloSegment) {
+        print("[DEBUG] AppData.updateSoloSegment called for segment ID: \(segment.id)")
         guard let index = preset?.soloSegments.firstIndex(where: { $0.id == segment.id }) else { return }
         preset?.soloSegments[index] = segment
         saveChanges()

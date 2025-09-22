@@ -378,14 +378,16 @@ struct SoloSegment: Codable, Identifiable, Hashable, Equatable {
 struct SoloNote: Codable, Identifiable, Hashable, Equatable {
     var id = UUID()
     var startTime: Double        // 开始时间（以拍为单位，相对于solo开始）
+    var duration: Double?       // new property to store the note's duration in beats
     var string: Int             // 弦（0-5，从高音弦到低音弦）
     var fret: Int               // 品位（0为空弦，-1为静音）
     var velocity: Int = 100     // 力度（0-127）
     var technique: PlayingTechnique = .normal
     var articulation: Articulation?
     
-    init(startTime: Double, string: Int, fret: Int, velocity: Int = 100, technique: PlayingTechnique = .normal) {
+    init(startTime: Double, duration: Double? = nil, string: Int, fret: Int, velocity: Int = 100, technique: PlayingTechnique = .normal) {
         self.startTime = startTime
+        self.duration = duration
         self.string = string
         self.fret = fret
         self.velocity = velocity

@@ -45,7 +45,8 @@ class PresetManager: ObservableObject {
 
         do {
             let data = try Data(contentsOf: fileURL)
-            let preset = try decoder.decode(Preset.self, from: data)
+            var preset = try decoder.decode(Preset.self, from: data)
+            preset = migratePreset(preset) // Migrate data after loading
             self.currentPreset = preset
         } catch {
             print("[PresetManager] ❌ Failed to load or decode preset file for \(presetInfo.name): \(error). This might be an old format.")
@@ -58,6 +59,44 @@ class PresetManager: ObservableObject {
                 currentPreset = nil // Or create a new default one
             }
         }
+    }
+
+    private func migratePreset(_ preset: Preset) -> Preset {
+        var migratedPreset = preset
+        
+        for i in 0..<migratedPreset.soloSegments.count {
+            var segment = migratedPreset.soloSegments[i]
+            var needsMigration = false
+            for note in segment.notes where note.duration == nil {
+                needsMigration = true
+                break
+            }
+            
+            if needsMigration {
+                var migratedNotes: [SoloNote] = []
+                let notesByString = Dictionary(grouping: segment.notes, by: { $0.string })
+                
+                for stringIndex in notesByString.keys.sorted() {
+                    let notesOnString = notesByString[stringIndex]!.sorted { $0.startTime < $1.startTime }
+                    
+                    for (noteIndex, var note) in notesOnString.enumerated() {
+                        if note.duration == nil {
+                            if noteIndex < notesOnString.count - 1 {
+                                let nextNote = notesOnString[noteIndex + 1]
+                                note.duration = nextNote.startTime - note.startTime
+                            } else {
+                                let calculatedDuration = segment.lengthInBeats - note.startTime
+                                note.duration = max(0, calculatedDuration) // Ensure duration is not negative
+                            }
+                        }
+                        migratedNotes.append(note)
+                    }
+                }
+                segment.notes = migratedNotes.sorted { $0.startTime < $1.startTime }
+                migratedPreset.soloSegments[i] = segment
+            }
+        }
+        return migratedPreset
     }
     
     func createNewPreset(name: String) -> Preset {
@@ -136,6 +175,7 @@ class PresetManager: ObservableObject {
     }
     
     func scheduleAutoSave() {
+        print("[DEBUG] PresetManager.scheduleAutoSave called.")
         autoSaveTimer?.invalidate()
         autoSaveTimer = Timer.scheduledTimer(withTimeInterval: autoSaveDelay, repeats: false) { [weak self] _ in
             self?.saveCurrentPresetToFile()

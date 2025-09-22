@@ -7,6 +7,14 @@ struct SoloEditorView: View {
     
     @Binding var soloSegment: SoloSegment
     @State private var selectedNotes: Set<UUID> = []
+    
+    // Editing tools and state
+    enum EditingTool: String, CaseIterable, Identifiable {
+        case note = "Note"
+        case sustain = "Sustain"
+        var id: Self { self }
+    }
+    @State private var currentTool: EditingTool = .note
     @State private var currentTechnique: PlayingTechnique = .normal
     @State private var currentFret: Int = 0
     @State private var gridSize: Double = 0.25
@@ -14,7 +22,7 @@ struct SoloEditorView: View {
     
     // State for fret input
     @State private var fretInputBuffer: String = ""
-    @State private var fretInputCancellable: AnyCancellable?
+    @State private var fretInputCancellable: AnyCancellable? = nil
     @State private var showingFretPopover: Bool = false
 
     @State private var isEditingName = false
@@ -46,6 +54,7 @@ struct SoloEditorView: View {
             }
 
             SoloToolbar(
+                currentTool: $currentTool,
                 currentTechnique: $currentTechnique,
                 currentFret: $currentFret,
                 gridSize: $gridSize,
@@ -75,7 +84,8 @@ struct SoloEditorView: View {
                     stringHeight: stringHeight,
                     onNoteSelect: selectNote,
                     onNoteDelete: deleteSelectedNotes,
-                    onBackgroundTap: handleBackgroundTap,
+                    onNoteTap: { noteId in handleGridTap(onNote: noteId) },
+                    onBackgroundTap: { position in handleGridTap(at: position) },
                     onSetFret: { showingFretPopover = true }
                 )
                 .frame(
@@ -124,33 +134,109 @@ struct SoloEditorView: View {
     }
 
     // MARK: - Note Editing Logic
-    private func handleBackgroundTap(at position: CGPoint) {
-        let stringIndex = Int(position.y / stringHeight)
-        if stringIndex >= 0 && stringIndex < 6 {
-            addNote(at: position)
-        } else {
-            selectedNotes.removeAll()
-        }
-    }
-    
+    // MARK: - Note Editing Logic
+
+    // MARK: - Note Editing Logic
+
     private func updateSelectedNote(change: (inout SoloNote) -> Void) {
         if selectedNotes.count == 1, let index = soloSegment.notes.firstIndex(where: { $0.id == selectedNotes.first! }) {
             change(&soloSegment.notes[index])
         }
     }
-    
-    private func addNote(at position: CGPoint) {
-        let stringLabelWidth: CGFloat = 40.0
-        let string = Int(position.y / stringHeight)
-        let time = Double((position.x - stringLabelWidth) / beatWidth) / Double(zoomLevel)
+
+    /// The main entry point for all tap interactions on the grid.
+    private func handleGridTap(at position: CGPoint? = nil, onNote noteID: UUID? = nil) {
+        // This is the unified handler for all tap gestures on the grid.
         
-        guard string >= 0 && string < 6 && time >= 0 && time <= soloSegment.lengthInBeats else { return }
+        // Case 1: A note was tapped directly.
+        if let noteID = noteID {
+            print("[DEBUG] Tapped on note ID: \(noteID)")
+            guard let noteIndex = soloSegment.notes.firstIndex(where: { $0.id == noteID }) else { return }
+            
+            switch currentTool {
+            case .note:
+                selectNote(noteID)
+                
+            case .sustain:
+                print("[DEBUG] Applying SUSTAIN tool to note.")
+                let currentDuration = soloSegment.notes[noteIndex].duration ?? 1.0
+                soloSegment.notes[noteIndex].duration = currentDuration + gridSize
+                
+
+            }
+            return
+        }
         
-        let alignedTime = snapToGrid(time)
-        let newNote = SoloNote(startTime: alignedTime, string: string, fret: currentFret, technique: currentTechnique)
+        // Case 2: A blank space was tapped.
+        if let position = position {
+            print("[DEBUG] Tapped on background at position: \(position)")
+            let stringLabelWidth: CGFloat = 40.0
+            let stringIndex = Int(position.y / stringHeight)
+            let time = Double((position.x - stringLabelWidth) / beatWidth) / Double(zoomLevel)
+            guard stringIndex >= 0 && stringIndex < 6 && time >= 0 else { return }
+            let tappedTime = snapToGrid(time)
+
+            switch currentTool {
+            case .note:
+                // Check if a note exists at the tapped position
+                if let existingNote = soloSegment.notes.first(where: { $0.string == stringIndex && tappedTime >= $0.startTime && tappedTime < ($0.startTime + ($0.duration ?? gridSize)) }) {
+                    selectNote(existingNote.id)
+                } else {
+                    addNote(at: tappedTime, on: stringIndex)
+                }
+                
+            case .sustain:
+                // Find the note before the tap and extend its duration TO the tap time.
+                print("[DEBUG] Applying SUSTAIN tool to blank space.")
+                guard let precedingNoteIndex = findPrecedingNoteIndex(before: tappedTime, on: stringIndex) else { return }
+                let note = soloSegment.notes[precedingNoteIndex]
+                let newDuration = tappedTime - note.startTime + gridSize
+                soloSegment.notes[precedingNoteIndex].duration = max(gridSize, newDuration)
+                print("[DEBUG] Extended note \(note.fret) to duration \(newDuration)")
+
+
+            }
+        }
+    }
+
+    private func addNote(at time: Double, on stringIndex: Int) {
+        print("[DEBUG] addNote called at time: \(time), string: \(stringIndex)")
+        if soloSegment.notes.contains(where: { $0.string == stringIndex && abs($0.startTime - time) < 0.001 }) {
+            return
+        }
         
+        let newNote = SoloNote(startTime: time, duration: 1.0, string: stringIndex, fret: currentFret, technique: currentTechnique)
         soloSegment.notes.append(newNote)
+        recalculateDurations(forString: stringIndex)
         selectedNotes = [newNote.id]
+    }
+
+    private func findPrecedingNoteIndex(before time: Double, on stringIndex: Int) -> Int? {
+        soloSegment.notes.indices.filter {
+            soloSegment.notes[$0].string == stringIndex && soloSegment.notes[$0].startTime < time
+        }.max(by: { soloSegment.notes[$0].startTime < soloSegment.notes[$1].startTime })
+    }
+
+    private func recalculateDurations(forString stringIndex: Int) {
+        let notesOnStringIndices = soloSegment.notes.indices
+            .filter { soloSegment.notes[$0].string == stringIndex }
+            .sorted { soloSegment.notes[$0].startTime < soloSegment.notes[$1].startTime }
+
+        for i in 0..<notesOnStringIndices.count - 1 {
+            let currentIndex = notesOnStringIndices[i]
+            let nextIndex = notesOnStringIndices[i+1]
+            
+            let currentNote = soloSegment.notes[currentIndex]
+            let nextNote = soloSegment.notes[nextIndex]
+            
+            if let currentDuration = currentNote.duration {
+                if currentNote.startTime + currentDuration > nextNote.startTime {
+                    soloSegment.notes[currentIndex].duration = nextNote.startTime - currentNote.startTime
+                }
+            } else {
+                 soloSegment.notes[currentIndex].duration = nextNote.startTime - currentNote.startTime
+            }
+        }
     }
     
     private func selectNote(_ noteId: UUID, addToSelection: Bool = false) {
@@ -166,7 +252,7 @@ struct SoloEditorView: View {
         selectedNotes.removeAll()
     }
     
-    private func snapToGrid(_ time: Double) -> Double { round(time / gridSize) * gridSize }
+    private func snapToGrid(_ time: Double) -> Double { floor(time / gridSize) * gridSize }
     
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         switch event.keyCode {
@@ -207,6 +293,7 @@ struct SoloEditorView: View {
 // MARK: - Subviews
 
 struct SoloToolbar: View {
+    @Binding var currentTool: SoloEditorView.EditingTool
     @Binding var currentTechnique: PlayingTechnique
     @Binding var currentFret: Int
     @Binding var gridSize: Double
@@ -233,6 +320,15 @@ struct SoloToolbar: View {
             Spacer()
 
             HStack(spacing: 15) {
+                Picker("Tool", selection: $currentTool) {
+                    ForEach(SoloEditorView.EditingTool.allCases) { tool in
+                        Text(tool.rawValue).tag(tool)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(minWidth: 180)
+                .help("Editing Tool")
+
                 Picker("Technique", selection: $currentTechnique) {
                     ForEach(PlayingTechnique.allCases) { technique in
                         Text(technique.chineseName).tag(technique)
@@ -287,6 +383,7 @@ struct SoloTablatureView: View {
     
     let onNoteSelect: (UUID, Bool) -> Void
     let onNoteDelete: () -> Void
+    let onNoteTap: (UUID) -> Void
     let onBackgroundTap: (CGPoint) -> Void
     let onSetFret: () -> Void
     
@@ -303,7 +400,10 @@ struct SoloTablatureView: View {
             }
             
             ForEach(soloSegment.notes) { note in
-                SoloNoteView(note: note, isSelected: selectedNotes.contains(note.id), beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel, onSelect: { onNoteSelect(note.id, $0) })
+                SoloNoteView(note: note, isSelected: selectedNotes.contains(note.id), beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel)
+                    .onTapGesture {
+                        onNoteTap(note.id)
+                    }
             }
             
             if isPlaying && playbackPosition > 0 {
@@ -401,21 +501,27 @@ struct SoloStringLineView: View {
 
 struct SoloNoteView: View {
     let note: SoloNote, isSelected: Bool, beatWidth: CGFloat, stringHeight: CGFloat, zoomLevel: CGFloat
-    let onSelect: (Bool) -> Void
     
     var body: some View {
-        HStack(spacing: 2) {
-            Text("\(note.fret)").font(.system(size: 12, weight: .bold))
-                .foregroundColor(isSelected ? .white : .primary)
-                .frame(width: 20, height: 20)
-                .background(Circle().fill(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor)).overlay(Circle().stroke(Color.primary, lineWidth: 1)))
+        let noteDuration = note.duration ?? 1.0
+        let noteWidth = CGFloat(noteDuration) * beatWidth * zoomLevel
+
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(isSelected ? Color.accentColor : Color.green.opacity(0.7))
+                .frame(width: noteWidth, height: stringHeight * 0.8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5)
+                        .stroke(Color.primary.opacity(0.8), lineWidth: isSelected ? 2 : 1)
+                )
             
-            if !note.technique.symbol.isEmpty {
-                Text(note.technique.symbol).font(.system(size: 10)).foregroundColor(.secondary)
-            }
+            Text("\(note.fret)")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(isSelected ? .white : .primary)
+                .padding(.leading, 5)
         }
-        .position(x: 40 + CGFloat(note.startTime) * beatWidth * zoomLevel, y: CGFloat(note.string) * stringHeight + stringHeight / 2)
-        .onTapGesture { onSelect(false) }
+        .position(x: 40 + (CGFloat(note.startTime) * beatWidth * zoomLevel) + (noteWidth / 2), y: CGFloat(note.string) * stringHeight + stringHeight / 2)
+        .allowsHitTesting(false)
     }
 }
 
