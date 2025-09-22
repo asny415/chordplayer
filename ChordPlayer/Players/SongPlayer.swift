@@ -296,13 +296,16 @@ class PresetArrangerPlayer: ObservableObject {
     }
 
     private func scheduleSoloSegment(segment: SoloSegment, startTime: TimeInterval, track: GuitarTrack) {
-        // 这里简化实现，实际应该使用SoloPlayer的逻辑
         guard let preset = currentPreset else { return }
         let beatsToSeconds = 60.0 / preset.bpm
         let transposition = self.transposition(forKey: preset.key)
 
         for note in segment.notes {
             let noteStartTime = startTime + note.startTime * beatsToSeconds
+            
+            // Use the note's own duration property, with a fallback.
+            let noteDurationInBeats = note.duration ?? 1.0 // Default to 1 beat if duration is not set
+            let noteDurationInSeconds = noteDurationInBeats * beatsToSeconds
 
             let midiNote = self.midiNote(from: note.string, fret: note.fret, transposition: transposition)
             let velocity = UInt8(min(127, max(1, Int(Double(note.velocity) * track.volume))))
@@ -314,12 +317,11 @@ class PresetArrangerPlayer: ObservableObject {
                 scheduledUptimeMs: noteStartTime * 1000
             )
             
-            // 音符持续时间（简化为0.5秒）
             let offEventId = midiManager.scheduleNoteOff(
                 note: UInt8(midiNote),
                 velocity: 0,
                 channel: UInt8(channel(for: track, in: preset) - 1),
-                scheduledUptimeMs: (noteStartTime + 0.5) * 1000
+                scheduledUptimeMs: (noteStartTime + noteDurationInSeconds) * 1000
             )
             
             eventsLock.lock()
