@@ -10,6 +10,7 @@ class SoloPlayer: ObservableObject, Quantizable {
     @Published var isPlaying: Bool = false
     @Published var playbackPosition: Double = 0
     
+    private var activeNotes: Set<UInt8> = []
     private var scheduledEventIDs: [UUID] = []
     private var playbackStartDate: Date?
     private var uiTimerCancellable: AnyCancellable?
@@ -61,9 +62,7 @@ class SoloPlayer: ObservableObject, Quantizable {
             let transposition = self.transposition(forKey: self.appData.preset?.key ?? "C")
 
             var eventIDs: [UUID] = []
-
-            // Stop any notes playing on the same string before starting a new one.
-            var lastNoteOffTimeByString: [Int: Double] = [:]
+            self.activeNotes.removeAll()
 
             for note in notesSortedByTime {
                 guard note.fret >= 0 else { continue }
@@ -72,26 +71,16 @@ class SoloPlayer: ObservableObject, Quantizable {
                 let noteOnTime = note.startTime
                 let noteOffTime = note.startTime + noteDuration
 
-                // Stop the previous note on this string if it would overlap
-                if let lastOffTime = lastNoteOffTimeByString[note.string], noteOnTime < lastOffTime {
-                    // This case should ideally be handled by data validation in the editor,
-                    // but as a safeguard, we could stop the previous note early.
-                    // For now, we trust the calculated durations.
-                }
-
                 let midiNoteNumber = self.midiNote(from: note.string, fret: note.fret, transposition: transposition)
                 let velocity = UInt8(note.velocity)
                 let noteOnTimeMs = playbackStartTimeMs + (noteOnTime * beatsToSeconds * 1000.0)
                 let noteOffTimeMs = playbackStartTimeMs + (noteOffTime * beatsToSeconds * 1000.0)
 
                 if noteOffTimeMs > noteOnTimeMs {
-                    // Stop any currently playing note on the same string before playing the new one.
-                    self.midiManager.sendNoteOff(note: midiNoteNumber, velocity: 0) // Send immediate off for safety
-                    
                     eventIDs.append(self.midiManager.scheduleNoteOn(note: midiNoteNumber, velocity: velocity, scheduledUptimeMs: noteOnTimeMs))
                     eventIDs.append(self.midiManager.scheduleNoteOff(note: midiNoteNumber, velocity: 0, scheduledUptimeMs: noteOffTimeMs))
+                    self.activeNotes.insert(midiNoteNumber)
                 }
-                lastNoteOffTimeByString[note.string] = noteOffTime
             }
 
             self.scheduledEventIDs = eventIDs
@@ -114,15 +103,25 @@ class SoloPlayer: ObservableObject, Quantizable {
 
 
     func stopPlayback() {
-        isPlaying = false
-        currentlyPlayingSegmentID = nil
+        DispatchQueue.main.async {
+            self.isPlaying = false
+            self.currentlyPlayingSegmentID = nil
+            self.uiTimerCancellable?.cancel()
+            self.playbackStartDate = nil
+            self.playbackPosition = 0
+        }
+        
         midiManager.cancelAllPendingScheduledEvents()
-        midiManager.sendPitchBend(value: 8192)
-        midiManager.sendPanic()
+        
+        // Send Note Off for all notes that were scheduled to play
+        for note in activeNotes {
+            midiManager.sendNoteOff(note: note, velocity: 0)
+        }
+        
+        midiManager.sendPitchBend(value: 8192) // Reset pitch bend
+        
+        activeNotes.removeAll()
         scheduledEventIDs.removeAll()
-        uiTimerCancellable?.cancel()
-        playbackStartDate = nil
-        playbackPosition = 0
     }
     
     private func transposition(forKey key: String) -> Int {
