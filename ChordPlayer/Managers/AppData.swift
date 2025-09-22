@@ -16,6 +16,7 @@ class AppData: ObservableObject {
     @Published var midiPortName: String
     @Published var chordMidiChannel: Int
     @Published var drumMidiChannel: Int
+    @Published var melodyMidiChannel: Int
 
     private let presetManager = PresetManager.shared
     private var cancellables = Set<AnyCancellable>()
@@ -27,6 +28,7 @@ class AppData: ObservableObject {
         self.midiPortName = UserDefaults.standard.string(forKey: "midiPortName") ?? defaultPortName
         self.chordMidiChannel = UserDefaults.standard.object(forKey: "chordMidiChannel") as? Int ?? 1
         self.drumMidiChannel = UserDefaults.standard.object(forKey: "drumMidiChannel") as? Int ?? 10
+        self.melodyMidiChannel = UserDefaults.standard.object(forKey: "melodyMidiChannel") as? Int ?? 4
 
         // Subscribe to the PresetManager's currentPreset
         presetManager.$currentPreset
@@ -55,6 +57,13 @@ class AppData: ObservableObject {
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .sink { channel in
                 UserDefaults.standard.set(channel, forKey: "drumMidiChannel")
+            }
+            .store(in: &cancellables)
+
+        $melodyMidiChannel
+            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
+            .sink { channel in
+                UserDefaults.standard.set(channel, forKey: "melodyMidiChannel")
             }
             .store(in: &cancellables)
     }

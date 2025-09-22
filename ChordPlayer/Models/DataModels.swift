@@ -573,6 +573,7 @@ struct DrumTrack: Codable, Hashable, Equatable {
     var segments: [DrumSegment] = []
     var isMuted: Bool = false
     var volume: Double = 1.0
+    var midiChannel: Int?
 
     mutating func addSegment(_ segment: DrumSegment) {
         // 确保不重叠
@@ -608,6 +609,7 @@ struct GuitarTrack: Codable, Identifiable, Hashable, Equatable {
     var isSolo: Bool = false
     var volume: Double = 1.0
     var pan: Double = 0.0 // -1.0 (左) 到 1.0 (右)
+    var midiChannel: Int?
 
     init(name: String) {
         self.name = name
@@ -723,6 +725,7 @@ struct LyricsTrack: Codable, Identifiable, Hashable, Equatable {
     var isMuted: Bool = false
     var volume: Double = 1.0
     var fontSize: Double = 14.0
+    var midiChannel: Int?
 
     init(name: String) {
         self.name = name

@@ -632,7 +632,15 @@ struct ArrangementDrumTrackView: View {
                 title: "Drums",
                 icon: "hifispeaker.fill",
                 iconColor: .orange,
-                isMuted: track.isMuted
+                isMuted: track.isMuted,
+                midiChannel: Binding<Int?>(
+                    get: { appData.preset?.arrangement.drumTrack.midiChannel },
+                    set: { newValue in
+                        guard appData.preset != nil else { return }
+                        appData.preset!.arrangement.drumTrack.midiChannel = newValue
+                    }
+                ),
+                defaultMidiChannel: appData.drumMidiChannel
             )
             .frame(width: 120)
 
@@ -702,20 +710,25 @@ struct ArrangementGuitarTrackView: View {
     @EnvironmentObject var appData: AppData
     @State private var isDragOver: Bool = false
 
-    private var midiChannel: Int {
-        let trackIndex = appData.preset?.arrangement.guitarTracks.firstIndex(where: { $0.id == track.id }) ?? 0
-        return appData.chordMidiChannel + trackIndex
-    }
-
     var body: some View {
         HStack(spacing: 0) {
             // 轨道控制
             TrackControlView(
                 title: track.name,
-                subtitle: "CH: \(midiChannel)",
                 icon: "guitars",
                 iconColor: track.isMuted ? .secondary : .blue,
                 isMuted: track.isMuted,
+                midiChannel: Binding<Int?>(
+                    get: {
+                        guard let preset = appData.preset, let trackIndex = preset.arrangement.guitarTracks.firstIndex(where: { $0.id == track.id }) else { return nil }
+                        return preset.arrangement.guitarTracks[trackIndex].midiChannel
+                    },
+                    set: { newValue in
+                        guard let preset = appData.preset, let trackIndex = preset.arrangement.guitarTracks.firstIndex(where: { $0.id == track.id }) else { return }
+                        appData.preset!.arrangement.guitarTracks[trackIndex].midiChannel = newValue
+                    }
+                ),
+                defaultMidiChannel: appData.chordMidiChannel + (appData.preset?.arrangement.guitarTracks.firstIndex(where: { $0.id == track.id }) ?? 0),
                 onDelete: { onDeleteTrack?(track.id) }
             )
             .frame(width: 120)
@@ -785,20 +798,24 @@ struct ArrangementLyricsTrackView: View {
     @EnvironmentObject var appData: AppData
     @State private var isDragOver: Bool = false
 
-    private var midiChannel: Int {
-        let guitarTrackCount = appData.preset?.arrangement.guitarTracks.count ?? 0
-        let lyricsTrackIndex = appData.preset?.arrangement.lyricsTracks.firstIndex(where: { $0.id == track.id }) ?? 0
-        return appData.chordMidiChannel + guitarTrackCount + lyricsTrackIndex
-    }
-
     var body: some View {
         HStack(spacing: 0) {
             TrackControlView(
                 title: track.name,
-                subtitle: "CH: \(midiChannel)",
                 icon: "text.quote",
                 iconColor: .purple,
                 isMuted: track.isMuted,
+                midiChannel: Binding<Int?>(
+                    get: {
+                        guard let preset = appData.preset, let trackIndex = preset.arrangement.lyricsTracks.firstIndex(where: { $0.id == track.id }) else { return nil }
+                        return preset.arrangement.lyricsTracks[trackIndex].midiChannel
+                    },
+                    set: { newValue in
+                        guard let preset = appData.preset, let trackIndex = preset.arrangement.lyricsTracks.firstIndex(where: { $0.id == track.id }) else { return }
+                        appData.preset!.arrangement.lyricsTracks[trackIndex].midiChannel = newValue
+                    }
+                ),
+                defaultMidiChannel: appData.melodyMidiChannel + (appData.preset?.arrangement.lyricsTracks.firstIndex(where: { $0.id == track.id }) ?? 0),
                 onDelete: { onDeleteTrack?(track.id) }
             )
             .frame(width: 120)
@@ -850,36 +867,72 @@ struct ArrangementLyricsTrackView: View {
     }
 }
 
-// MARK: - 轨道控制视图
 struct TrackControlView: View {
     let title: String
-    var subtitle: String? = nil
     let icon: String
     let iconColor: Color
     let isMuted: Bool
     var onDelete: (() -> Void)? = nil
+
+    @Binding var midiChannel: Int?
+    let defaultMidiChannel: Int
+
     @EnvironmentObject var appData: AppData
+
+    init(title: String, icon: String, iconColor: Color, isMuted: Bool, midiChannel: Binding<Int?>, defaultMidiChannel: Int, onDelete: (() -> Void)? = nil) {
+        self.title = title
+        self.icon = icon
+        self.iconColor = iconColor
+        self.isMuted = isMuted
+        self._midiChannel = midiChannel
+        self.defaultMidiChannel = defaultMidiChannel
+        self.onDelete = onDelete
+    }
 
     private var canDelete: Bool {
         return onDelete != nil
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        let channelBinding = Binding<Int>(
+            get: { self.midiChannel ?? 0 }, // 0 represents "Default"
+            set: {
+                if $0 == 0 {
+                    self.midiChannel = nil
+                } else {
+                    self.midiChannel = $0
+                }
+                appData.saveChanges()
+            }
+        )
+
+        return HStack(spacing: 8) {
             Image(systemName: icon)
                 .foregroundColor(iconColor)
                 .font(.title2)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .strikethrough(isMuted)
 
-                if let subtitle = subtitle {
-                    Text(subtitle)
-                        .font(.caption2)
+                HStack(spacing: 4) {
+                    Text("CH:")
+                        .font(.caption)
                         .foregroundColor(.secondary)
+
+                    Picker("Channel", selection: channelBinding) {
+                        Text("Def").tag(0) // Default
+                        ForEach(1...16, id: \.self) { channel in
+                            Text(String(channel)).tag(channel)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(width: 65)
                 }
             }
 

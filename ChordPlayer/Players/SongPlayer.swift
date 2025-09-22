@@ -195,7 +195,7 @@ class PresetArrangerPlayer: ObservableObject {
                     tempTrack.volume = lyricsTrack.volume
                     
                     // 根据轨道索引分配唯一的MIDI通道
-                    let midiChannel = appData.chordMidiChannel + preset.arrangement.guitarTracks.count + trackIndex
+                    let midiChannel = lyricsTrack.midiChannel ?? (appData.melodyMidiChannel + trackIndex)
 
                     scheduleMelodicLyricSegment(segment: melodicData, startTime: segmentStartTime, track: tempTrack, preset: preset, channel: midiChannel)
                 }
@@ -237,13 +237,13 @@ class PresetArrangerPlayer: ObservableObject {
                 let repeatStartTime = segmentStartTime + Double(repeatIndex) * patternDurationSeconds
                 // Ensure we don't schedule past the loop end time
                 if repeatStartTime < (segmentStartTime + segmentEffectiveDuration) && repeatStartTime >= currentTime {
-                    scheduleDrumPattern(pattern: drumPattern, startTime: repeatStartTime, volume: track.volume)
+                    scheduleDrumPattern(pattern: drumPattern, startTime: repeatStartTime, volume: track.volume, track: track)
                 }
             }
         }
     }
 
-    private func scheduleDrumPattern(pattern: DrumPattern, startTime: TimeInterval, volume: Double) {
+    private func scheduleDrumPattern(pattern: DrumPattern, startTime: TimeInterval, volume: Double, track: DrumTrack) {
         let stepDuration = (60.0 / (currentPreset?.bpm ?? 120.0)) / Double(pattern.length / 4) // 假设16th notes per bar
 
         for stepIndex in 0..<pattern.length {
@@ -256,7 +256,7 @@ class PresetArrangerPlayer: ObservableObject {
                     let eventId = midiManager.scheduleNoteOn(
                         note: UInt8(midiNote),
                         velocity: velocity,
-                        channel: UInt8(appData.drumMidiChannel - 1),
+                        channel: UInt8((track.midiChannel ?? appData.drumMidiChannel) - 1),
                         scheduledUptimeMs: noteTime * 1000
                     )
                     scheduledEvents.append(eventId)
@@ -264,7 +264,7 @@ class PresetArrangerPlayer: ObservableObject {
                     let offEventId = midiManager.scheduleNoteOff(
                         note: UInt8(midiNote),
                         velocity: 0,
-                        channel: UInt8(appData.drumMidiChannel - 1),
+                        channel: UInt8((track.midiChannel ?? appData.drumMidiChannel) - 1),
                         scheduledUptimeMs: (noteTime + 0.1) * 1000
                     )
                     scheduledEvents.append(offEventId)
@@ -436,6 +436,9 @@ class PresetArrangerPlayer: ObservableObject {
     }
 
     private func channel(for track: GuitarTrack, in preset: Preset) -> Int {
+        if let customChannel = track.midiChannel {
+            return customChannel
+        }
         if let index = preset.arrangement.guitarTracks.firstIndex(where: { $0.id == track.id }) {
             return appData.chordMidiChannel + index
         }
