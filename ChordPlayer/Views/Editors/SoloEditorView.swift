@@ -150,7 +150,6 @@ struct SoloEditorView: View {
         
         // Case 1: A note was tapped directly.
         if let noteID = noteID {
-            print("[DEBUG] Tapped on note ID: \(noteID)")
             guard let noteIndex = soloSegment.notes.firstIndex(where: { $0.id == noteID }) else { return }
             
             switch currentTool {
@@ -158,18 +157,15 @@ struct SoloEditorView: View {
                 selectNote(noteID)
                 
             case .sustain:
-                print("[DEBUG] Applying SUSTAIN tool to note.")
-                let currentDuration = soloSegment.notes[noteIndex].duration ?? 1.0
+                // When tapping a note body with the sustain tool, extend its duration by one grid step.
+                let currentDuration = soloSegment.notes[noteIndex].duration ?? gridSize
                 soloSegment.notes[noteIndex].duration = currentDuration + gridSize
-                
-
             }
             return
         }
         
-        // Case 2: A blank space was tapped.
+        // Case 2: A blank space on the grid was tapped.
         if let position = position {
-            print("[DEBUG] Tapped on background at position: \(position)")
             let stringLabelWidth: CGFloat = 40.0
             let stringIndex = Int(position.y / stringHeight)
             let time = Double((position.x - stringLabelWidth) / beatWidth) / Double(zoomLevel)
@@ -178,7 +174,7 @@ struct SoloEditorView: View {
 
             switch currentTool {
             case .note:
-                // Check if a note exists at the tapped position
+                // Original logic: if a note exists, select it. Otherwise, add a new one.
                 if let existingNote = soloSegment.notes.first(where: { $0.string == stringIndex && tappedTime >= $0.startTime && tappedTime < ($0.startTime + ($0.duration ?? gridSize)) }) {
                     selectNote(existingNote.id)
                 } else {
@@ -186,15 +182,21 @@ struct SoloEditorView: View {
                 }
                 
             case .sustain:
-                // Find the note before the tap and extend its duration TO the tap time.
-                print("[DEBUG] Applying SUSTAIN tool to blank space.")
-                guard let precedingNoteIndex = findPrecedingNoteIndex(before: tappedTime, on: stringIndex) else { return }
-                let note = soloSegment.notes[precedingNoteIndex]
-                let newDuration = tappedTime - note.startTime + gridSize
-                soloSegment.notes[precedingNoteIndex].duration = max(gridSize, newDuration)
-                print("[DEBUG] Extended note \(note.fret) to duration \(newDuration)")
-
-
+                // Priority 1: If tapping inside a note, truncate it. This is the "trim" or "add rest" function.
+                if let noteToTrimIndex = soloSegment.notes.firstIndex(where: { $0.string == stringIndex && tappedTime > $0.startTime && tappedTime < ($0.startTime + ($0.duration ?? gridSize)) }) {
+                    let note = soloSegment.notes[noteToTrimIndex]
+                    let newDuration = tappedTime - note.startTime
+                    soloSegment.notes[noteToTrimIndex].duration = max(gridSize, newDuration)
+                }
+                // Priority 2: If tapping in empty space, extend the previous note.
+                else if let precedingNoteIndex = findPrecedingNoteIndex(before: tappedTime, on: stringIndex) {
+                    let note = soloSegment.notes[precedingNoteIndex]
+                    let newDuration = tappedTime - note.startTime
+                    // Only extend, don't shorten.
+                    if newDuration > (note.duration ?? 0) {
+                        soloSegment.notes[precedingNoteIndex].duration = max(gridSize, newDuration)
+                    }
+                }
             }
         }
     }
