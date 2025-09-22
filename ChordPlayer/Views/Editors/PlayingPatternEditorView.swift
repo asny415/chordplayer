@@ -8,10 +8,12 @@ struct PlayingPatternEditorView: View {
     let onCancel: () -> Void
 
     @EnvironmentObject var chordPlayer: ChordPlayer
+    @EnvironmentObject var appData: AppData
     
     // State for the editor
     @State private var popoverStepIndex: Int? = nil
     @State private var selectedCell: (step: Int, string: Int)? = nil
+    @State private var previewMidiChannel: Int = 1
     
     // State for fret input
     @State private var fretInputBuffer: String = ""
@@ -62,7 +64,17 @@ struct PlayingPatternEditorView: View {
             }.pickerStyle(SegmentedPickerStyle()).frame(width: 200)
             Stepper("Length: \(pattern.length) steps", value: $pattern.length, in: 1...64)
             Spacer()
-            Button("Preview with C Major") { chordPlayer.previewPattern(pattern) }
+            
+            Picker("MIDI Ch:", selection: $previewMidiChannel) {
+                ForEach(1...16, id: \.self) { channel in
+                    Text("\(channel)").tag(channel)
+                }
+            }
+            .frame(width: 120)
+
+            Button("Preview with C Major") { 
+                chordPlayer.previewPattern(pattern, midiChannel: previewMidiChannel)
+            }
         }
     }
 

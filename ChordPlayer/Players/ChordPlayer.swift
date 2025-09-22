@@ -11,8 +11,8 @@ class ChordPlayer: ObservableObject {
     private var scheduledWorkItems: [UUID: DispatchWorkItem] = [:]
     private let workItemsLock = NSRecursiveLock()
 
-    private var playingNotes: [UInt8: UUID] = [:] // Maps MIDI Note -> Scheduled Note-Off Task ID
     private var stringNotes: [Int: UInt8] = [:] // Maps String Index (0-5) -> MIDI Note
+    private var stringNoteOffTasks: [Int: UUID] = [:] // Maps String Index (0-5) -> Scheduled Note-Off Task ID
     private var cancellables = Set<AnyCancellable>()
 
     init(midiManager: MidiManager, appData: AppData, drumPlayer: DrumPlayer) {
@@ -72,7 +72,7 @@ class ChordPlayer: ObservableObject {
         }
     }
 
-    func previewPattern(_ pattern: GuitarPattern) {
+    func previewPattern(_ pattern: GuitarPattern, midiChannel: Int) {
         guard let preset = appData.preset else { return }
         panic()
         let previewChord = Chord(name: "C", frets: [-1, 3, 2, 0, 1, 0], fingers: [])
@@ -84,12 +84,13 @@ class ChordPlayer: ObservableObject {
         let previewDuration = singleStepDuration * Double(pattern.length)
 
         schedulePattern(
-            chord: previewChord, 
-            pattern: pattern, 
-            preset: preset, 
+            chord: previewChord,
+            pattern: pattern,
+            preset: preset,
             scheduledUptime: ProcessInfo.processInfo.systemUptime,
-            totalDuration: previewDuration, 
+            totalDuration: previewDuration,
             dynamics: .medium,
+            midiChannel: midiChannel,
             completion: { _ in }
         )
     }
@@ -108,8 +109,8 @@ class ChordPlayer: ObservableObject {
 
         midiManager.sendPanic()
         midiManager.cancelAllPendingScheduledEvents()
-        playingNotes.removeAll()
         stringNotes.removeAll()
+        stringNoteOffTasks.removeAll()
     }
 
     // MARK: - Scheduling Logic
@@ -133,7 +134,6 @@ class ChordPlayer: ObservableObject {
                 }
             }
 
-            // If the pattern is empty, don't try to divide by zero
             let singleStepDurationSeconds = pattern.steps.isEmpty ? totalDuration : (totalDuration / Double(pattern.steps.count))
 
             DispatchQueue.main.async {
@@ -142,9 +142,9 @@ class ChordPlayer: ObservableObject {
             }
 
             for (stepIndex, step) in pattern.steps.enumerated() {
-                guard !step.activeNotes.isEmpty else { continue }
-
-                let stepStartTimeOffset = Double(stepIndex) * singleStepDurationSeconds
+                if step.activeNotes.isEmpty {
+                    continue
+                }
 
                 let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
                     var finalFret: Int
@@ -166,22 +166,40 @@ class ChordPlayer: ObservableObject {
                 let adaptiveVelocity = self.calculateAdaptiveVelocity(baseVelocity: velocityWithDynamics, noteCount: activeNotesInStep.count)
 
                 switch step.type {
-                case .rest:
-                    break
-                case .arpeggio:
-                    let arpeggioStepDuration = singleStepDurationSeconds / Double(activeNotesInStep.count)
+                case .arpeggio, .strum:
                     let sortedNotes = activeNotesInStep.sorted { $0.stringIndex > $1.stringIndex }
-                    for (noteIndex, noteItem) in sortedNotes.enumerated() {
-                        let noteStartTimeOffset = Double(noteIndex) * arpeggioStepDuration
-                        eventIDs.append(contentsOf: self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: velocityWithDynamics, channel: channel, scheduledUptime: scheduledUptime + stepStartTimeOffset + noteStartTimeOffset, durationSeconds: totalDuration))
-                    }
-                case .strum:
-                    let strumDelay = self.strumDelayInSeconds(for: step.strumSpeed)
-                    let sortedNotes = activeNotesInStep.sorted { step.strumDirection == .down ? $0.stringIndex > $1.stringIndex : $0.stringIndex < $1.stringIndex }
-                    for (noteIndex, noteItem) in sortedNotes.enumerated() {
+                    let isStrum = step.type == .strum
+                    let strumDelay = isStrum ? self.strumDelayInSeconds(for: step.strumSpeed) : (singleStepDurationSeconds / Double(activeNotesInStep.count))
+                    let strumDirectionSortedNotes = isStrum ? (step.strumDirection == .down ? sortedNotes : sortedNotes.reversed()) : sortedNotes
+
+                    for (noteIndex, noteItem) in strumDirectionSortedNotes.enumerated() {
+                        var calculatedDuration = totalDuration
+                        
+                        // Look ahead for the precise duration
+                        for futureIndex in (stepIndex + 1)..<pattern.steps.count {
+                            let futureStep = pattern.steps[futureIndex]
+                            if futureStep.type == .rest || futureStep.activeNotes.contains(noteItem.stringIndex) {
+                                calculatedDuration = (Double(futureIndex - stepIndex) * singleStepDurationSeconds)
+                                break
+                            }
+                        }
+                        
                         let noteStartTimeOffset = Double(noteIndex) * strumDelay
-                        eventIDs.append(contentsOf: self.scheduleNote(note: noteItem.note, stringIndex: noteItem.stringIndex, velocity: adaptiveVelocity, channel: channel, scheduledUptime: scheduledUptime + stepStartTimeOffset + noteStartTimeOffset, durationSeconds: totalDuration))
+                        let finalVelocity = isStrum ? adaptiveVelocity : velocityWithDynamics
+                        
+                        eventIDs.append(contentsOf: self.scheduleNote(
+                            note: noteItem.note, 
+                            stringIndex: noteItem.stringIndex, 
+                            velocity: finalVelocity, 
+                            channel: channel, 
+                            scheduledUptime: scheduledUptime + (Double(stepIndex) * singleStepDurationSeconds) + noteStartTimeOffset, 
+                            durationSeconds: calculatedDuration
+                        ))
                     }
+                case .rest:
+                    // Rests do not play notes, but they act as terminators for previous notes,
+                    // which is handled by the duration calculation logic above.
+                    break
                 }
             }
             completion(eventIDs)
@@ -205,14 +223,9 @@ class ChordPlayer: ObservableObject {
         var eventIDs: [UUID] = []
         let scheduledUptimeMs = scheduledUptime * 1000.0
 
-        if let previousNote = self.stringNotes[stringIndex] {
-            if let scheduledOffId = self.playingNotes[previousNote] {
-                self.midiManager.cancelScheduledEvent(id: scheduledOffId)
-                self.playingNotes.removeValue(forKey: previousNote)
-            }
-            self.midiManager.sendNoteOff(note: previousNote, velocity: 0, channel: channel)
-        }
+        // --- String Muting Logic is now handled by the caller by calculating a precise duration ---
 
+        // --- Schedule New Note ---
         let onId = self.midiManager.scheduleNoteOn(note: note, velocity: velocity, channel: channel, scheduledUptimeMs: scheduledUptimeMs)
         self.stringNotes[stringIndex] = note
         eventIDs.append(onId)
@@ -220,7 +233,8 @@ class ChordPlayer: ObservableObject {
         let scheduledNoteOffUptimeMs = scheduledUptimeMs + (durationSeconds * 1000.0)
         let offId = self.midiManager.scheduleNoteOff(note: note, velocity: 0, channel: channel, scheduledUptimeMs: scheduledNoteOffUptimeMs)
         
-        self.playingNotes[note] = offId
+        // Track the new note-off task by its STRING INDEX.
+        self.stringNoteOffTasks[stringIndex] = offId
         eventIDs.append(offId)
         return eventIDs
     }
@@ -229,13 +243,16 @@ class ChordPlayer: ObservableObject {
         notesLock.lock()
         defer { notesLock.unlock() }
 
-        for (stringIndex, note) in stringNotes {
+        for stringIndex in Array(stringNotes.keys) {
             if newChordMidiNotes[stringIndex] == -1 {
-                if let scheduledOffId = playingNotes[note] {
+                guard let note = stringNotes[stringIndex] else { continue }
+
+                if let scheduledOffId = stringNoteOffTasks.removeValue(forKey: stringIndex) {
                     midiManager.cancelScheduledEvent(id: scheduledOffId)
-                    playingNotes.removeValue(forKey: note)
                 }
+                
                 midiManager.sendNoteOff(note: note, velocity: 0, channel: channel)
+                
                 stringNotes.removeValue(forKey: stringIndex)
             }
         }
