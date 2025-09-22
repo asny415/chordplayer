@@ -3,8 +3,7 @@ import SwiftUI
 struct PresetArrangementView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var presetArrangerPlayer: PresetArrangerPlayer
-
-    @State private var showingArrangerSheet = false
+    @Environment(\.openWindow) var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -31,7 +30,7 @@ struct PresetArrangementView: View {
                 .disabled(appData.preset == nil)
 
                 Button("Edit Arrangement") {
-                    showingArrangerSheet = true
+                    openWindow(id: "song-arranger")
                 }
                 .buttonStyle(.bordered)
                 .disabled(appData.preset == nil)
@@ -140,22 +139,7 @@ struct PresetArrangementView: View {
             }
         }
         .padding()
-        .sheet(isPresented: $showingArrangerSheet) {
-            if let preset = appData.preset {
-                NavigationStack {
-                    SimplePresetArrangerView()
-                        .navigationTitle("Arrange: \(preset.name)")
-                        .toolbar {
-                            ToolbarItem(placement: .primaryAction) {
-                                Button("Done") {
-                                    showingArrangerSheet = false
-                                }
-                            }
-                        }
-                }
-                .frame(minWidth: 900, minHeight: 600)
-            }
-        }
+
     }
 }
 
@@ -163,6 +147,7 @@ struct PresetArrangementView: View {
 struct SimplePresetArrangerView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var presetArrangerPlayer: PresetArrangerPlayer
+    @Environment(\.dismiss) var dismiss
 
     @State private var zoomLevel: CGFloat = 1.0
     @State private var selectedSegmentId: UUID?
@@ -204,6 +189,9 @@ struct SimplePresetArrangerView: View {
                 },
                 onAddLyricsTrack: {
                     addLyricsTrack()
+                },
+                onDone: {
+                    dismiss()
                 }
             )
             .padding()
@@ -424,6 +412,7 @@ struct ArrangementToolbar: View {
     let onUpdateLength: (Double) -> Void
     let onAddGuitarTrack: () -> Void
     let onAddLyricsTrack: () -> Void
+    let onDone: () -> Void
 
     var body: some View {
         HStack(spacing: 16) {
@@ -452,6 +441,9 @@ struct ArrangementToolbar: View {
             }
 
             Spacer()
+
+            Button("Done", action: onDone)
+                .buttonStyle(.borderedProminent)
 
             // 长度控制
             HStack {
