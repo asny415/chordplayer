@@ -194,7 +194,6 @@ class MidiManager: ObservableObject {
     }
 
     func sendNoteOn(note: UInt8, velocity: UInt8, channel: UInt8 = 0) {
-        print("[MIDI] > sendNoteOn: note \(note) vel \(velocity) ch \(channel+1)")
         guard let destination = selectedOutput else {
             // No output - nothing to do
             return
@@ -243,7 +242,6 @@ class MidiManager: ObservableObject {
     @discardableResult
     func scheduleNoteOn(note: UInt8, velocity: UInt8, channel: UInt8 = 0, scheduledUptimeMs: Double) -> UUID {
         let id = UUID()
-        print("[MIDI] > scheduleNoteOn: note \(note) vel \(velocity) ch \(channel+1) at \(scheduledUptimeMs)ms. ID: \(id)")
         let type: MIDIEventType = .note(isNoteOn: true, note: note, velocity: velocity)
         let ev = PendingEvent(id: id, type: type, channel: channel, scheduledUptimeMs: scheduledUptimeMs)
         midiQueue.async { [weak self] in
@@ -256,7 +254,6 @@ class MidiManager: ObservableObject {
     @discardableResult
     func scheduleNoteOff(note: UInt8, velocity: UInt8, channel: UInt8 = 0, scheduledUptimeMs: Double) -> UUID {
         let id = UUID()
-        print("[MIDI] > scheduleNoteOff: note \(note) ch \(channel+1) at \(scheduledUptimeMs)ms. ID: \(id)")
         let type: MIDIEventType = .note(isNoteOn: false, note: note, velocity: velocity)
         let ev = PendingEvent(id: id, type: type, channel: channel, scheduledUptimeMs: scheduledUptimeMs)
         midiQueue.async { [weak self] in
@@ -277,7 +274,6 @@ class MidiManager: ObservableObject {
     }
 
     func cancelScheduledEvent(id: UUID) {
-        print("[MIDI] > cancelScheduledEvent: ID \(id)")
         midiQueue.async { [weak self] in
             self?.pendingEvents.removeValue(forKey: id)
         }
@@ -308,7 +304,6 @@ class MidiManager: ObservableObject {
     }
 
     func sendNoteOff(note: UInt8, velocity: UInt8, channel: UInt8 = 0) {
-        print("[MIDI] > sendNoteOff: note \(note) ch \(channel+1)")
         guard let destination = selectedOutput else { return }
         midiQueue.async { [weak self] in
             Thread.current.threadPriority = 1.0
@@ -327,7 +322,6 @@ class MidiManager: ObservableObject {
     }
 
     func sendPanic() {
-        print("[MIDI] > sendPanic: Sending All Notes Off to all channels.")
         guard let destination = selectedOutput else { return }
         midiQueue.async { [weak self] in
             Thread.current.threadPriority = 1.0
