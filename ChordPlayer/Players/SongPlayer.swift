@@ -197,7 +197,11 @@ class PresetArrangerPlayer: ObservableObject {
                     // 根据轨道索引分配唯一的MIDI通道
                     let midiChannel = lyricsTrack.midiChannel ?? (appData.melodyMidiChannel + trackIndex)
 
-                    scheduleMelodicLyricSegment(segment: melodicData, startTime: segmentStartTime, track: tempTrack, preset: preset, channel: midiChannel)
+                    if let freshPreset = appData.preset {
+                        scheduleMelodicLyricSegment(segment: melodicData, startTime: segmentStartTime, track: tempTrack, preset: freshPreset, channel: midiChannel)
+                    } else {
+                        scheduleMelodicLyricSegment(segment: melodicData, startTime: segmentStartTime, track: tempTrack, preset: preset, channel: midiChannel)
+                    }
                 }
             }
         }

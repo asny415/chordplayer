@@ -1,4 +1,3 @@
-
 import Foundation
 import Combine
 
@@ -56,11 +55,15 @@ class MelodicLyricPlayer {
                let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
                 consumedItemIDs.insert(targetItem.id)
                 var offPosition: Double
-                if let duration = currentItem.duration {
-                    offPosition = Double(currentItem.position + duration)
+                if let duration = targetItem.duration {
+                    offPosition = Double(targetItem.position + duration)
                 } else {
-                    // Fallback
-                    offPosition = Double(itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? Int(segmentDurationInBeats / sixteenthNoteDurationInBeats))
+                    if let targetIndex = itemsSortedByTime.firstIndex(of: targetItem),
+                       let nextItem = itemsSortedByTime.dropFirst(targetIndex + 1).first(where: { $0.pitch > 0 }) {
+                        offPosition = Double(nextItem.position)
+                    } else {
+                        offPosition = segmentDurationInBeats / sixteenthNoteDurationInBeats
+                    }
                 }
                 let offTime = offPosition * sixteenthNoteDurationInBeats
                 actions.append(.slide(from: currentItem, to: targetItem, offTime: offTime))
@@ -69,11 +72,15 @@ class MelodicLyricPlayer {
                       let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
                 consumedItemIDs.insert(targetItem.id)
                 var offPosition: Double
-                if let duration = currentItem.duration {
-                    offPosition = Double(currentItem.position + duration)
+                if let duration = targetItem.duration {
+                    offPosition = Double(targetItem.position + duration)
                 } else {
-                    // Fallback
-                    offPosition = Double(itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? Int(segmentDurationInBeats / sixteenthNoteDurationInBeats))
+                    if let targetIndex = itemsSortedByTime.firstIndex(of: targetItem),
+                       let nextItem = itemsSortedByTime.dropFirst(targetIndex + 1).first(where: { $0.pitch > 0 }) {
+                        offPosition = Double(nextItem.position)
+                    } else {
+                        offPosition = segmentDurationInBeats / sixteenthNoteDurationInBeats
+                    }
                 }
                 let offTime = offPosition * sixteenthNoteDurationInBeats
                 actions.append(.vibrato(from: currentItem, to: targetItem, offTime: offTime))
@@ -82,11 +89,15 @@ class MelodicLyricPlayer {
                       let targetItem = itemsSortedByTime.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
                 consumedItemIDs.insert(targetItem.id)
                 var offPosition: Double
-                if let duration = currentItem.duration {
-                    offPosition = Double(currentItem.position + duration)
+                if let duration = targetItem.duration {
+                    offPosition = Double(targetItem.position + duration)
                 } else {
-                    // Fallback
-                    offPosition = Double(itemsSortedByTime.firstIndex(of: targetItem).flatMap { itemsSortedByTime.dropFirst($0 + 1).first(where: { $0.pitch > 0 })?.position } ?? Int(segmentDurationInBeats / sixteenthNoteDurationInBeats))
+                    if let targetIndex = itemsSortedByTime.firstIndex(of: targetItem),
+                       let nextItem = itemsSortedByTime.dropFirst(targetIndex + 1).first(where: { $0.pitch > 0 }) {
+                        offPosition = Double(nextItem.position)
+                    } else {
+                        offPosition = segmentDurationInBeats / sixteenthNoteDurationInBeats
+                    }
                 }
                 let offTime = offPosition * sixteenthNoteDurationInBeats
                 actions.append(.bend(from: currentItem, to: targetItem, offTime: offTime))
