@@ -770,6 +770,9 @@ struct MelodicLyricItem: Identifiable, Codable, Hashable {
     /// 段内位置，以16分音符为单位的偏移量
     var position: Int
     
+    /// 持续时间，以16分音符为单位
+    var duration: Int?
+    
     /// 音高 (1-7 分别代表 Do, Re, Mi, Fa, Sol, La, Si)。0可以用来表示休止。
     var pitch: Int
     
@@ -778,6 +781,16 @@ struct MelodicLyricItem: Identifiable, Codable, Hashable {
     
     /// 可选的演奏技巧 (复用已有的 PlayingTechnique 枚举)
     var technique: PlayingTechnique?
+    
+    init(id: UUID = UUID(), word: String, position: Int, duration: Int? = nil, pitch: Int, octave: Int, technique: PlayingTechnique? = nil) {
+        self.id = id
+        self.word = word
+        self.position = position
+        self.duration = duration
+        self.pitch = pitch
+        self.octave = octave
+        self.technique = technique
+    }
 }
 
 /// 代表一个完整的旋律歌词片段
@@ -791,13 +804,17 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
     /// 片段的小节数，例如 2, 4, 8
     var lengthInBars: Int
     
+    /// 网格量化单位 (1=16分, 2=8分, 4=4分)
+    var gridUnit: Int?
+    
     /// 组成该片段的歌词单元数组
     var items: [MelodicLyricItem]
 
-    init(id: UUID = UUID(), name: String, lengthInBars: Int, items: [MelodicLyricItem] = []) {
+    init(id: UUID = UUID(), name: String, lengthInBars: Int, gridUnit: Int? = nil, items: [MelodicLyricItem] = []) {
         self.id = id
         self.name = name
         self.lengthInBars = lengthInBars
+        self.gridUnit = gridUnit
         self.items = items
     }
 }

@@ -107,10 +107,11 @@ struct MelodicLyricEditorView: View {
                     }
 
                     ForEach(segment.items) { item in
+                        let cellWidth = stepWidth * CGFloat(item.duration ?? stepStride)
                         MelodicLyricCellView(
                             item: item,
                             isSelected: item.position == selectedStep,
-                            stepWidth: stepWidth
+                            cellWidth: cellWidth
                         )
                         .offset(x: CGFloat(item.position) * stepWidth)
                         .onTapGesture {
@@ -162,8 +163,13 @@ struct MelodicLyricEditorView: View {
             stopSegmentPlayback()
             persistSegment()
         }
-        .onChange(of: gridSizeInSteps) { _ in alignSelectionToGrid() }
-        .onAppear { 
+        .onChange(of: gridSizeInSteps) { newValue in
+            alignSelectionToGrid()
+            segment.gridUnit = newValue
+            persistSegment()
+        }
+        .onAppear {
+            gridSizeInSteps = segment.gridUnit ?? 1 // Use saved or default
             registerKeyMonitor()
             if melodicLyricPlayer == nil {
                 melodicLyricPlayer = MelodicLyricPlayer(midiManager: midiManager)
@@ -226,6 +232,7 @@ struct MelodicLyricEditorView: View {
         let newItem = MelodicLyricItem(
             word: "",
             position: step,
+            duration: stepStride, // Set default duration
             pitch: pitchValue,
             octave: defaultOctave,
             technique: techniqueValue
@@ -289,11 +296,11 @@ struct MelodicLyricEditorView: View {
 
     private func moveSelection(by delta: Int) {
         guard totalSteps > 0 else {
-            selectedStep = 0
+            selectStep(0)
             return
         }
         let newValue = selectedStep + delta
-        selectedStep = snapStep(newValue)
+        selectStep(newValue)
     }
 
     private func adjustPitch(direction: Int) {
@@ -697,24 +704,24 @@ struct MelodicLyricGridBackground: View {
 struct MelodicLyricCellView: View {
     let item: MelodicLyricItem
     let isSelected: Bool
-    let stepWidth: CGFloat
+    let cellWidth: CGFloat
 
     // Dynamically calculate font sizes based on the cell's width
     private var pitchFontSize: CGFloat {
-        return max(8, min(24, stepWidth * 0.6))
+        return max(8, min(24, cellWidth * 0.25))
     }
 
     private var wordFontSize: CGFloat {
-        return max(6, min(16, stepWidth * 0.4))
+        return max(6, min(16, cellWidth * 0.2))
     }
 
     private var techniqueFontSize: CGFloat {
-        return max(5, min(12, stepWidth * 0.3))
+        return max(5, min(12, cellWidth * 0.15))
     }
 
     var body: some View {
         let textColor = isSelected ? Color.white : Color.primary
-        VStack(spacing: 2) {
+        VStack(alignment: .leading, spacing: 2) { // Left alignment
             OctaveDotsRow(count: max(item.octave, 0), color: textColor)
 
             HStack(spacing: 1) {
@@ -725,6 +732,7 @@ struct MelodicLyricCellView: View {
                     Text(technique.symbol)
                         .font(.system(size: techniqueFontSize))
                 }
+                Spacer() // Pushes content to the left
             }
             .foregroundColor(textColor)
 
@@ -733,13 +741,15 @@ struct MelodicLyricCellView: View {
             Text(item.word)
                 .font(.system(size: wordFontSize, weight: .regular))
                 .foregroundColor(textColor)
+            
+            Spacer() // Pushes all content to the top
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
         .background(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor))
         .cornerRadius(6)
         .shadow(radius: 1, y: 1)
-        .frame(width: stepWidth - 2) // Leave a small gap between cells
+        .frame(width: cellWidth - 2, alignment: .leading) // Frame alignment
     }
 }
 
