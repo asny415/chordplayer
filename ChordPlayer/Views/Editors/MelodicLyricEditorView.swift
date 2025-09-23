@@ -457,26 +457,26 @@ struct MelodicLyricEditorView: View {
     }
 
     private func applySustain() {
-        guard selectedStep > 0 else { return }
+        guard selectedStep >= 0 else { return }
 
-        // Find the item to sustain (the last one before the selected step)
-        guard let itemToSustain = segment.items.filter({ $0.position < selectedStep }).max(by: { $0.position < $1.position }) else { return }
+        // Find the note to modify: the last note starting at or before the selected step.
+        // This handles both extending a previous note and shortening the current note.
+        guard let itemToModify = segment.items.filter({ $0.position <= selectedStep }).max(by: { $0.position < $1.position }) else { return }
 
-        let newDuration = selectedStep - itemToSustain.position
+        // New duration extends to the end of the selected grid cell, ensuring it's a multiple of the grid size.
+        let newDuration = selectedStep + stepStride - itemToModify.position
         guard newDuration >= 1 else { return }
 
-        // Remove any items that will be covered by the new duration
-        let coveredStartPosition = itemToSustain.position + 1
-        let coveredEndPosition = selectedStep
+        // Remove any items that are now covered by the sustained note.
+        let coveredStartPosition = itemToModify.position + 1
+        let coveredEndPosition = selectedStep + stepStride // End of range is exclusive
         segment.items.removeAll { $0.position >= coveredStartPosition && $0.position < coveredEndPosition }
 
-        // After removal, the index might have changed. So we must find it again.
-        guard let finalItemIndex = segment.items.firstIndex(where: { $0.id == itemToSustain.id }) else { return }
+        // Find the index again after removal, as it might have changed.
+        guard let finalItemIndex = segment.items.firstIndex(where: { $0.id == itemToModify.id }) else { return }
 
-        // Update the duration
+        // Update the duration and persist.
         segment.items[finalItemIndex].duration = newDuration
-
-        // Persist
         persistSegment()
     }
 
@@ -775,11 +775,14 @@ struct MelodicLyricGridBackground: View {
             // Draw sub-beat lines (faint, dashed)
             let subBeatLineStyle = StrokeStyle(lineWidth: 0.5, dash: [2, 3])
             var subBeatPath = Path()
-            for step in 1...totalSteps {
-                if step % stepsPerBeat != 0 {
-                    let x = CGFloat(step) * stepWidth
-                    subBeatPath.move(to: CGPoint(x: x, y: 0))
-                    subBeatPath.addLine(to: CGPoint(x: x, y: size.height))
+            let lineStride = gridSizeInSteps
+            if lineStride < stepsPerBeat {
+                for step in stride(from: lineStride, through: totalSteps, by: lineStride) {
+                    if step % stepsPerBeat != 0 {
+                        let x = CGFloat(step) * stepWidth
+                        subBeatPath.move(to: CGPoint(x: x, y: 0))
+                        subBeatPath.addLine(to: CGPoint(x: x, y: size.height))
+                    }
                 }
             }
             context.stroke(subBeatPath, with: .color(.primary.opacity(0.15)), style: subBeatLineStyle)
@@ -802,7 +805,7 @@ struct MelodicLyricGridBackground: View {
                 barPath.move(to: CGPoint(x: x, y: 0))
                 barPath.addLine(to: CGPoint(x: x, y: size.height))
             }
-            context.stroke(barPath, with: .color(.accentColor.opacity(0.7)), lineWidth: 1.8)
+            context.stroke(barPath, with: .color(Color(red: 0.5, green: 0.25, blue: 0.95).opacity(0.9)), lineWidth: 2.2)
         }
     }
 }
