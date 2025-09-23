@@ -246,17 +246,77 @@ struct MelodicLyricEditorView: View {
         return (index, true)
     }
 
+    private func midiNoteNumber(pitch: Int, octave: Int) -> Int? {
+        guard pitch >= 1 && pitch <= 7 else { return nil }
+        let scaleOffsets = [0, 2, 4, 5, 7, 9, 11] // Major scale intervals
+        let baseC = 60 // Middle C
+        let key = appData.preset?.key ?? "C"
+        let keyMap: [String: Int] = [
+            "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
+            "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9,
+            "A#": 10, "Bb": 10, "B": 11
+        ]
+        let transpose = keyMap[key] ?? 0
+        let midiValue = baseC + transpose + scaleOffsets[pitch - 1] + octave * 12
+        guard midiValue >= 0 && midiValue <= 127 else { return nil }
+        return midiValue
+    }
+
     private func handlePitchInput(_ pitch: Int) {
         guard totalSteps > 0 else { return }
-        let (index, _) = ensureItem(at: selectedStep, defaultPitch: pitch)
-        segment.items[index].pitch = pitch
+
+        // Special handling for rests (pitch 0)
         if pitch == 0 {
+            let (index, _) = ensureItem(at: selectedStep)
+            segment.items[index].pitch = 0
             segment.items[index].octave = 0
             segment.items[index].technique = nil
             stopPreview()
-        } else {
-            previewPitch(pitch: pitch, octave: segment.items[index].octave)
+            persistSegment()
+            moveSelection(by: stepStride)
+            return
         }
+
+        let octave: Int
+        if let existingIndex = itemIndex(at: selectedStep) {
+            // Item already exists, keep its octave when just changing the pitch.
+            octave = segment.items[existingIndex].octave
+        } else {
+            // This is a new item, find the best octave based on the previous note.
+            let previousItem = segment.items
+                .filter { $0.position < selectedStep && $0.pitch != 0 }
+                .max(by: { $0.position < $1.position })
+
+            if let prev = previousItem, let prevMidi = midiNoteNumber(pitch: prev.pitch, octave: prev.octave) {
+                var minDistance = Int.max
+                var bestOctave = 0
+                // Check a reasonable range of octaves to find the closest pitch
+                for oct in -2...3 {
+                    if let newMidi = midiNoteNumber(pitch: pitch, octave: oct) {
+                        let distance = abs(newMidi - prevMidi)
+                        if distance < minDistance {
+                            minDistance = distance
+                            bestOctave = oct
+                        }
+                    }
+                }
+                octave = bestOctave
+            } else {
+                // No previous note, use default octave.
+                octave = 0
+            }
+        }
+
+        // Get or create the item.
+        // We pass the calculated octave to ensureItem, which will only use it for creation.
+        let (index, _) = ensureItem(at: selectedStep, defaultPitch: pitch, defaultOctave: octave)
+        
+        // Update the item's properties.
+        segment.items[index].pitch = pitch
+        segment.items[index].octave = octave
+
+        previewPitch(pitch: pitch, octave: octave)
+        
         persistSegment()
         moveSelection(by: stepStride)
     }
@@ -597,22 +657,10 @@ struct MelodicLyricEditorView: View {
 
     private func previewPitch(pitch: Int, octave: Int) {
         stopPreview()
-        
-        // Re-implement midiNoteNumber logic directly for preview purposes
-        guard pitch >= 1 && pitch <= 7 else { return }
-        let scaleOffsets = [0, 2, 4, 5, 7, 9, 11]
-        let baseC = 60
-        let key = appData.preset?.key ?? "C"
-        let keyMap: [String: Int] = [
-            "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
-            "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9,
-            "A#": 10, "Bb": 10, "B": 11
-        ]
-        let transpose = keyMap[key] ?? 0
-        let midiValue = baseC + transpose + scaleOffsets[pitch - 1] + octave * 12
-        guard midiValue >= 0 && midiValue <= 127 else { return }
+
+        guard let midiValue = midiNoteNumber(pitch: pitch, octave: octave) else { return }
         let midiNote = UInt8(midiValue)
-        
+
         let channel = UInt8(max(0, min(15, sanitizedEditorMidiChannel - 1)))
         midiManager.sendNoteOn(note: midiNote, velocity: 100, channel: channel)
         lastPreviewNote = midiNote
@@ -720,14 +768,41 @@ struct MelodicLyricGridBackground: View {
     var body: some View {
         Canvas { context, size in
             let totalSteps = lengthInBars * beatsPerBar * stepsPerBeat
-            for step in stride(from: 0, through: totalSteps, by: gridSizeInSteps) {
-                let x = CGFloat(step) * stepWidth
-                let isBeatLine = step % stepsPerBeat == 0
-                let isBarLine = isBeatLine && (step / stepsPerBeat) % beatsPerBar == 0
-                let lineColor: Color = isBarLine ? .primary.opacity(0.8) : (isBeatLine ? .primary.opacity(0.5) : .primary.opacity(0.2))
-                let lineWidth: CGFloat = isBarLine ? 1.0 : 0.5
-                context.stroke(Path { $0.move(to: CGPoint(x: x, y: 0)); $0.addLine(to: CGPoint(x: x, y: trackHeight)) }, with: .color(lineColor), lineWidth: lineWidth)
+            guard totalSteps > 0 else { return }
+
+            let stepsPerBar = beatsPerBar * stepsPerBeat
+
+            // Draw sub-beat lines (faint, dashed)
+            let subBeatLineStyle = StrokeStyle(lineWidth: 0.5, dash: [2, 3])
+            var subBeatPath = Path()
+            for step in 1...totalSteps {
+                if step % stepsPerBeat != 0 {
+                    let x = CGFloat(step) * stepWidth
+                    subBeatPath.move(to: CGPoint(x: x, y: 0))
+                    subBeatPath.addLine(to: CGPoint(x: x, y: size.height))
+                }
             }
+            context.stroke(subBeatPath, with: .color(.primary.opacity(0.15)), style: subBeatLineStyle)
+
+            // Draw beat lines (less prominent)
+            var beatPath = Path()
+            for step in stride(from: stepsPerBeat, through: totalSteps, by: stepsPerBeat) {
+                if step % stepsPerBar != 0 {
+                    let x = CGFloat(step) * stepWidth
+                    beatPath.move(to: CGPoint(x: x, y: 0))
+                    beatPath.addLine(to: CGPoint(x: x, y: size.height))
+                }
+            }
+            context.stroke(beatPath, with: .color(.primary.opacity(0.3)), lineWidth: 0.8)
+
+            // Draw bar lines (most prominent)
+            var barPath = Path()
+            for step in stride(from: 0, through: totalSteps, by: stepsPerBar) {
+                let x = CGFloat(step) * stepWidth
+                barPath.move(to: CGPoint(x: x, y: 0))
+                barPath.addLine(to: CGPoint(x: x, y: size.height))
+            }
+            context.stroke(barPath, with: .color(.accentColor.opacity(0.7)), lineWidth: 1.8)
         }
     }
 }
