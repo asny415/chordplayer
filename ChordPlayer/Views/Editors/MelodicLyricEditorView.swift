@@ -106,23 +106,26 @@ struct MelodicLyricEditorView: View {
                             .animation(.easeInOut(duration: 0.12), value: selectedStep)
                     }
 
-                    ForEach(segment.items) { item in
-                        let cellWidth = stepWidth * CGFloat(item.duration ?? stepStride)
-                        MelodicLyricCellView(
-                            item: item,
-                            isSelected: item.position == selectedStep,
-                            cellWidth: cellWidth
-                        )
-                        .offset(x: CGFloat(item.position) * stepWidth)
-                        .onTapGesture {
-                            selectStep(item.position)
-                        }
-                        .onTapGesture(count: 2) {
-                            selectStep(item.position)
-                            startWordEditing()
-                        }
-                    }
-
+                                        ForEach(segment.items) { item in
+                                            let cellWidth = stepWidth * CGFloat(item.duration ?? stepStride)
+                                            MelodicLyricCellView(
+                                                item: item,
+                                                isSelected: item.position == selectedStep,
+                                                cellWidth: cellWidth,
+                                                unitWidth: stepWidth
+                                            )
+                                            .offset(x: CGFloat(item.position) * stepWidth)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture(count: 2) { 
+                                                selectStep(item.position)
+                                                startWordEditing()
+                                            }
+                                            .onTapGesture(count: 1) { location in
+                                                let tappedSubStep = Int(location.x / stepWidth)
+                                                let newSelectedStep = item.position + tappedSubStep
+                                                selectStep(newSelectedStep)
+                                            }
+                                        }
                     if let editingStep = editingWordStep {
                         let editorWidth = max(stepWidth * CGFloat(max(gridSizeInSteps, 1)) - 8, 100)
                         let editorHeight: CGFloat = 28
@@ -389,7 +392,32 @@ struct MelodicLyricEditorView: View {
         let wordDisplay = item.word.isEmpty ? "Word: -" : "Word: \(item.word)"
         let pitchDisplay = item.pitch == 0 ? "Rest" : "Pitch \(item.pitch) Oct \(item.octave)"
         let techniqueDisplay = item.technique?.chineseName ?? "普通"
-        return "\(wordDisplay) | \(pitchDisplay) | \(techniqueDisplay)"
+        let durationDisplay = "Len: \(item.duration ?? stepStride)"
+        return "\(wordDisplay) | \(pitchDisplay) | \(techniqueDisplay) | \(durationDisplay)"
+    }
+
+    private func applySustain() {
+        guard selectedStep > 0 else { return }
+
+        // Find the item to sustain (the last one before the selected step)
+        guard let itemToSustain = segment.items.filter({ $0.position < selectedStep }).max(by: { $0.position < $1.position }) else { return }
+
+        let newDuration = selectedStep - itemToSustain.position
+        guard newDuration >= 1 else { return }
+
+        // Remove any items that will be covered by the new duration
+        let coveredStartPosition = itemToSustain.position + 1
+        let coveredEndPosition = selectedStep
+        segment.items.removeAll { $0.position >= coveredStartPosition && $0.position < coveredEndPosition }
+
+        // After removal, the index might have changed. So we must find it again.
+        guard let finalItemIndex = segment.items.firstIndex(where: { $0.id == itemToSustain.id }) else { return }
+
+        // Update the duration
+        segment.items[finalItemIndex].duration = newDuration
+
+        // Persist
+        persistSegment()
     }
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {
@@ -432,6 +460,9 @@ struct MelodicLyricEditorView: View {
                 return true
             case "~":
                 toggleTechnique(.vibrato)
+                return true
+            case "-":
+                applySustain()
                 return true
             default:
                 break
@@ -705,51 +736,54 @@ struct MelodicLyricCellView: View {
     let item: MelodicLyricItem
     let isSelected: Bool
     let cellWidth: CGFloat
+    let unitWidth: CGFloat
 
     // Dynamically calculate font sizes based on the cell's width
     private var pitchFontSize: CGFloat {
-        return max(8, min(24, cellWidth * 0.25))
+        return max(8, min(24, unitWidth * 0.6))
     }
 
     private var wordFontSize: CGFloat {
-        return max(6, min(16, cellWidth * 0.2))
+        return max(6, min(16, unitWidth * 0.4))
     }
 
     private var techniqueFontSize: CGFloat {
-        return max(5, min(12, cellWidth * 0.15))
+        return max(5, min(12, unitWidth * 0.3))
     }
 
     var body: some View {
+        let baseColor = isSelected ? Color.accentColor : Color.gray
         let textColor = isSelected ? Color.white : Color.primary
-        VStack(alignment: .leading, spacing: 2) { // Left alignment
-            OctaveDotsRow(count: max(item.octave, 0), color: textColor)
 
-            HStack(spacing: 1) {
-                Text("\(item.pitch)")
-                    .font(.system(size: pitchFontSize, weight: .bold, design: .monospaced))
+        ZStack(alignment: .leading) {
+            // The background shape with border
+            RoundedRectangle(cornerRadius: 6)
+                .fill(baseColor.opacity(isSelected ? 0.5 : 0.2))
+                .stroke(baseColor, lineWidth: 1.5)
 
-                if let technique = item.technique {
-                    Text(technique.symbol)
-                        .font(.system(size: techniqueFontSize))
+            // The text content
+            VStack(alignment: .leading, spacing: 2) {
+                OctaveDotsRow(count: max(item.octave, 0), color: textColor)
+                HStack(spacing: 1) {
+                    Text("\(item.pitch)")
+                        .font(.system(size: pitchFontSize, weight: .bold, design: .monospaced))
+                    if let technique = item.technique {
+                        Text(technique.symbol)
+                            .font(.system(size: techniqueFontSize))
+                    }
                 }
-                Spacer() // Pushes content to the left
-            }
-            .foregroundColor(textColor)
-
-            OctaveDotsRow(count: max(-item.octave, 0), color: textColor)
-
-            Text(item.word)
-                .font(.system(size: wordFontSize, weight: .regular))
                 .foregroundColor(textColor)
-            
-            Spacer() // Pushes all content to the top
+                OctaveDotsRow(count: max(-item.octave, 0), color: textColor)
+                Text(item.word)
+                    .font(.system(size: wordFontSize, weight: .regular))
+                    .foregroundColor(textColor)
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading) // Let the ZStack control the width
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 4)
-        .background(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor))
-        .cornerRadius(6)
-        .shadow(radius: 1, y: 1)
-        .frame(width: cellWidth - 2, alignment: .leading) // Frame alignment
+        .frame(width: cellWidth - 2)
+        .shadow(radius: isSelected ? 3 : 1, y: 1)
     }
 }
 
