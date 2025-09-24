@@ -13,7 +13,7 @@ struct PlayingPatternsView: View {
                 Button(action: {
                     // Create a new pattern and set it as the item to be edited.
                     let timeSignature = appData.preset?.timeSignature ?? TimeSignature()
-                    let defaultResolution = NoteResolution.sixteenth
+                    let defaultResolution = GridResolution.sixteenth
                     let length = calculateDefaultLength(timeSignature: timeSignature, resolution: defaultResolution)
                     self.patternToEdit = GuitarPattern.createNew(name: "New Pattern", length: length, resolution: defaultResolution)
                 }) {
@@ -72,15 +72,10 @@ struct PlayingPatternsView: View {
         }
     }
     
-    private func calculateDefaultLength(timeSignature: TimeSignature, resolution: NoteResolution) -> Int {
-        let beatUnit = Double(timeSignature.beatUnit)
-        
-        switch resolution {
-        case .eighth:
-            return Int(8.0 / beatUnit)
-        case .sixteenth:
-            return Int(16.0 / beatUnit)
-        }
+    private func calculateDefaultLength(timeSignature: TimeSignature, resolution: GridResolution) -> Int {
+        // Calculate the number of steps for a single measure by default
+        let stepsPerMeasure = timeSignature.beatsPerMeasure * resolution.stepsPerBeat
+        return Int(stepsPerMeasure)
     }
 }
 

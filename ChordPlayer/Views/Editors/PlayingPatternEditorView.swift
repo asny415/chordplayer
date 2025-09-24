@@ -59,9 +59,9 @@ struct PlayingPatternEditorView: View {
 
     private var toolbarView: some View {
         HStack(spacing: 20) {
-            Picker("Resolution", selection: $pattern.resolution) {
-                ForEach(NoteResolution.allCases) { res in Text(res.rawValue).tag(res) }
-            }.pickerStyle(SegmentedPickerStyle()).frame(width: 200)
+            Picker("Resolution", selection: $pattern.activeResolution) {
+                ForEach(GridResolution.allCases) { res in Text(res.rawValue).tag(res) }
+            }.pickerStyle(SegmentedPickerStyle()).frame(width: 320)
             Stepper("Length: \(pattern.length) steps", value: $pattern.length, in: 1...64)
             Spacer()
             
@@ -92,7 +92,7 @@ struct PlayingPatternEditorView: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 2) {
                     ForEach(0..<pattern.steps.count, id: \.self) { index in
-                        let stepsPerBeat = pattern.resolution == .sixteenth ? 4 : 2
+                        let stepsPerBeat = pattern.activeResolution.stepsPerBeat
                         VStack(spacing: 2) {
                             StepHeaderView(step: $pattern.steps[index], index: index, popoverStepIndex: $popoverStepIndex)
                             ForEach(0..<6, id: \.self) { stringIndex in

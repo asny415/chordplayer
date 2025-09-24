@@ -56,15 +56,50 @@ struct PatternStep: Codable, Identifiable, Hashable, Equatable {
     var strumSpeed: StrumSpeed = .medium
 }
 
+enum GridResolution: String, Codable, CaseIterable, Identifiable {
+    case eighth = "8th"
+    case sixteenth = "16th"
+    case eighthTriplet = "8th Triplet"
+    case sixteenthTriplet = "16th Triplet"
+
+    var id: Self { self }
+
+    var stepsPerBeat: Int {
+        switch self {
+        case .eighth: return 2
+        case .sixteenth: return 4
+        case .eighthTriplet: return 3
+        case .sixteenthTriplet: return 6
+        }
+    }
+}
+
 // MARK: - Guitar Pattern Model
 
 struct GuitarPattern: Codable, Identifiable, Hashable, Equatable {
-    var id = UUID()
+    var id: UUID
     var name: String
     
     // Defines the time value of each step
-    var resolution: NoteResolution = .sixteenth
+    var resolution: NoteResolution = .sixteenth // Legacy, for backward compatibility
+    var resolutionNew: GridResolution? // New, flexible resolution
     
+    // Computed property to safely access the active resolution
+    var activeResolution: GridResolution {
+        get {
+            resolutionNew ?? (resolution == .sixteenth ? .sixteenth : .eighth)
+        }
+        set {
+            resolutionNew = newValue
+            // Also set the legacy property for basic backward compatibility
+            if newValue == .sixteenth || newValue == .sixteenthTriplet {
+                resolution = .sixteenth
+            } else {
+                resolution = .eighth
+            }
+        }
+    }
+
     // The sequence of steps that make up the pattern
     var steps: [PatternStep] = []
     
@@ -81,30 +116,72 @@ struct GuitarPattern: Codable, Identifiable, Hashable, Equatable {
         }
     }
     
-    init(id: UUID = UUID(), name: String, resolution: NoteResolution = .sixteenth, length: Int, steps: [PatternStep]? = nil) {
+    init(id: UUID = UUID(), name: String, resolution: GridResolution = .sixteenth, length: Int, steps: [PatternStep]? = nil) {
         self.id = id
         self.name = name
-        self.resolution = resolution
         self.length = length
+        self.steps = steps ?? Array(repeating: PatternStep(), count: length)
+        self.activeResolution = resolution // This will set both new and legacy properties
+    }
+    
+    // MARK: - Codable Implementation for Compatibility
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, resolution, resolutionNew, steps, length
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.name = try container.decode(String.self, forKey: .name)
         
-        if let providedSteps = steps, providedSteps.count == length {
-            self.steps = providedSteps
+        // Decode new resolution if available, otherwise fall back to legacy
+        if let resNew = try container.decodeIfPresent(GridResolution.self, forKey: .resolutionNew) {
+            self.resolutionNew = resNew
+            self.resolution = (resNew == .sixteenth || resNew == .sixteenthTriplet) ? .sixteenth : .eighth
         } else {
-            // Initialize with empty steps if none are provided or if counts mismatch
-            self.steps = Array(repeating: PatternStep(), count: length)
+            self.resolutionNew = nil // Explicitly nil for old data
+            self.resolution = try container.decode(NoteResolution.self, forKey: .resolution)
+        }
+        
+        self.length = try container.decode(Int.self, forKey: .length)
+        self.steps = try container.decode([PatternStep].self, forKey: .steps)
+        
+        // Ensure steps count matches length
+        if steps.count != length {
+            let currentCount = steps.count
+            if length > currentCount {
+                steps.append(contentsOf: Array(repeating: PatternStep(), count: length - currentCount))
+            } else if length < currentCount {
+                steps = Array(steps.prefix(length))
+            }
         }
     }
     
-    // Add a custom decoder to handle the possibility of old data formats if necessary
-    // For now, we assume new data structure.
-    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(length, forKey: .length)
+        try container.encode(steps, forKey: .steps)
+        
+        // Save both properties for full compatibility
+        try container.encode(resolution, forKey: .resolution)
+        try container.encode(resolutionNew, forKey: .resolutionNew)
+    }
+
     // Default initializer for creating a new pattern
-    static func createNew(name: String, length: Int, resolution: NoteResolution) -> GuitarPattern {
+    static func createNew(name: String, length: Int, resolution: GridResolution) -> GuitarPattern {
         return GuitarPattern(name: name, resolution: resolution, length: length)
     }
     
     func generateAutomaticName() -> String {
-        let resolutionStr = (resolution == .sixteenth) ? "16th" : "8th"
+        let resolutionStr: String
+        switch activeResolution {
+        case .sixteenth, .sixteenthTriplet: resolutionStr = "16th"
+        case .eighth, .eighthTriplet: resolutionStr = "8th"
+        }
+        
         let lengthStr = "\(length)s"
         
         let activeSteps = steps.filter { !$0.activeNotes.isEmpty }
