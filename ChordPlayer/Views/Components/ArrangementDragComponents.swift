@@ -393,7 +393,7 @@ struct DrumTrackDropDelegate: DropDelegate {
             DispatchQueue.main.async {
                 let dropLocationX = info.location.x - 120 // 减去轨道控制区域宽度
                 let beat = dropLocationX / (beatWidth * zoomLevel)
-                let snappedBeat = max(0, round(beat)) // 对齐到拍后再确保不小于0
+                let snappedBeat = max(0, floor(beat))
 
                 let newSegment = DrumSegment(
                     startBeat: snappedBeat,
@@ -401,7 +401,7 @@ struct DrumTrackDropDelegate: DropDelegate {
                     patternId: dragData.resourceId
                 )
 
-                updateDrumTrack(with: newSegment)
+                self.updateDrumTrack(with: newSegment)
             }
         }
 
@@ -447,7 +447,7 @@ struct GuitarTrackDropDelegate: DropDelegate {
             DispatchQueue.main.async {
                 let dropLocationX = info.location.x - 120 // 减去轨道控制区域宽度
                 let beat = dropLocationX / (beatWidth * zoomLevel)
-                let snappedBeat = max(0, round(beat)) // 对齐到拍后再确保不小于0
+                let snappedBeat = max(0, floor(beat))
 
                 let segmentType: GuitarSegmentType = dragData.type == "solo"
                     ? .solo(segmentId: dragData.resourceId)
@@ -459,7 +459,7 @@ struct GuitarTrackDropDelegate: DropDelegate {
                     type: segmentType
                 )
 
-                updateGuitarTrack(with: newSegment)
+                self.updateGuitarTrack(with: newSegment)
             }
         }
 
@@ -513,9 +513,7 @@ struct EnhancedDrumTrackDropDelegate: DropDelegate {
 
                 DispatchQueue.main.async {
                     let beat = info.location.x / (beatWidth * zoomLevel)
-                    let measure = beat / beatsPerMeasure
-                    let snappedMeasure = floor(measure)
-                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
+                    let snappedBeat = max(0, floor(beat))
                     self.repositionDrumSegment(segmentId: segmentDragData.segmentId, newStartBeat: snappedBeat, appData: self.appData)
                 }
             }
@@ -531,9 +529,7 @@ struct EnhancedDrumTrackDropDelegate: DropDelegate {
 
                 DispatchQueue.main.async {
                     let beat = info.location.x / (beatWidth * zoomLevel)
-                    let measure = beat / beatsPerMeasure
-                    let snappedMeasure = floor(measure)
-                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
+                    let snappedBeat = max(0, floor(beat))
                     let newSegment = DrumSegment(startBeat: snappedBeat, durationInBeats: dragData.defaultDuration, patternId: dragData.resourceId)
                     self.updateDrumTrack(with: newSegment, appData: self.appData)
                 }
@@ -594,9 +590,7 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
 
                 DispatchQueue.main.async {
                     let beat = info.location.x / (beatWidth * zoomLevel)
-                    let measure = beat / beatsPerMeasure
-                    let snappedMeasure = floor(measure)
-                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
+                    let snappedBeat = max(0, floor(beat))
                     self.repositionGuitarSegment(segmentId: segmentDragData.segmentId, newStartBeat: snappedBeat, appData: self.appData)
                 }
             }
@@ -611,9 +605,7 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
 
                 DispatchQueue.main.async {
                     let beat = info.location.x / (beatWidth * zoomLevel)
-                    let measure = beat / beatsPerMeasure
-                    let snappedMeasure = floor(measure)
-                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
+                    let snappedBeat = max(0, floor(beat))
                     let segmentType: GuitarSegmentType = dragData.type == "solo" ? .solo(segmentId: dragData.resourceId) : .accompaniment(segmentId: dragData.resourceId)
                     let newSegment = GuitarSegment(startBeat: snappedBeat, durationInBeats: dragData.defaultDuration, type: segmentType)
                     self.updateGuitarTrack(with: newSegment, appData: self.appData)
@@ -692,9 +684,7 @@ struct EnhancedLyricsTrackDropDelegate: DropDelegate {
 
                 DispatchQueue.main.async {
                     let beat = info.location.x / (beatWidth * zoomLevel)
-                    let measure = beat / beatsPerMeasure
-                    let snappedMeasure = floor(measure)
-                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
+                    let snappedBeat = max(0, floor(beat))
                     self.repositionLyricsSegment(segmentId: segmentDragData.segmentId, newStartBeat: snappedBeat, appData: self.appData)
                 }
             }
@@ -709,9 +699,7 @@ struct EnhancedLyricsTrackDropDelegate: DropDelegate {
 
                 DispatchQueue.main.async {
                     let beat = info.location.x / (beatWidth * zoomLevel)
-                    let measure = beat / beatsPerMeasure
-                    let snappedMeasure = floor(measure)
-                    let snappedBeat = max(0, snappedMeasure * beatsPerMeasure)
+                    let snappedBeat = max(0, floor(beat))
 
                     guard let melodicSegment = self.appData.getMelodicLyricSegment(for: dragData.resourceId) else { return }
 
