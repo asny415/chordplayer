@@ -8,13 +8,7 @@ struct SoloEditorView: View {
     @Binding var soloSegment: SoloSegment
     @State private var selectedNotes: Set<UUID> = []
     
-    // Editing tools and state
-    enum EditingTool: String, CaseIterable, Identifiable {
-        case note = "Note"
-        case sustain = "Sustain"
-        var id: Self { self }
-    }
-    @State private var currentTool: EditingTool = .note
+    // Editing state
     @State private var currentTechnique: PlayingTechnique = .normal
     @State private var currentFret: Int = 0
     @State private var gridSize: Double = 0.25
@@ -55,7 +49,6 @@ struct SoloEditorView: View {
             }
 
             SoloToolbar(
-                currentTool: $currentTool,
                 currentTechnique: $currentTechnique,
                 currentFret: $currentFret,
                 gridSize: $gridSize,
@@ -86,8 +79,27 @@ struct SoloEditorView: View {
                     stringHeight: stringHeight,
                     onNoteSelect: selectNote,
                     onNoteDelete: deleteSelectedNotes,
-                    onNoteTap: { noteId in handleGridTap(onNote: noteId) },
+                    onNoteTap: { noteId in selectNote(noteId) },
                     onBackgroundTap: { position in handleGridTap(at: position) },
+                    onNoteResize: { noteId, newDuration in
+                        // Handle resizing from note view drag handle: snap, clamp against next note, enforce min gridSize
+                        if let idx = soloSegment.notes.firstIndex(where: { $0.id == noteId }) {
+                            let start = soloSegment.notes[idx].startTime
+                            // clamp to not overlap next note on same string
+                            var maxDuration: Double = soloSegment.lengthInBeats - start
+                            if let nextIdx = findPrecedingNoteIndex(before: Double.greatestFiniteMagnitude, on: soloSegment.notes[idx].string) {
+                                // find next note after this one on same string
+                                let candidates = soloSegment.notes.indices.filter { soloSegment.notes[$0].string == soloSegment.notes[idx].string && soloSegment.notes[$0].startTime > start }
+                                if let next = candidates.min(by: { soloSegment.notes[$0].startTime < soloSegment.notes[$1].startTime }) {
+                                    maxDuration = soloSegment.notes[next].startTime - start
+                                }
+                            }
+                            var snapped = snapToGrid(newDuration)
+                            snapped = max(gridSize, min(snapped, maxDuration))
+                            soloSegment.notes[idx].duration = snapped
+                            selectedNotes = [noteId]
+                        }
+                    },
                     onSetFret: { showingFretPopover = true }
                 )
                 .frame(
@@ -152,17 +164,8 @@ struct SoloEditorView: View {
         
         // Case 1: A note was tapped directly.
         if let noteID = noteID {
-            guard let noteIndex = soloSegment.notes.firstIndex(where: { $0.id == noteID }) else { return }
-            
-            switch currentTool {
-            case .note:
-                selectNote(noteID)
-                
-            case .sustain:
-                // When tapping a note body with the sustain tool, extend its duration by one grid step.
-                let currentDuration = soloSegment.notes[noteIndex].duration ?? gridSize
-                soloSegment.notes[noteIndex].duration = currentDuration + gridSize
-            }
+            // Simple behavior: tapping a note selects it
+            selectNote(noteID)
             return
         }
         
@@ -174,31 +177,11 @@ struct SoloEditorView: View {
             guard stringIndex >= 0 && stringIndex < 6 && time >= 0 else { return }
             let tappedTime = snapToGrid(time)
 
-            switch currentTool {
-            case .note:
-                // Original logic: if a note exists, select it. Otherwise, add a new one.
-                if let existingNote = soloSegment.notes.first(where: { $0.string == stringIndex && tappedTime >= $0.startTime && tappedTime < ($0.startTime + ($0.duration ?? gridSize)) }) {
-                    selectNote(existingNote.id)
-                } else {
-                    addNote(at: tappedTime, on: stringIndex)
-                }
-                
-            case .sustain:
-                // Priority 1: If tapping inside a note, truncate it. This is the "trim" or "add rest" function.
-                if let noteToTrimIndex = soloSegment.notes.firstIndex(where: { $0.string == stringIndex && tappedTime > $0.startTime && tappedTime < ($0.startTime + ($0.duration ?? gridSize)) }) {
-                    let note = soloSegment.notes[noteToTrimIndex]
-                    let newDuration = tappedTime - note.startTime
-                    soloSegment.notes[noteToTrimIndex].duration = max(gridSize, newDuration)
-                }
-                // Priority 2: If tapping in empty space, extend the previous note.
-                else if let precedingNoteIndex = findPrecedingNoteIndex(before: tappedTime, on: stringIndex) {
-                    let note = soloSegment.notes[precedingNoteIndex]
-                    let newDuration = tappedTime - note.startTime
-                    // Only extend, don't shorten.
-                    if newDuration > (note.duration ?? 0) {
-                        soloSegment.notes[precedingNoteIndex].duration = max(gridSize, newDuration)
-                    }
-                }
+            // Default behavior: if a note exists at this grid position, select it. Otherwise add a new note.
+            if let existingNote = soloSegment.notes.first(where: { $0.string == stringIndex && tappedTime >= $0.startTime && tappedTime < ($0.startTime + ($0.duration ?? gridSize)) }) {
+                selectNote(existingNote.id)
+            } else {
+                addNote(at: tappedTime, on: stringIndex)
             }
         }
     }
@@ -297,7 +280,6 @@ struct SoloEditorView: View {
 // MARK: - Subviews
 
 struct SoloToolbar: View {
-    @Binding var currentTool: SoloEditorView.EditingTool
     @Binding var currentTechnique: PlayingTechnique
     @Binding var currentFret: Int
     @Binding var gridSize: Double
@@ -325,14 +307,7 @@ struct SoloToolbar: View {
             Spacer()
 
             HStack(spacing: 15) {
-                Picker("Tool", selection: $currentTool) {
-                    ForEach(SoloEditorView.EditingTool.allCases) { tool in
-                        Text(tool.rawValue).tag(tool)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(minWidth: 180)
-                .help("Editing Tool")
+                // Tool selection removed: clicking adds/selects, drag handle resizes
 
                 Picker("Technique", selection: $currentTechnique) {
                     ForEach(PlayingTechnique.allCases) { technique in
@@ -390,6 +365,7 @@ struct SoloTablatureView: View {
     let onNoteDelete: () -> Void
     let onNoteTap: (UUID) -> Void
     let onBackgroundTap: (CGPoint) -> Void
+    let onNoteResize: (UUID, Double) -> Void
     let onSetFret: () -> Void
     
     private let stringNames = ["E", "B", "G", "D", "A", "E"]
@@ -405,10 +381,12 @@ struct SoloTablatureView: View {
             }
             
             ForEach(soloSegment.notes) { note in
-                SoloNoteView(note: note, isSelected: selectedNotes.contains(note.id), beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel)
-                    .onTapGesture {
-                        onNoteTap(note.id)
-                    }
+                SoloNoteView(note: note, isSelected: selectedNotes.contains(note.id), beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel) { newDuration in
+                    onNoteResize(note.id, newDuration)
+                }
+                .onTapGesture {
+                    onNoteTap(note.id)
+                }
             }
             
             if isPlaying && playbackPosition > 0 {
@@ -506,7 +484,9 @@ struct SoloStringLineView: View {
 
 struct SoloNoteView: View {
     let note: SoloNote, isSelected: Bool, beatWidth: CGFloat, stringHeight: CGFloat, zoomLevel: CGFloat
-    
+    // callback when user resizes note via handle; newDuration is in beats
+    var onResize: ((Double) -> Void)? = nil
+
     private var noteColor: Color {
         switch note.technique {
         case .normal: return isSelected ? Color.accentColor : Color.green.opacity(0.7)
@@ -538,7 +518,32 @@ struct SoloNoteView: View {
             .padding(.leading, 5)
         }
         .position(x: 40 + (CGFloat(note.startTime) * beatWidth * zoomLevel) + (noteWidth / 2), y: CGFloat(note.string) * stringHeight + stringHeight / 2)
-        .allowsHitTesting(false)
+        .allowsHitTesting(true)
+        .overlay(
+            // Resize handle on the tail when selected
+            Group {
+                if isSelected {
+                    let handleSize: CGFloat = 10
+                    let tailX = 40 + (CGFloat(note.startTime + (note.duration ?? 1.0)) * beatWidth * zoomLevel)
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: handleSize, height: handleSize)
+                        .shadow(radius: 1)
+                        .position(x: tailX, y: CGFloat(note.string) * stringHeight + stringHeight / 2)
+                        .gesture(DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                // calculate new duration from dragged x delta
+                                let stringLabelWidth: CGFloat = 40.0
+                                let localX = value.location.x
+                                var time = Double((localX - stringLabelWidth) / beatWidth) / Double(zoomLevel)
+                                if time < note.startTime + 0.0625 { time = note.startTime + 0.0625 }
+                                let newDuration = time - note.startTime
+                                onResize?(newDuration)
+                            }
+                        )
+                }
+            }
+        )
     }
 }
 
