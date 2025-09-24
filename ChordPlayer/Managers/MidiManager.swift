@@ -340,4 +340,33 @@ class MidiManager: ObservableObject {
             }
         }
     }
+    
+    func setPitchBendRange(channel: UInt8, rangeInSemitones: UInt8) {
+        guard let destination = selectedOutput else { return }
+        
+        let sendControlChange = { (control: UInt8, value: UInt8) in
+            self.midiQueue.async { [weak self] in
+                var packet = MIDIPacket()
+                packet.timeStamp = 0 // Send immediately
+                packet.length = 3
+                packet.data.0 = 0xB0 | channel
+                packet.data.1 = control
+                packet.data.2 = value
+                var packetList = MIDIPacketList(numPackets: 1, packet: packet)
+                MIDISend(self?.outputPort ?? MIDIPortRef(), destination, &packetList)
+            }
+        }
+
+        // RPN for Pitch Bend Sensitivity
+        sendControlChange(101, 0) // RPN MSB
+        sendControlChange(100, 0) // RPN LSB
+
+        // Set the range
+        sendControlChange(6, rangeInSemitones) // Data Entry MSB (semitones)
+        sendControlChange(38, 0) // Data Entry LSB (cents, set to 0)
+
+        // Nullify RPN selection
+        sendControlChange(101, 127)
+        sendControlChange(100, 127)
+    }
 }

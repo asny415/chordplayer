@@ -19,7 +19,8 @@ struct SoloEditorView: View {
     @State private var currentFret: Int = 0
     @State private var gridSize: Double = 0.25
     @State private var zoomLevel: CGFloat = 1.0
-    
+    @State private var midiChannel: UInt8 = 0
+
     // State for fret input
     @State private var fretInputBuffer: String = ""
     @State private var fretInputCancellable: AnyCancellable? = nil
@@ -59,6 +60,7 @@ struct SoloEditorView: View {
                 currentFret: $currentFret,
                 gridSize: $gridSize,
                 zoomLevel: $zoomLevel,
+                midiChannel: $midiChannel,
                 isPlaying: .constant(soloPlayer.isPlaying),
                 playbackPosition: .constant(soloPlayer.playbackPosition),
                 segmentLength: $soloSegment.lengthInBeats,
@@ -126,7 +128,7 @@ struct SoloEditorView: View {
     
     // MARK: - Actions
     private func playToggle() {
-        soloPlayer.play(segment: soloSegment, quantization: .none)
+        soloPlayer.play(segment: soloSegment, quantization: .none, channel: midiChannel)
     }
 
     private func notifyChanges() {
@@ -300,6 +302,7 @@ struct SoloToolbar: View {
     @Binding var currentFret: Int
     @Binding var gridSize: Double
     @Binding var zoomLevel: CGFloat
+    @Binding var midiChannel: UInt8
     @Binding var isPlaying: Bool
     @Binding var playbackPosition: Double
     @Binding var segmentLength: Double
@@ -362,7 +365,7 @@ struct SoloToolbar: View {
                 Image(systemName: "gearshape.fill")
             }.buttonStyle(.bordered)
             .popover(isPresented: $showingSettings, arrowEdge: .bottom) {
-                SegmentSettingsView(lengthInBeats: $segmentLength)
+                SegmentSettingsView(lengthInBeats: $segmentLength, midiChannel: $midiChannel)
             }
         }
         .textFieldStyle(.roundedBorder)
@@ -504,23 +507,35 @@ struct SoloStringLineView: View {
 struct SoloNoteView: View {
     let note: SoloNote, isSelected: Bool, beatWidth: CGFloat, stringHeight: CGFloat, zoomLevel: CGFloat
     
+    private var noteColor: Color {
+        switch note.technique {
+        case .normal: return isSelected ? Color.accentColor : Color.green.opacity(0.7)
+        case .slide: return isSelected ? Color.accentColor : Color.blue.opacity(0.7)
+        case .bend: return isSelected ? Color.accentColor : Color.orange.opacity(0.7)
+        case .vibrato: return isSelected ? Color.accentColor : Color.purple.opacity(0.7)
+        }
+    }
+
     var body: some View {
         let noteDuration = note.duration ?? 1.0
         let noteWidth = CGFloat(noteDuration) * beatWidth * zoomLevel
 
         ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 5)
-                .fill(isSelected ? Color.accentColor : Color.green.opacity(0.7))
+                .fill(noteColor)
                 .frame(width: noteWidth, height: stringHeight * 0.8)
                 .overlay(
                     RoundedRectangle(cornerRadius: 5)
                         .stroke(Color.primary.opacity(0.8), lineWidth: isSelected ? 2 : 1)
                 )
             
-            Text("\(note.fret)")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(isSelected ? .white : .primary)
-                .padding(.leading, 5)
+            HStack(spacing: 2) {
+                Text("\(note.fret)")
+                Text(note.technique.symbol)
+            }
+            .font(.system(size: 12, weight: .bold))
+            .foregroundColor(isSelected ? .white : .primary)
+            .padding(.leading, 5)
         }
         .position(x: 40 + (CGFloat(note.startTime) * beatWidth * zoomLevel) + (noteWidth / 2), y: CGFloat(note.string) * stringHeight + stringHeight / 2)
         .allowsHitTesting(false)
@@ -529,6 +544,7 @@ struct SoloNoteView: View {
 
 struct SegmentSettingsView: View {
     @Binding var lengthInBeats: Double
+    @Binding var midiChannel: UInt8
     @State private var lengthInBarsString: String = ""
     private let beatsPerBar: Int = 4
 
@@ -540,6 +556,15 @@ struct SegmentSettingsView: View {
                 TextField("Length", text: $lengthInBarsString)
                     .frame(width: 60)
                     .onSubmit(commitLengthChange)
+            }
+            HStack {
+                Text("MIDI Channel:")
+                Picker("MIDI Channel", selection: $midiChannel) {
+                    ForEach(0..<16) { channel in
+                        Text("\(channel + 1)").tag(UInt8(channel))
+                    }
+                }
+                .labelsHidden()
             }
         }.padding()
         .onAppear {
