@@ -116,7 +116,7 @@ struct GuitarPattern: Codable, Identifiable, Hashable, Equatable {
         }
     }
     
-    init(id: UUID = UUID(), name: String, resolution: GridResolution = .sixteenth, length: Int, steps: [PatternStep]? = nil) {
+    init(id: UUID = UUID(), name: String, resolution: GridResolution = .eighth, length: Int = 8, steps: [PatternStep]? = nil) {
         self.id = id
         self.name = name
         self.length = length
@@ -203,14 +203,16 @@ struct GuitarPattern: Codable, Identifiable, Hashable, Equatable {
 
             switch step.type {
             case .arpeggio:
-                // The check for activeNotes.isEmpty is already done above, so we can proceed.
-                guard let stringIndex = step.activeNotes.min() else { return "" } // Safety check
-                let stringNum = stringIndex + 1
-                if let fret = step.fretOverrides[stringIndex] {
-                    return "a\(stringNum)(\(fret))"
-                } else {
-                    return "a\(stringNum)"
+                let sortedActiveStrings = step.activeNotes.sorted()
+                let arpeggioParts: [String] = sortedActiveStrings.map { stringIndex in
+                    let stringNum = stringIndex + 1
+                    if let fret = step.fretOverrides[stringIndex] {
+                        return "\(stringNum)(\(fret))"
+                    } else {
+                        return "\(stringNum)"
+                    }
                 }
+                return "a" + arpeggioParts.joined()
 
             case .strum:
                 guard let minStringIndex = step.activeNotes.min(), let maxStringIndex = step.activeNotes.max() else { return "" } // Safety check

@@ -12,10 +12,8 @@ struct PlayingPatternsView: View {
                 Spacer()
                 Button(action: {
                     // Create a new pattern and set it as the item to be edited.
-                    let timeSignature = appData.preset?.timeSignature ?? TimeSignature()
-                    let defaultResolution = GridResolution.sixteenth
-                    let length = calculateDefaultLength(timeSignature: timeSignature, resolution: defaultResolution)
-                    self.patternToEdit = GuitarPattern.createNew(name: "New Pattern", length: length, resolution: defaultResolution)
+                    // Default to 8 steps of 8th notes as requested.
+                    self.patternToEdit = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .eighth)
                 }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)

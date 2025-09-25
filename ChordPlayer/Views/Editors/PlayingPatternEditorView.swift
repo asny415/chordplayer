@@ -21,6 +21,9 @@ struct PlayingPatternEditorView: View {
     @State private var showingFretPopover: Bool = false
     @State private var fretOverrideValue: Int = 0
 
+    @State private var showingDuplicateNameAlert = false
+    @State private var duplicateName = ""
+
     var body: some View {
         VStack(spacing: 0) {
             headerView.padding()
@@ -39,6 +42,11 @@ struct PlayingPatternEditorView: View {
                 commitFretOverride(fretOverrideValue)
                 showingFretPopover = false
             })
+        }
+        .alert("Duplicate Pattern Name", isPresented: $showingDuplicateNameAlert) {
+            Button("OK") { }
+        } message: {
+            Text("A pattern named '\(duplicateName)' already exists. Please choose a unique name.")
         }
     }
 
@@ -123,7 +131,32 @@ struct PlayingPatternEditorView: View {
             Button("Cancel", role: .cancel, action: onCancel)
             Spacer()
             Button("Save", action: {
-                if isNew && pattern.name == "New Pattern" { pattern.name = pattern.generateAutomaticName() }
+                // Validate for duplicate names
+                guard let currentPreset = appData.preset else {
+                    // Handle error: no current preset available
+                    print("Error: No current preset available in AppData.")
+                    onSave(pattern) // Or handle this error more gracefully
+                    return
+                }
+
+                let existingPatterns = currentPreset.playingPatterns.filter { existingPattern in
+                    // If editing, exclude the pattern itself from the duplicate check
+                    if !isNew && existingPattern.id == pattern.id {
+                        return false
+                    }
+                    return existingPattern.name == pattern.name
+                }
+
+                if !existingPatterns.isEmpty {
+                    duplicateName = pattern.name
+                    showingDuplicateNameAlert = true
+                    return // Stop saving if duplicate name found
+                }
+
+                // If it's a new pattern and the name is still "New Pattern", auto-generate one
+                if isNew && pattern.name == "New Pattern" {
+                    pattern.name = pattern.generateAutomaticName()
+                }
                 onSave(pattern)
             }).buttonStyle(.borderedProminent)
         }
