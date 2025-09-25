@@ -45,6 +45,14 @@ struct ChordPlayerApp: App {
                 .environmentObject(keyboardHandler)
                 .environmentObject(PresetManager.shared)
         }
+        .commands {
+            CommandGroup(after: .windowArrangement) {
+                Button("Toggle Song Arranger") {
+                    openWindow(id: "song-arranger")
+                }
+                .keyboardShortcut("r", modifiers: .command)
+            }
+        }
         
         Settings {
             PreferencesView()

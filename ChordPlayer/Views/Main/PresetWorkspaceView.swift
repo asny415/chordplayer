@@ -11,10 +11,6 @@ struct PresetWorkspaceView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                // 歌曲编排功能 - 基于Preset
-                GroupBox {
-                    PresetArrangementView()
-                }
 
                 GroupBox {
                     GlobalSettingsView()
