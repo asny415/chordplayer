@@ -45,44 +45,13 @@ struct ChordPlayerApp: App {
                 .environmentObject(keyboardHandler)
                 .environmentObject(PresetManager.shared)
         }
-        .commands {
-            CommandGroup(after: .windowArrangement) {
-                Button("Toggle Song Arranger") {
-                    openWindow(id: "song-arranger")
-                }
-                .keyboardShortcut("r", modifiers: .command)
-            }
-        }
+
         
         Settings {
             PreferencesView()
                 .environmentObject(appData)
                 .environmentObject(midiManager)
-        }
-        
-        Window("演奏助手", id: "timing-display") {
-            // TODO: This view needs to be updated or might be obsolete
-            // TimingDisplayWindowView()
-            //     .environmentObject(appData)
-            //     .environmentObject(keyboardHandler)
-            Text("Timing Display Window - Needs Update")
-        }
-        .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 600, height: 250)
-        .windowResizability(.contentMinSize)
-        
-        Window("曲谱编辑器", id: "sheet-music-editor") {
-            // TODO: This view needs to be updated or might be obsolete
-            // SheetMusicEditorWindow()
-            //     .environmentObject(appData)
-            //     .environmentObject(keyboardHandler)
-            //     .environmentObject(PresetManager.shared)
-            Text("Sheet Music Editor - Needs Update")
-        }
-        .keyboardShortcut("E", modifiers: .command)
-        // TODO: Re-implement a new, relevant command menu if needed.
-        // .commands { ... }
-        
+        }        
         Window("Song Arranger", id: "song-arranger") {
             NavigationStack {
                 // We need to ensure a preset is loaded. A simple check and message is best.
@@ -103,5 +72,6 @@ struct ChordPlayerApp: App {
         }
         .defaultSize(width: 1200, height: 700)
         .windowResizability(.contentSize)
+        .keyboardShortcut("r", modifiers: .command)
     }
 }

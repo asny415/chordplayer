@@ -15,16 +15,6 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .frame(minWidth: 900, minHeight: 600)
-        .onAppear(perform: setupInitialState)
-        // All .sheet modifiers for custom libraries are removed as they are now obsolete.
-        // The functionality will be integrated into the PresetWorkspaceView.
-    }
-
-    private func setupInitialState() {
-        DispatchQueue.main.async {
-            // TODO: keyboardHandler needs to be updated to work with the new Preset model
-            // keyboardHandler.updateWithNewConfig(appData.preset)
-        }
     }
 }
 
@@ -129,10 +119,7 @@ private struct PresetRow: View {
                     Text(presetInfo.name)
                         .fontWeight(isCurrent ? .bold : .regular)
                 }
-                // Description was removed from PresetInfo, so this is commented out
-                // if let desc = presetInfo.description, !desc.isEmpty {
-                //     Text(desc).font(.caption).foregroundColor(.secondary)
-                // }
+
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
