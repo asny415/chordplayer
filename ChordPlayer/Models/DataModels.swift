@@ -176,39 +176,72 @@ struct GuitarPattern: Codable, Identifiable, Hashable, Equatable {
     }
     
     func generateAutomaticName() -> String {
-        let resolutionStr: String
+        let resolutionCode: String
         switch activeResolution {
-        case .sixteenth, .sixteenthTriplet: resolutionStr = "16th"
-        case .eighth, .eighthTriplet: resolutionStr = "8th"
+        case .eighth:
+            resolutionCode = "1"
+        case .sixteenth:
+            resolutionCode = "2"
+        case .eighthTriplet:
+            resolutionCode = "3"
+        case .sixteenthTriplet:
+            resolutionCode = "4"
         }
-        
-        let lengthStr = "\(length)s"
-        
-        let activeSteps = steps.filter { !$0.activeNotes.isEmpty }
-        guard !activeSteps.isEmpty else {
-            return "\(resolutionStr) \(lengthStr) Silent"
+
+        let stepParts: [String] = steps.map { step in
+            // Correct mapping: 0=e(1), 1=B(2), ..., 5=E(6). So, user-facing string number is model_index + 1.
+
+            // A step is ONLY a rest if its type is explicitly .rest.
+            if step.type == .rest {
+                return "r"
+            }
+
+            // For other types, if there are no active notes, it's an empty column, not a rest.
+            if step.activeNotes.isEmpty {
+                return "" // Return an empty string to represent an empty, non-rest step.
+            }
+
+            switch step.type {
+            case .arpeggio:
+                // The check for activeNotes.isEmpty is already done above, so we can proceed.
+                guard let stringIndex = step.activeNotes.min() else { return "" } // Safety check
+                let stringNum = stringIndex + 1
+                if let fret = step.fretOverrides[stringIndex] {
+                    return "a\(stringNum)(\(fret))"
+                } else {
+                    return "a\(stringNum)"
+                }
+
+            case .strum:
+                guard let minStringIndex = step.activeNotes.min(), let maxStringIndex = step.activeNotes.max() else { return "" } // Safety check
+
+                var strumPart = "s"
+
+                switch step.strumDirection {
+                case .down:
+                    strumPart += "d"
+                case .up:
+                    strumPart += "u"
+                }
+
+                if step.strumSpeed == .fast {
+                    strumPart += "f"
+                }
+
+                // For down-strum, start is low-pitch (high index, e.g., 6th string/index 5)
+                // For up-strum, start is high-pitch (low index, e.g., 1st string/index 0)
+                let startString = step.strumDirection == .down ? maxStringIndex + 1 : minStringIndex + 1
+                let endString = step.strumDirection == .down ? minStringIndex + 1 : maxStringIndex + 1
+
+                strumPart += "\(startString)\(endString)"
+                return strumPart
+
+            case .rest: // Already handled above.
+                return "r"
+            }
         }
-        
-        let strumCount = activeSteps.filter { $0.type == .strum }.count
-        let arpCount = activeSteps.filter { $0.type == .arpeggio }.count
-        
-        let typeStr: String
-        if strumCount > arpCount * 2 {
-            typeStr = "Strum"
-        } else if arpCount > strumCount * 2 {
-            typeStr = "Arp"
-        } else {
-            typeStr = "Hybrid"
-        }
-        
-        let rhythmIndices = steps.enumerated()
-            .filter { !$0.element.activeNotes.isEmpty }
-            .map { $0.offset + 1 }
-            .prefix(4)
-        
-        let rhythmStr = rhythmIndices.map(String.init).joined(separator: "-")
-        
-        return "\(resolutionStr) \(lengthStr) \(typeStr) (\(rhythmStr))"
+
+        return ([resolutionCode] + stepParts).joined(separator: "-")
     }
 }
 
