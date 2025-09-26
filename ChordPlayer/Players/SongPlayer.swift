@@ -417,11 +417,8 @@ class PresetArrangerPlayer: ObservableObject {
             let scheduledUptime = startTime + (Double(currentPatternEvent.startBeat) * secondsPerBeat)
             let totalDuration = durationInBeats * secondsPerBeat
 
-            // Ensure we don't schedule events in the past.
-            if scheduledUptime < ProcessInfo.processInfo.systemUptime {
-                continue
-            }
-
+            // The check for past events was removed as it was causing events at beat 0 to be skipped.
+            // The underlying MIDI scheduler should handle events scheduled for the immediate past.
             chordPlayer.schedulePattern(
                 chord: chordToPlay,
                 pattern: patternToPlay,
