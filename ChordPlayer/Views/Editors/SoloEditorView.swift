@@ -304,6 +304,8 @@ struct SoloEditorView: View {
                     technique = .bend
                 case "~":
                     technique = .vibrato
+                case "p":
+                    technique = .pullOff
                 default:
                     technique = nil
                 }
@@ -543,6 +545,7 @@ struct SoloNoteView: View {
         case .slide: return isSelected ? Color.accentColor : Color.blue.opacity(0.7)
         case .bend: return isSelected ? Color.accentColor : Color.orange.opacity(0.7)
         case .vibrato: return isSelected ? Color.accentColor : Color.purple.opacity(0.7)
+        case .pullOff: return isSelected ? Color.accentColor : Color.red.opacity(0.7) // 使用红色表示勾弦技巧
         }
     }
 

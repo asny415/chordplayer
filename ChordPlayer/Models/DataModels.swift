@@ -512,6 +512,7 @@ enum PlayingTechnique: String, Codable, CaseIterable, Identifiable {
     case slide = "Slide"
     case bend = "Bend"
     case vibrato = "Vibrato"
+    case pullOff = "Pull-off"
 
     var id: Self { self }
 
@@ -521,6 +522,7 @@ enum PlayingTechnique: String, Codable, CaseIterable, Identifiable {
         case .slide: return "滑音"
         case .bend: return "推弦"
         case .vibrato: return "颤音"
+        case .pullOff: return "勾弦"
         }
     }
     
@@ -530,6 +532,7 @@ enum PlayingTechnique: String, Codable, CaseIterable, Identifiable {
         case .slide: return "/"
         case .bend: return "^"
         case .vibrato: return "~"
+        case .pullOff: return "p"
         }
     }
 }

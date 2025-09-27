@@ -146,6 +146,8 @@ class SoloPlayer: ObservableObject {
                 }
             case .vibrato:
                 actions.append(.vibrato(note: currentNote, offTime: noteOffTime))
+            case .pullOff:
+                actions.append(.playNote(note: currentNote, offTime: noteOffTime))
             case .normal:
                 actions.append(.playNote(note: currentNote, offTime: noteOffTime))
             }
@@ -153,7 +155,22 @@ class SoloPlayer: ObservableObject {
 
         // 2. Process actions and add events to the MusicTrack
         for action in actions {
-            let velocity = UInt8(100)
+            var baseVelocity = UInt8(100)
+            
+            // Determine the note to check for pull-off technique
+            var shouldUsePullOffVelocity = false
+            switch action {
+            case .playNote(let note, _):
+                shouldUsePullOffVelocity = (note.technique == .pullOff)
+            case .vibrato(let note, _):
+                shouldUsePullOffVelocity = (note.technique == .pullOff)
+            case .bend(let fromNote, _, _):
+                shouldUsePullOffVelocity = (fromNote.technique == .pullOff)
+            case .slide(let fromNote, _, _):
+                shouldUsePullOffVelocity = (fromNote.technique == .pullOff)
+            }
+            
+            let velocity = shouldUsePullOffVelocity ? UInt8(max(1, Int(baseVelocity) / 2)) : baseVelocity
 
             switch action {
             case .playNote(let note, let offTime):
