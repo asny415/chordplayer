@@ -25,13 +25,13 @@ class PresetArrangerPlayer: ObservableObject {
     private var currentPreset: Preset?
     private let openStringMIDINotes: [UInt8] = [64, 59, 55, 50, 45, 40]
 
-    init(midiManager: MidiManager, appData: AppData, chordPlayer: ChordPlayer, drumPlayer: DrumPlayer, soloPlayer: SoloPlayer) {
+    init(midiSequencer: MIDISequencer, midiManager: MidiManager, appData: AppData, chordPlayer: ChordPlayer, drumPlayer: DrumPlayer, soloPlayer: SoloPlayer) {
         self.midiManager = midiManager
         self.appData = appData
         self.chordPlayer = chordPlayer
         self.drumPlayer = drumPlayer
         self.soloPlayer = soloPlayer
-        self.melodicLyricPlayer = MelodicLyricPlayer(midiManager: midiManager)
+        self.melodicLyricPlayer = MelodicLyricPlayer(midiSequencer: midiSequencer, midiManager: midiManager, appData: appData)
     }
 
     // MARK: - Playback Control
@@ -333,17 +333,10 @@ class PresetArrangerPlayer: ObservableObject {
     }
 
     private func scheduleMelodicLyricSegment(segment: MelodicLyricSegment, startTime: TimeInterval, track: GuitarTrack, preset: Preset, channel: Int) {
-        let eventIDs = melodicLyricPlayer.schedulePlayback(
-            segment: segment,
-            preset: preset,
-            channel: channel,
-            volume: track.volume,
-            startTime: startTime
-        )
-        
-        self.eventsLock.lock()
-        self.scheduledEvents.append(contentsOf: eventIDs)
-        self.eventsLock.unlock()
+        // TODO: This playback will ignore the calculated startTime due to architectural changes.
+        // The PresetArrangerPlayer needs to be refactored to build a single master MusicSequence
+        // instead of trying to manually schedule different players.
+        melodicLyricPlayer.play(segment: segment)
     }
 
     private func midiNote(for item: MelodicLyricItem, transposition: Int) -> UInt8? {

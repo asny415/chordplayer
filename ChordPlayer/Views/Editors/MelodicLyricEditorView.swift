@@ -7,6 +7,7 @@ import AppKit
 struct MelodicLyricEditorView: View {
     @EnvironmentObject private var appData: AppData
     @EnvironmentObject private var midiManager: MidiManager
+    @EnvironmentObject private var midiSequencer: MIDISequencer
     @Binding var segment: MelodicLyricSegment
 
     // Editor State
@@ -175,7 +176,7 @@ struct MelodicLyricEditorView: View {
             gridSizeInSteps = segment.gridUnit ?? 1 // Use saved or default
             registerKeyMonitor()
             if melodicLyricPlayer == nil {
-                melodicLyricPlayer = MelodicLyricPlayer(midiManager: midiManager)
+                melodicLyricPlayer = MelodicLyricPlayer(midiSequencer: midiSequencer, midiManager: midiManager, appData: appData)
             }
         }
         .onDisappear {
@@ -582,75 +583,24 @@ struct MelodicLyricEditorView: View {
     }
 
     private func startSegmentPlayback() {
-        guard let preset = appData.preset, let player = melodicLyricPlayer else { return }
+        guard let player = melodicLyricPlayer else { return }
         stopSegmentPlayback()
         stopPreview()
-
-        let bpm = preset.bpm
-        guard bpm > 0 else { return }
-
-        let channel = sanitizedEditorMidiChannel
-        let startTime = ProcessInfo.processInfo.systemUptime + 0.08 // 80ms buffer
-
-        let eventIDs = player.schedulePlayback(
-            segment: segment,
-            preset: preset,
-            channel: channel,
-            volume: 1.0, // Editor playback uses full volume
-            startTime: startTime
-        )
-
-        guard !eventIDs.isEmpty else { return }
         
-        self.scheduledPlaybackEvents = eventIDs
+        player.play(segment: segment)
+        // The isPlayingSegment state should now be driven by the player's @Published property.
+        // For now, we set it manually. A future refactor could bind them.
         self.isPlayingSegment = true
-
-        // --- UI Update and Completion Handling ---
-        playbackProgress = 0.0
-        cancelProgressTasks()
-        
-        let stepsPerBeat = 4
-        let msPerBeat = 60_000.0 / bpm
-        let msPerStep = msPerBeat / Double(stepsPerBeat)
-        let totalStepsInSegment = segment.lengthInBars * preset.timeSignature.beatsPerMeasure * stepsPerBeat
-        let totalDurationMs = Double(totalStepsInSegment) * msPerStep
-
-        let completionTask = DispatchWorkItem { stopSegmentPlayback(sendNoteOff: false) }
-        playbackCompletionTask = completionTask
-        DispatchQueue.main.asyncAfter(deadline: .now() + totalDurationMs / 1000.0 + 0.25, execute: completionTask)
-
-        var tasks: [DispatchWorkItem] = []
-        let now = ProcessInfo.processInfo.systemUptime * 1000.0
-        for step in 0...totalStepsInSegment {
-            let stepTimeMs = startTime * 1000.0 + Double(step) * msPerStep
-            let delaySeconds = max(0, (stepTimeMs - now) / 1000.0)
-            let task = DispatchWorkItem {
-                guard isPlayingSegment else { return }
-                playbackProgress = min(max(Double(step) / Double(totalStepsInSegment), 0.0), 1.0)
-            }
-            tasks.append(task)
-            DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds, execute: task)
-        }
-        playbackProgressTasks = tasks
     }
 
     private func stopSegmentPlayback(sendNoteOff: Bool = true) {
+        melodicLyricPlayer?.stop()
+        self.isPlayingSegment = false
+        
+        // Clean up UI-related tasks
         playbackCompletionTask?.cancel()
         playbackCompletionTask = nil
         cancelProgressTasks()
-
-        // Cancel all MIDI events scheduled by the player for this segment
-        for eventID in scheduledPlaybackEvents {
-            midiManager.cancelScheduledEvent(id: eventID)
-        }
-        
-        // If immediate stop is needed, send a panic message to turn off all notes on the relevant channels.
-        if sendNoteOff {
-            midiManager.sendPanic()
-        }
-
-        scheduledPlaybackEvents.removeAll()
-        isPlayingSegment = false
         playbackProgress = 0.0
         stopPreview()
     }
