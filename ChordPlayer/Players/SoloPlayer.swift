@@ -28,22 +28,28 @@ class SoloPlayer: ObservableObject {
         self.midiSequencer = midiSequencer
         self.midiManager = midiManager
         self.appData = appData
+        print("[SoloPlayer] Initialized.")
         
         // Subscribe to sequencer's isPlaying state
-        self.midiSequencer.$isPlaying.sink { [weak self] isPlaying in
-            if !isPlaying {
+        self.midiSequencer.$isPlaying.sink { [weak self] sequencerIsPlaying in
+            print("[SoloPlayer] Sink received: midiSequencer.isPlaying is now \(sequencerIsPlaying)")
+            if !sequencerIsPlaying {
                 self?.isPlaying = false
                 self?.currentlyPlayingSegmentID = nil
+                print("[SoloPlayer] Sink updated self.isPlaying to false.")
             }
         }.store(in: &cancellables)
     }
 
     func play(segment: SoloSegment, channel: UInt8 = 0) {
+        print("[SoloPlayer] play() called.")
         if isPlaying && currentlyPlayingSegmentID == segment.id {
+            print("[SoloPlayer] play() -> stopping existing playback.")
             stop()
             return
         }
         
+        print("[SoloPlayer] play() -> stopping any previous playback.")
         stop() // Stop any previous playback
 
         // Set the pitch bend range for the channel before playing
@@ -58,13 +64,20 @@ class SoloPlayer: ObservableObject {
         midiSequencer.play(sequence: sequence, on: endpoint)
         
         // Update local state
+        print("[SoloPlayer] play() -> setting self.isPlaying = true")
         self.isPlaying = true
         self.currentlyPlayingSegmentID = segment.id
     }
 
     func stop() {
+        print("[SoloPlayer] stop() called.")
         midiSequencer.stop()
-        // The isPlaying and currentlyPlayingSegmentID state will be updated via the sink subscription.
+        // Directly update state here to be more robust, not just relying on the sink.
+        if isPlaying {
+            self.isPlaying = false
+            self.currentlyPlayingSegmentID = nil
+            print("[SoloPlayer] stop() updated self.isPlaying to false.")
+        }
     }
     
     private func createSequence(from segment: SoloSegment, onChannel midiChannel: UInt8) -> MusicSequence? {

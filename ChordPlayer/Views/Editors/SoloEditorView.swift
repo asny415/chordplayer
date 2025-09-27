@@ -123,6 +123,9 @@ struct SoloEditorView: View {
             .frame(height: 30)
             .background(Color(NSColor.controlBackgroundColor))
         }
+        .onChange(of: soloPlayer.isPlaying) { _, newValue in
+            print("[SoloEditorView] Detected change: soloPlayer.isPlaying is now \(newValue)")
+        }
         .onKeyDown { event in handleKeyDown(event) }
         .onDisappear(perform: { soloPlayer.stop() })
         .onChange(of: soloSegment) { notifyChanges() }
