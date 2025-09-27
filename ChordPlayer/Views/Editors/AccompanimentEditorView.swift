@@ -590,26 +590,45 @@ struct ResourceLibraryView: View {
             }
         }
         
+        // If the selected event is not a chord event, find the chord associated with the selected pattern event
+        for measure in segment.measures {
+            if let patternEvent = measure.patternEvents.first(where: { $0.id == selectedId }) {
+                // Find the chord at the same position or before it
+                let chordIdAtPosition = getChordIdAtPosition(measureIndex: segment.measures.firstIndex(of: measure)!, startBeat: patternEvent.startBeat)
+                return chordIdAtPosition == chordId
+            }
+        }
+        
         return false
     }
     
     private func isSelectedPattern(_ patternId: UUID) -> Bool {
-        guard let selectedId = selectedEventId else { return false }
+        // First, determine which chord type should be considered as "selected"
+        var chordType: UUID?
         
-        // First, find the chord type of the selected event
-        var selectedChordType: UUID? = nil
-        var isChordEventSelected = false
-        
-        for measure in segment.measures {
-            if let chordEvent = measure.chordEvents.first(where: { $0.id == selectedId }) {
-                selectedChordType = chordEvent.resourceId
-                isChordEventSelected = true
-                break
+        if let selectedId = selectedEventId {
+            // Check if a chord event is selected directly
+            for measure in segment.measures {
+                if let chordEvent = measure.chordEvents.first(where: { $0.id == selectedId }) {
+                    chordType = chordEvent.resourceId
+                    break
+                }
+            }
+            
+            // If no chord event is selected, check if a pattern event is selected
+            if chordType == nil {
+                for measure in segment.measures {
+                    if let patternEvent = measure.patternEvents.first(where: { $0.id == selectedId }) {
+                        // Find the chord at the same position or before it
+                        chordType = getChordIdAtPosition(measureIndex: segment.measures.firstIndex(of: measure)!, startBeat: patternEvent.startBeat)
+                        break
+                    }
+                }
             }
         }
         
-        // If a chord event is not selected, return false
-        guard isChordEventSelected, let chordType = selectedChordType else {
+        // If no chord type could be determined, return false
+        guard let selectedChordType = chordType else {
             return false
         }
         
@@ -655,7 +674,7 @@ struct ResourceLibraryView: View {
                     
                     // Check if this pattern position falls within any segment of the selected chord type
                     for timelineSegment in chordTimeline {
-                        if timelineSegment.chordId == chordType && 
+                        if timelineSegment.chordId == selectedChordType && 
                            patternPos >= timelineSegment.startPos && 
                            patternPos < timelineSegment.endPos {
                             return true
@@ -666,6 +685,39 @@ struct ResourceLibraryView: View {
         }
         
         return false
+    }
+    
+    private func getChordIdAtPosition(measureIndex: Int, startBeat: Int) -> UUID? {
+        let beatsPerMeasure = appData.preset?.timeSignature.beatsPerMeasure ?? 4
+        
+        // Go through all measures up to and including the target measure
+        var lastChordSoFar: UUID? = nil
+        
+        for i in 0...measureIndex {
+            let measure = segment.measures[i]
+            let chordsInMeasure = measure.chordEvents.sorted { $0.startBeat < $1.startBeat }
+            
+            if i == measureIndex {
+                // In the target measure, look for chords at or before the startBeat
+                for chord in chordsInMeasure {
+                    if chord.startBeat <= startBeat {
+                        lastChordSoFar = chord.resourceId
+                    } else {
+                        // If we find a chord after our target beat, we stop here
+                        break
+                    }
+                }
+            } else {
+                // In previous measures, get the last chord by position
+                if !chordsInMeasure.isEmpty {
+                    if let lastChordInMeasure = chordsInMeasure.last {
+                        lastChordSoFar = lastChordInMeasure.resourceId
+                    }
+                }
+            }
+        }
+        
+        return lastChordSoFar
     }
 }
 
