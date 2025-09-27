@@ -61,6 +61,12 @@ class SoloPlayer: ObservableObject {
             return
         }
         
+        
+        // MARK: - DEBUG: Print MusicSequence
+        let sequenceDescription = MIDIDebugger.describe(sequence: sequence)
+        print(sequenceDescription)
+        // END DEBUG
+        
         midiSequencer.play(sequence: sequence, on: endpoint)
         
         // Update local state
