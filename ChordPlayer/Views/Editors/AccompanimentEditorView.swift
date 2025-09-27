@@ -596,25 +596,70 @@ struct ResourceLibraryView: View {
     private func isSelectedPattern(_ patternId: UUID) -> Bool {
         guard let selectedId = selectedEventId else { return false }
         
-        // Find the selected chord event
-        var selectedChordId: UUID? = nil
+        // First, find the chord type of the selected event
+        var selectedChordType: UUID? = nil
+        var isChordEventSelected = false
+        
         for measure in segment.measures {
             if let chordEvent = measure.chordEvents.first(where: { $0.id == selectedId }) {
-                selectedChordId = chordEvent.resourceId
+                selectedChordType = chordEvent.resourceId
+                isChordEventSelected = true
                 break
             }
         }
         
-        // If a chord is selected, find all pattern events that occur at the same positions as that chord
-        if let chordId = selectedChordId {
-            for measure in segment.measures {
-                // Find chord events with the same chord ID
-                let chordEvents = measure.chordEvents.filter { $0.resourceId == chordId }
-                
-                // Check if any pattern event occurs at the same position as the chord events
-                for chordEvent in chordEvents {
-                    if let patternEvent = measure.patternEvents.first(where: { $0.startBeat == chordEvent.startBeat && $0.resourceId == patternId }) {
-                        return true
+        // If a chord event is not selected, return false
+        guard isChordEventSelected, let chordType = selectedChordType else {
+            return false
+        }
+        
+        // Now find all positions where this chord type is effective
+        // Create a timeline of chord changes
+        let beatsPerMeasure = appData.preset?.timeSignature.beatsPerMeasure ?? 4
+        var chordTimeline: [(startPos: Int, endPos: Int, chordId: UUID)] = []
+        var allChordEvents: [(absolutePosition: Int, event: TimelineEvent)] = []
+        
+        // Collect all chord events
+        for (measureIdx, measure) in segment.measures.enumerated() {
+            for chordEvent in measure.chordEvents {
+                let absolutePosition = measureIdx * beatsPerMeasure + chordEvent.startBeat
+                allChordEvents.append((absolutePosition: absolutePosition, event: chordEvent))
+            }
+        }
+        
+        // Sort chord events by position
+        allChordEvents.sort { $0.absolutePosition < $1.absolutePosition }
+        
+        // Create timeline segments for each chord
+        for i in 0..<allChordEvents.count {
+            let currentEvent = allChordEvents[i]
+            let startPos = currentEvent.absolutePosition
+            
+            var endPos: Int
+            if i == allChordEvents.count - 1 {
+                // Last chord event - continues to end of segment
+                endPos = segment.measures.count * beatsPerMeasure
+            } else {
+                // Until the next chord event
+                endPos = allChordEvents[i + 1].absolutePosition
+            }
+            
+            chordTimeline.append((startPos: startPos, endPos: endPos, chordId: currentEvent.event.resourceId))
+        }
+        
+        // Find all pattern events that occur during any occurrence of the selected chord type
+        for (measureIdx, measure) in segment.measures.enumerated() {
+            for patternEvent in measure.patternEvents {
+                if patternEvent.resourceId == patternId {
+                    let patternPos = measureIdx * beatsPerMeasure + patternEvent.startBeat
+                    
+                    // Check if this pattern position falls within any segment of the selected chord type
+                    for timelineSegment in chordTimeline {
+                        if timelineSegment.chordId == chordType && 
+                           patternPos >= timelineSegment.startPos && 
+                           patternPos < timelineSegment.endPos {
+                            return true
+                        }
                     }
                 }
             }
