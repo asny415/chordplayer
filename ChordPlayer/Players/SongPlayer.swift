@@ -66,7 +66,6 @@ class PresetArrangerPlayer: ObservableObject {
         playbackStartTime = nil
 
         // Stop all sub-players to ensure their internal states and scheduled tasks are cleared.
-        chordPlayer.panic()
         soloPlayer.stop()
 
         // Also cancel any events scheduled directly by this player
@@ -86,7 +85,6 @@ class PresetArrangerPlayer: ObservableObject {
         playbackTimer = nil
 
         // Stop all sub-players to ensure their internal states and scheduled tasks are cleared.
-        chordPlayer.panic()
         drumPlayer.stop()
         soloPlayer.stop()
 
@@ -418,20 +416,20 @@ class PresetArrangerPlayer: ObservableObject {
 
             // The check for past events was removed as it was causing events at beat 0 to be skipped.
             // The underlying MIDI scheduler should handle events scheduled for the immediate past.
-            chordPlayer.schedulePattern(
-                chord: chordToPlay,
-                pattern: patternToPlay,
-                preset: preset,
-                scheduledUptime: scheduledUptime,
-                totalDuration: totalDuration,
-                dynamics: dynamics,
-                midiChannel: channel(for: track, in: preset),
-                completion: { eventIDs in
-                    self.eventsLock.lock()
-                    self.scheduledEvents.append(contentsOf: eventIDs)
-                    self.eventsLock.unlock()
-                }
-            )
+//            chordPlayer.schedulePattern(
+//                chord: chordToPlay,
+//                pattern: patternToPlay,
+//                preset: preset,
+//                scheduledUptime: scheduledUptime,
+//                totalDuration: totalDuration,
+//                dynamics: dynamics,
+//                midiChannel: channel(for: track, in: preset),
+//                completion: { eventIDs in
+//                    self.eventsLock.lock()
+//                    self.scheduledEvents.append(contentsOf: eventIDs)
+//                    self.eventsLock.unlock()
+//                }
+//            )
         }
     }
 

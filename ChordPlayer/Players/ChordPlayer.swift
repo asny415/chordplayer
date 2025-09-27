@@ -1,36 +1,142 @@
 import Foundation
 import Combine
+import AudioToolbox
 
 class ChordPlayer: ObservableObject {
-    private let schedulingQueue = DispatchQueue(label: "com.guitastudio.guitarScheduler", qos: .userInitiated)
+    // MARK: - Dependencies
+    private var midiSequencer: MIDISequencer
     private var midiManager: MidiManager
     var appData: AppData
-    var drumPlayer: DrumPlayer
 
-    private let notesLock = NSRecursiveLock()
-    private var scheduledWorkItems: [UUID: DispatchWorkItem] = [:]
-    private let workItemsLock = NSRecursiveLock()
-
-    private var stringNotes: [Int: UInt8] = [:] // Maps String Index (0-5) -> MIDI Note
-    private var stringNoteOffTasks: [Int: UUID] = [:] // Maps String Index (0-5) -> Scheduled Note-Off Task ID
+    // MARK: - Playback State
+    @Published var isPlaying: Bool = false
+    private var currentlyPlayingSegmentID: UUID?
     private var cancellables = Set<AnyCancellable>()
 
-    init(midiManager: MidiManager, appData: AppData, drumPlayer: DrumPlayer) {
+    init(midiSequencer: MIDISequencer, midiManager: MidiManager, appData: AppData) {
+        self.midiSequencer = midiSequencer
         self.midiManager = midiManager
         self.appData = appData
-        self.drumPlayer = drumPlayer
+        
+        // Subscribe to sequencer's isPlaying state
+        self.midiSequencer.$isPlaying.sink { [weak self] sequencerIsPlaying in
+            if !sequencerIsPlaying {
+                self?.isPlaying = false
+                self?.currentlyPlayingSegmentID = nil
+            }
+        }.store(in: &cancellables)
     }
 
     // MARK: - Public Playback Methods
 
     func play(segment: AccompanimentSegment) {
+        if isPlaying && currentlyPlayingSegmentID == segment.id {
+            stop()
+            return
+        }
+        
+        stop() // Stop any previous playback
+
+        let channel = UInt8((appData.chordMidiChannel) - 1)
+        guard let sequence = createSequence(from: segment, onChannel: channel),
+              let endpoint = midiManager.selectedOutput else {
+            print("[ChordPlayer] Failed to create sequence or get MIDI endpoint.")
+            return
+        }
+        
+        // DEBUG
+        // let sequenceDescription = MIDIDebugger.describe(sequence: sequence)
+        // print(sequenceDescription)
+        
+        midiSequencer.play(sequence: sequence, on: endpoint)
+        
+        self.isPlaying = true
+        self.currentlyPlayingSegmentID = segment.id
+    }
+
+    func previewPattern(_ pattern: GuitarPattern, midiChannel: Int) {
+        stop()
+        
+        let channel = UInt8(midiChannel - 1)
+        guard let sequence = createSequenceForPattern(pattern, onChannel: channel),
+              let endpoint = midiManager.selectedOutput else {
+            print("[ChordPlayer] Failed to create preview sequence or get MIDI endpoint.")
+            return
+        }
+        
+        midiSequencer.play(sequence: sequence, on: endpoint)
+        
+        // For preview, we don't manage the isPlaying state in the same way
+    }
+
+    func stop() {
+        midiSequencer.stop()
+        if isPlaying {
+            self.isPlaying = false
+            self.currentlyPlayingSegmentID = nil
+        }
+    }
+
+    func playSingle(chord: Chord, withPattern pattern: GuitarPattern) {
+        stop()
+        
+        let channel = UInt8((appData.chordMidiChannel) - 1)
         guard let preset = appData.preset else { return }
-        panic() // Stop any previous playback
 
-        let secondsPerBeat = 60.0 / preset.bpm
-        let playbackStartTime = ProcessInfo.processInfo.systemUptime
+        // Create a sequence for this single chord/pattern combo
+        var musicSequence: MusicSequence?
+        var status = NewMusicSequence(&musicSequence)
+        guard status == noErr, let sequence = musicSequence else { return }
 
-        // Create a flat, time-sorted list of all chord events with their absolute start times.
+        var tempoTrack: MusicTrack?
+        if MusicSequenceGetTempoTrack(sequence, &tempoTrack) == noErr, let tempoTrack = tempoTrack {
+            MusicTrackNewExtendedTempoEvent(tempoTrack, 0.0, preset.bpm)
+        }
+
+        var musicTrack: MusicTrack?
+        status = MusicSequenceNewTrack(sequence, &musicTrack)
+        guard status == noErr, let track = musicTrack else { return }
+        
+        let patternDurationBeats = Double(pattern.length) * (pattern.activeResolution == .sixteenth ? 0.25 : 0.5)
+
+        addPatternToTrack(
+            track,
+            chord: chord,
+            pattern: pattern,
+            preset: preset,
+            patternStartBeat: 0.0,
+            patternDurationBeats: patternDurationBeats,
+            dynamics: .medium, // Default dynamics for single play
+            midiChannel: channel
+        )
+        
+        guard let endpoint = midiManager.selectedOutput else {
+            print("[ChordPlayer] Failed to get MIDI endpoint for single play.")
+            return
+        }
+        
+        midiSequencer.play(sequence: sequence, on: endpoint)
+    }
+
+    // MARK: - Sequence Creation
+
+    private func createSequence(from segment: AccompanimentSegment, onChannel midiChannel: UInt8) -> MusicSequence? {
+        guard let preset = appData.preset else { return nil }
+        
+        var musicSequence: MusicSequence?
+        var status = NewMusicSequence(&musicSequence)
+        guard status == noErr, let sequence = musicSequence else { return nil }
+
+        var tempoTrack: MusicTrack?
+        if MusicSequenceGetTempoTrack(sequence, &tempoTrack) == noErr, let tempoTrack = tempoTrack {
+            MusicTrackNewExtendedTempoEvent(tempoTrack, 0.0, preset.bpm)
+        }
+
+        var musicTrack: MusicTrack?
+        status = MusicSequenceNewTrack(sequence, &musicTrack)
+        guard status == noErr, let track = musicTrack else { return nil }
+
+        // Create a flat map of all chord events with their absolute INT beat.
         let absoluteChordEvents = segment.measures.enumerated().flatMap { (measureIndex, measure) -> [TimelineEvent] in
             measure.chordEvents.map { event in
                 var absoluteEvent = event
@@ -42,234 +148,141 @@ class ChordPlayer: ObservableObject {
         // Iterate through each measure and its pattern events.
         for (measureIndex, measure) in segment.measures.enumerated() {
             for patternEvent in measure.patternEvents {
-                let absolutePatternStartBeat = measureIndex * preset.timeSignature.beatsPerMeasure + patternEvent.startBeat
-
-                // Find the chord that should be active for this pattern event.
-                // It's the last chord event that starts at or before the pattern event.
-                let activeChordEvent = absoluteChordEvents.last { $0.startBeat <= absolutePatternStartBeat }
-
-                guard let chordEvent = activeChordEvent else { continue }
+                // Calculate the absolute start beat of the pattern event as an Int first.
+                let absolutePatternStartBeatInt = measureIndex * preset.timeSignature.beatsPerMeasure + patternEvent.startBeat
                 
-                // Find the actual Chord and GuitarPattern objects from the preset library.
-                guard let chordToPlay = preset.chords.first(where: { $0.id == chordEvent.resourceId }),
+                // Find the chord that should be active for this pattern event.
+                let activeChordEvent = absoluteChordEvents.last { $0.startBeat <= absolutePatternStartBeatInt }
+
+                guard let chordEvent = activeChordEvent,
+                      let chordToPlay = preset.chords.first(where: { $0.id == chordEvent.resourceId }),
                       let patternToPlay = preset.playingPatterns.first(where: { $0.id == patternEvent.resourceId }) else {
                     continue
                 }
-
-                let scheduledUptime = playbackStartTime + (Double(absolutePatternStartBeat) * secondsPerBeat)
-                let totalDuration = Double(patternEvent.durationInBeats) * secondsPerBeat
-
-                schedulePattern(
+                
+                // Now, create the Double value for the music sequence.
+                let absolutePatternStartBeatDouble = Double(absolutePatternStartBeatInt)
+                
+                addPatternToTrack(
+                    track,
                     chord: chordToPlay,
                     pattern: patternToPlay,
                     preset: preset,
-                    scheduledUptime: scheduledUptime,
-                    totalDuration: totalDuration,
+                    patternStartBeat: absolutePatternStartBeatDouble, // Correctly a Double
+                    patternDurationBeats: Double(patternEvent.durationInBeats), // Correctly cast from Int
                     dynamics: measure.dynamics,
-                    completion: { _ in }
+                    midiChannel: midiChannel
                 )
             }
         }
+        return sequence
     }
-
-    func previewPattern(_ pattern: GuitarPattern, midiChannel: Int) {
-        guard let preset = appData.preset else { return }
-        panic()
-        let previewChord = Chord(name: "C", frets: [-1, 3, 2, 0, 1, 0], fingers: [])
+    
+    private func createSequenceForPattern(_ pattern: GuitarPattern, onChannel midiChannel: UInt8) -> MusicSequence? {
+        guard let preset = appData.preset else { return nil }
         
-        // Calculate a sensible preview duration based on pattern properties
-        let wholeNoteSeconds = (60.0 / Double(preset.bpm)) * 4.0
-        let stepsPerWholeNote = pattern.resolution == .sixteenth ? 16.0 : 8.0
-        let singleStepDuration = wholeNoteSeconds / stepsPerWholeNote
-        let previewDuration = singleStepDuration * Double(pattern.length)
+        var musicSequence: MusicSequence?
+        var status = NewMusicSequence(&musicSequence)
+        guard status == noErr, let sequence = musicSequence else { return nil }
 
-        schedulePattern(
+        var tempoTrack: MusicTrack?
+        if MusicSequenceGetTempoTrack(sequence, &tempoTrack) == noErr, let tempoTrack = tempoTrack {
+            MusicTrackNewExtendedTempoEvent(tempoTrack, 0.0, preset.bpm)
+        }
+
+        var musicTrack: MusicTrack?
+        status = MusicSequenceNewTrack(sequence, &musicTrack)
+        guard status == noErr, let track = musicTrack else { return nil }
+        
+        let previewChord = Chord(name: "C", frets: [-1, 3, 2, 0, 1, 0], fingers: [])
+        let patternDurationBeats = Double(pattern.length) * (pattern.resolution == .sixteenth ? 0.25 : 0.5)
+
+        addPatternToTrack(
+            track,
             chord: previewChord,
             pattern: pattern,
             preset: preset,
-            scheduledUptime: ProcessInfo.processInfo.systemUptime,
-            totalDuration: previewDuration,
+            patternStartBeat: 0.0,
+            patternDurationBeats: patternDurationBeats,
             dynamics: .medium,
-            midiChannel: midiChannel,
-            completion: { _ in }
+            midiChannel: midiChannel
         )
+        
+        return sequence
     }
 
-    func panic() {
-        print("[ChordPlayer] PANIC! Cancelling all scheduled events.")
-        workItemsLock.lock()
-        for item in scheduledWorkItems.values {
-            item.cancel()
-        }
-        scheduledWorkItems.removeAll()
-        workItemsLock.unlock()
+    private func addPatternToTrack(_ track: MusicTrack, chord: Chord, pattern: GuitarPattern, preset: Preset, patternStartBeat: MusicTimeStamp, patternDurationBeats: MusicTimeStamp, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100, midiChannel: UInt8) {
+        
+        let transpositionOffset = MusicTheory.KEY_CYCLE.firstIndex(of: preset.key) ?? 0
+        let fretsForPlayback = Array(chord.frets.reversed())
 
-        notesLock.lock()
-        defer { notesLock.unlock() }
+        let singleStepDurationBeats = pattern.steps.isEmpty ? patternDurationBeats : (patternDurationBeats / Double(pattern.steps.count))
 
-        midiManager.sendPanic()
-        midiManager.cancelAllPendingScheduledEvents()
-        stringNotes.removeAll()
-        stringNoteOffTasks.removeAll()
-    }
+        for (stepIndex, step) in pattern.steps.enumerated() {
+            if step.activeNotes.isEmpty { continue }
 
-    // MARK: - Scheduling Logic
-
-    func schedulePattern(chord: Chord, pattern: GuitarPattern, preset: Preset, scheduledUptime: TimeInterval, totalDuration: TimeInterval, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100, midiChannel: Int? = nil, completion: @escaping ([UUID]) -> Void) {
-        let delay = scheduledUptime - ProcessInfo.processInfo.systemUptime
-        let workItemID = UUID()
-
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self = self else { return completion([]) }
-
-            var eventIDs: [UUID] = []
-            let channel = UInt8((midiChannel ?? self.appData.chordMidiChannel) - 1)
-            let transpositionOffset = MusicTheory.KEY_CYCLE.firstIndex(of: preset.key) ?? 0
-
-            var midiNotesForChord: [Int] = Array(repeating: -1, count: 6)
-            let fretsForPlayback = Array(chord.frets.reversed())
-            for (stringIndex, fret) in fretsForPlayback.enumerated() {
-                if fret >= 0 {
-                    midiNotesForChord[stringIndex] = MusicTheory.standardGuitarTuning[stringIndex] + fret + transpositionOffset
+            let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
+                var finalFret: Int
+                if let overrideFret = step.fretOverrides[stringIndex] {
+                    finalFret = overrideFret
+                } else {
+                    guard stringIndex < fretsForPlayback.count else { return nil }
+                    finalFret = fretsForPlayback[stringIndex]
                 }
+                guard finalFret >= 0 else { return nil }
+                let noteValue = MusicTheory.standardGuitarTuning[stringIndex] + finalFret + transpositionOffset
+                return (note: UInt8(noteValue), stringIndex: stringIndex)
             }
 
-            let singleStepDurationSeconds = pattern.steps.isEmpty ? totalDuration : (totalDuration / Double(pattern.steps.count))
+            guard !activeNotesInStep.isEmpty else { continue }
 
-            DispatchQueue.main.async {
-                self.updateCurrentlyPlayingUI(chordName: chord.name)
-                self.stopSilentStrings(newChordMidiNotes: midiNotesForChord, channel: channel)
-            }
+            let velocityWithDynamics = UInt8(max(1, min(127, Double(baseVelocity) * dynamics.velocityMultiplier)))
+            let adaptiveVelocity = calculateAdaptiveVelocity(baseVelocity: velocityWithDynamics, noteCount: activeNotesInStep.count)
 
-            for (stepIndex, step) in pattern.steps.enumerated() {
-                if step.activeNotes.isEmpty {
-                    continue
-                }
+            switch step.type {
+            case .arpeggio, .strum:
+                let sortedNotes = activeNotesInStep.sorted { $0.stringIndex > $1.stringIndex }
+                let isStrum = step.type == .strum
+                let strumDelayBeats = isStrum ? strumDelayInBeats(for: step.strumSpeed, bpm: preset.bpm) : (singleStepDurationBeats / Double(activeNotesInStep.count))
+                let strumDirectionSortedNotes = isStrum ? (step.strumDirection == .down ? sortedNotes : sortedNotes.reversed()) : sortedNotes
 
-                let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
-                    var finalFret: Int
-                    if let overrideFret = step.fretOverrides[stringIndex] {
-                        finalFret = overrideFret
-                    } else {
-                        guard stringIndex < fretsForPlayback.count else { return nil }
-                        finalFret = fretsForPlayback[stringIndex]
-                    }
-
-                    guard finalFret >= 0 else { return nil }
-                    let noteValue = MusicTheory.standardGuitarTuning[stringIndex] + finalFret + transpositionOffset
-                    return (note: UInt8(noteValue), stringIndex: stringIndex)
-                }
-
-                guard !activeNotesInStep.isEmpty else { continue }
-
-                let velocityWithDynamics = UInt8(max(1, min(127, Double(baseVelocity) * dynamics.velocityMultiplier)))
-                let adaptiveVelocity = self.calculateAdaptiveVelocity(baseVelocity: velocityWithDynamics, noteCount: activeNotesInStep.count)
-
-                switch step.type {
-                case .arpeggio, .strum:
-                    let sortedNotes = activeNotesInStep.sorted { $0.stringIndex > $1.stringIndex }
-                    let isStrum = step.type == .strum
-                    let strumDelay = isStrum ? self.strumDelayInSeconds(for: step.strumSpeed) : (singleStepDurationSeconds / Double(activeNotesInStep.count))
-                    let strumDirectionSortedNotes = isStrum ? (step.strumDirection == .down ? sortedNotes : sortedNotes.reversed()) : sortedNotes
-
-                    for (noteIndex, noteItem) in strumDirectionSortedNotes.enumerated() {
-                        var calculatedDuration = totalDuration
-                        
-                        // Look ahead for the precise duration
-                        for futureIndex in (stepIndex + 1)..<pattern.steps.count {
-                            let futureStep = pattern.steps[futureIndex]
-                            if futureStep.type == .rest || futureStep.activeNotes.contains(noteItem.stringIndex) {
-                                calculatedDuration = (Double(futureIndex - stepIndex) * singleStepDurationSeconds)
-                                break
-                            }
+                for (noteIndex, noteItem) in strumDirectionSortedNotes.enumerated() {
+                    var calculatedDurationBeats = patternDurationBeats // Default duration
+                    
+                    // Look ahead for the precise duration
+                    for futureIndex in (stepIndex + 1)..<pattern.steps.count {
+                        let futureStep = pattern.steps[futureIndex]
+                        if futureStep.type == .rest || futureStep.activeNotes.contains(noteItem.stringIndex) {
+                            calculatedDurationBeats = (Double(futureIndex - stepIndex) * singleStepDurationBeats)
+                            break
                         }
-                        
-                        let noteStartTimeOffset = Double(noteIndex) * strumDelay
-                        let finalVelocity = isStrum ? adaptiveVelocity : velocityWithDynamics
-                        
-                        eventIDs.append(contentsOf: self.scheduleNote(
-                            note: noteItem.note, 
-                            stringIndex: noteItem.stringIndex, 
-                            velocity: finalVelocity, 
-                            channel: channel, 
-                            scheduledUptime: scheduledUptime + (Double(stepIndex) * singleStepDurationSeconds) + noteStartTimeOffset, 
-                            durationSeconds: calculatedDuration
-                        ))
                     }
-                case .rest:
-                    // Rests do not play notes, but they act as terminators for previous notes,
-                    // which is handled by the duration calculation logic above.
-                    break
+                    
+                    let noteStartTimeBeat = patternStartBeat + (Double(stepIndex) * singleStepDurationBeats) + (Double(noteIndex) * strumDelayBeats)
+                    let finalVelocity = isStrum ? adaptiveVelocity : velocityWithDynamics
+                    
+                    if calculatedDurationBeats > 0 {
+                        var noteMessage = MIDINoteMessage(channel: midiChannel, note: noteItem.note, velocity: finalVelocity, releaseVelocity: 0, duration: Float(calculatedDurationBeats))
+                        MusicTrackNewMIDINoteEvent(track, noteStartTimeBeat, &noteMessage)
+                    }
                 }
-            }
-            completion(eventIDs)
-            
-            self.workItemsLock.lock()
-            self.scheduledWorkItems.removeValue(forKey: workItemID)
-            self.workItemsLock.unlock()
-        }
-        
-        workItemsLock.lock()
-        scheduledWorkItems[workItemID] = workItem
-        workItemsLock.unlock()
-
-        schedulingQueue.asyncAfter(deadline: .now() + (delay > 0 ? delay : 0), execute: workItem)
-    }
-    
-    private func scheduleNote(note: UInt8, stringIndex: Int, velocity: UInt8, channel: UInt8, scheduledUptime: TimeInterval, durationSeconds: TimeInterval) -> [UUID] {
-        notesLock.lock()
-        defer { notesLock.unlock() }
-
-        var eventIDs: [UUID] = []
-        let scheduledUptimeMs = scheduledUptime * 1000.0
-
-        // --- String Muting Logic is now handled by the caller by calculating a precise duration ---
-
-        // --- Schedule New Note ---
-        let onId = self.midiManager.scheduleNoteOn(note: note, velocity: velocity, channel: channel, scheduledUptimeMs: scheduledUptimeMs)
-        self.stringNotes[stringIndex] = note
-        eventIDs.append(onId)
-
-        let scheduledNoteOffUptimeMs = scheduledUptimeMs + (durationSeconds * 1000.0)
-        let offId = self.midiManager.scheduleNoteOff(note: note, velocity: 0, channel: channel, scheduledUptimeMs: scheduledNoteOffUptimeMs)
-        
-        // Track the new note-off task by its STRING INDEX.
-        self.stringNoteOffTasks[stringIndex] = offId
-        eventIDs.append(offId)
-        return eventIDs
-    }
-    
-    private func stopSilentStrings(newChordMidiNotes: [Int], channel: UInt8) {
-        notesLock.lock()
-        defer { notesLock.unlock() }
-
-        for stringIndex in Array(stringNotes.keys) {
-            if newChordMidiNotes[stringIndex] == -1 {
-                guard let note = stringNotes[stringIndex] else { continue }
-
-                if let scheduledOffId = stringNoteOffTasks.removeValue(forKey: stringIndex) {
-                    midiManager.cancelScheduledEvent(id: scheduledOffId)
-                }
-                
-                midiManager.sendNoteOff(note: note, velocity: 0, channel: channel)
-                
-                stringNotes.removeValue(forKey: stringIndex)
+            case .rest:
+                break
             }
         }
     }
     
-    private func updateCurrentlyPlayingUI(chordName: String) {
-        DispatchQueue.main.async {
-            self.appData.currentlyPlayingChordName = chordName
-        }
-    }
-
-    private func strumDelayInSeconds(for speed: StrumSpeed) -> TimeInterval {
+    // MARK: - Helper Methods
+    
+    private func strumDelayInBeats(for speed: StrumSpeed, bpm: Double) -> MusicTimeStamp {
+        let secondsPerBeat = 60.0 / bpm
+        let delayInSeconds: TimeInterval
         switch speed {
-        case .fast: return 0.01
-        case .medium: return 0.025
-        case .slow: return 0.05
+        case .fast: delayInSeconds = 0.01
+        case .medium: delayInSeconds = 0.025
+        case .slow: delayInSeconds = 0.05
         }
+        return delayInSeconds / secondsPerBeat
     }
     
     private func calculateAdaptiveVelocity(baseVelocity: UInt8, noteCount: Int) -> UInt8 {

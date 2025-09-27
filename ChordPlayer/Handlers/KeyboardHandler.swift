@@ -84,21 +84,7 @@ class KeyboardHandler: ObservableObject {
             return
         }
         
-        // Calculate a sensible duration for the pattern based on its properties
-        let wholeNoteSeconds = (60.0 / Double(preset.bpm)) * 4.0
-        let stepsPerWholeNote = patternToPlay.resolution == .sixteenth ? 16.0 : 8.0
-        let singleStepDuration = wholeNoteSeconds / stepsPerWholeNote
-        let totalDuration = singleStepDuration * Double(patternToPlay.length)
-
-        chordPlayer.schedulePattern(
-            chord: chordToPlay,
-            pattern: patternToPlay,
-            preset: preset,
-            scheduledUptime: ProcessInfo.processInfo.systemUptime, // Play immediately
-            totalDuration: totalDuration,
-            dynamics: .medium, // Use a default dynamic for keyboard triggers
-            completion: { _ in }
-        )
+        chordPlayer.playSingle(chord: chordToPlay, withPattern: patternToPlay)
 
         DispatchQueue.main.async {
             self.lastPlayedChord = chordName

@@ -166,7 +166,7 @@ struct AccompanimentEditorView: View {
         playbackEndTask?.cancel()
         
         // Stop all sounds and reset state
-        chordPlayer.panic()
+        chordPlayer.stop()
         isPlaying = false
         playbackStartTime = nil
     }

@@ -79,21 +79,7 @@ struct ChordProgressionView: View {
     private func playChord(_ chord: Chord) {
         guard let preset = appData.preset, let activePatternId = preset.activePlayingPatternId else { return }
         if let activePattern = preset.playingPatterns.first(where: { $0.id == activePatternId }) {
-            // Calculate a sensible duration for the pattern based on its properties
-            let wholeNoteSeconds = (60.0 / Double(preset.bpm)) * 4.0
-            let stepsPerWholeNote = activePattern.resolution == .sixteenth ? 16.0 : 8.0
-            let singleStepDuration = wholeNoteSeconds / stepsPerWholeNote
-            let totalDuration = singleStepDuration * Double(activePattern.length)
-
-            chordPlayer.schedulePattern(
-                chord: chord, 
-                pattern: activePattern, 
-                preset: preset, 
-                scheduledUptime: ProcessInfo.processInfo.systemUptime, // Play immediately
-                totalDuration: totalDuration, 
-                dynamics: .medium,
-                completion: { _ in }
-            )
+            chordPlayer.playSingle(chord: chord, withPattern: activePattern)
         }
     }
 }
