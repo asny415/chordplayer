@@ -196,7 +196,7 @@ struct SoloEditorView: View {
             return
         }
         
-        let newNote = SoloNote(startTime: time, duration: 1.0, string: stringIndex, fret: currentFret, technique: currentTechnique)
+        let newNote = SoloNote(startTime: time, duration: gridSize, string: stringIndex, fret: currentFret, technique: currentTechnique)
         soloSegment.notes.append(newNote)
         recalculateDurations(forString: stringIndex)
         selectedNotes = [newNote.id]
@@ -226,6 +226,31 @@ struct SoloEditorView: View {
                 }
             } else {
                  soloSegment.notes[currentIndex].duration = nextNote.startTime - currentNote.startTime
+            }
+        }
+    }
+    
+    private func toggleTechnique(_ technique: PlayingTechnique) {
+        // Toggle technique for selected notes
+        var updatedNotes: [SoloNote] = []
+        
+        for noteId in selectedNotes {
+            if let index = soloSegment.notes.firstIndex(where: { $0.id == noteId }) {
+                var note = soloSegment.notes[index]
+                // 如果当前技巧相同，则移除技巧（设置为normal）
+                if note.technique == technique {
+                    note.technique = .normal
+                } else {
+                    note.technique = technique
+                }
+                updatedNotes.append(note)
+            }
+        }
+        
+        // 更新所有修改的音符
+        for updatedNote in updatedNotes {
+            if let index = soloSegment.notes.firstIndex(where: { $0.id == updatedNote.id }) {
+                soloSegment.notes[index] = updatedNote
             }
         }
     }
@@ -268,6 +293,27 @@ struct SoloEditorView: View {
                 }
                 return true
             }
+            
+            // Check for technique input
+            if let chars = event.characters, let firstChar = chars.first {
+                let technique: PlayingTechnique?
+                switch firstChar {
+                case "/":
+                    technique = .slide
+                case "^":
+                    technique = .bend
+                case "~":
+                    technique = .vibrato
+                default:
+                    technique = nil
+                }
+                
+                if let technique = technique {
+                    toggleTechnique(technique)
+                    return true
+                }
+            }
+            
             return false
         }
     }
