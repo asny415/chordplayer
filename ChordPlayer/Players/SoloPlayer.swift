@@ -181,15 +181,19 @@ class SoloPlayer: ObservableObject {
                     MusicTrackNewMIDINoteEvent(musicTrack, noteOnTime, &noteMessage)
                 }
 
-                // Add pitch bend events
-                let slideDurationBeats = slideTargetTime - noteOnTime
-                if slideDurationBeats > 0.01 && abs(semitoneDifference) > 0 {
-                    let finalPitchBendValue = 8192 + Int(Double(semitoneDifference) * (8191.0 / pitchBendRangeSemitones))
-                    let pitchBendSteps = max(2, Int(slideDurationBeats * 50)) // 50 steps per beat
+                // Add pitch bend events with delayed start
+                let totalSlideDuration = slideTargetTime - noteOnTime
+                let slideDelay = min(totalSlideDuration / 2.0, 0.25) // Half duration or quarter note (0.25), whichever is smaller
+                let actualSlideStartTime = noteOnTime + slideDelay
+                let actualSlideDuration = slideTargetTime - actualSlideStartTime
+                
+                if actualSlideDuration > 0.01 && abs(semitoneDifference) > 0 {
+                    let pitchBendSteps = max(2, Int(actualSlideDuration * 50)) // 50 steps per beat
                     
                     for step in 0...pitchBendSteps {
                         let t = Double(step) / Double(pitchBendSteps)
-                        let bendTime = noteOnTime + t * slideDurationBeats
+                        let bendTime = actualSlideStartTime + t * actualSlideDuration
+                        let finalPitchBendValue = 8192 + Int(Double(semitoneDifference) * (8191.0 / pitchBendRangeSemitones))
                         let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
                         let clampedPitch = max(0, min(16383, intermediatePitch))
                         
