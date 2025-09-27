@@ -17,7 +17,7 @@ struct ChordPlayerApp: App {
         let initialAppData = AppData(midiManager: initialMidiManager)
         let initialMidiSequencer = MIDISequencer(midiManager: initialMidiManager)
         // TODO: Refactor these initializers to remove dependencies on old managers
-        let initialDrumPlayer = DrumPlayer(midiManager: initialMidiManager, appData: initialAppData)
+        let initialDrumPlayer = DrumPlayer(midiSequencer: initialMidiSequencer, midiManager: initialMidiManager, appData: initialAppData)
         let initialChordPlayer = ChordPlayer(midiSequencer: initialMidiSequencer, midiManager: initialMidiManager, appData: initialAppData)
         let initialSoloPlayer = SoloPlayer(midiSequencer: initialMidiSequencer, midiManager: initialMidiManager, appData: initialAppData)
         let initialMelodicLyricPlayer = MelodicLyricPlayer(midiSequencer: initialMidiSequencer, midiManager: initialMidiManager, appData: initialAppData)

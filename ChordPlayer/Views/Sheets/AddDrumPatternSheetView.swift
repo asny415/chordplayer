@@ -120,7 +120,7 @@ struct DrumPatternEditorView: View {
             Button("Cancel", role: .cancel) { onCancel() }
             Spacer()
             Button(action: togglePlayback) {
-                Image(systemName: drumPlayer.isPreviewing ? "stop.fill" : "play.fill")
+                Image(systemName: drumPlayer.isPlaying ? "stop.fill" : "play.fill")
             }.frame(width: 50)
             Spacer()
             Button("Save") { onSave(pattern) }.buttonStyle(.borderedProminent)
@@ -128,10 +128,10 @@ struct DrumPatternEditorView: View {
     }
     
     private func togglePlayback() {
-        if drumPlayer.isPreviewing {
+        if drumPlayer.isPlaying {
             drumPlayer.stop()
         } else {
-            drumPlayer.previewPattern(pattern, bpm: bpm)
+            drumPlayer.preview(pattern: pattern)
         }
     }
 

@@ -86,7 +86,7 @@ class SoloPlayer: ObservableObject {
         }
     }
     
-    private func createSequence(from segment: SoloSegment, onChannel midiChannel: UInt8) -> MusicSequence? {
+    func createSequence(from segment: SoloSegment, onChannel midiChannel: UInt8) -> MusicSequence? {
         var musicSequence: MusicSequence?
         var status = NewMusicSequence(&musicSequence)
         guard status == noErr, let sequence = musicSequence else { return nil }

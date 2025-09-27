@@ -1,172 +1,118 @@
 import Foundation
 import Combine
+import AudioToolbox
 
 class DrumPlayer: ObservableObject {
+    // MARK: - Dependencies
+    private var midiSequencer: MIDISequencer
     private var midiManager: MidiManager
     private var appData: AppData
 
-    @Published private(set) var isPlaying: Bool = false
-    @Published private(set) var isPreviewing: Bool = false
-    @Published private(set) var currentBeat: Int = 0
+    // MARK: - Playback State
+    @Published var isPlaying: Bool = false
+    private var cancellables = Set<AnyCancellable>()
 
-    private enum PlaybackState { case stopped, playing }
-    private var playbackState: PlaybackState = .stopped
-
-    private var beatScheduler: DispatchWorkItem?
-    private var beatDurationMs: Double = 0
-    private var measureDurationMs: Double = 0
-    var startTimeMs: Double = 0
-    private var currentMeasureIndex: Int = 0
-    private(set) var lastBeatTime: Double = 0
-
-    private var previewTimer: Timer?
-
-    let beatSubject = PassthroughSubject<Int, Never>()
-
-    init(midiManager: MidiManager, appData: AppData) {
+    init(midiSequencer: MIDISequencer, midiManager: MidiManager, appData: AppData) {
+        self.midiSequencer = midiSequencer
         self.midiManager = midiManager
         self.appData = appData
+        
+        // Subscribe to the central sequencer's state
+        self.midiSequencer.$isPlaying.sink { [weak self] sequencerIsPlaying in
+            if self?.isPlaying != sequencerIsPlaying {
+                self?.isPlaying = sequencerIsPlaying
+            }
+        }.store(in: &cancellables)
+    }
+
+    /// Plays a single drum pattern for a couple of loops for preview purposes.
+    func preview(pattern: DrumPattern) {
+        let singlePatternBeats = Double(pattern.length) / (pattern.resolution == .sixteenth ? 4.0 : 2.0)
+        let previewDuration = singlePatternBeats * 2.0 // Preview for 2 loops
+
+        guard let sequence = createSequence(from: pattern, loopDurationInBeats: previewDuration),
+              let endpoint = midiManager.selectedOutput else {
+            print("[DrumPlayer] Failed to create preview sequence.")
+            return
+        }
+        midiSequencer.play(sequence: sequence, on: endpoint)
     }
 
     func playNote(midiNote: Int) {
         let channel = UInt8(appData.drumMidiChannel - 1)
         midiManager.sendNoteOn(note: UInt8(midiNote), velocity: 100, channel: channel)
+        // Schedule a note-off event shortly after, without using the sequencer.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             self.midiManager.sendNoteOff(note: UInt8(midiNote), velocity: 0, channel: channel)
         }
     }
 
-    func playActivePattern() {
-        guard let preset = appData.preset, let activePatternId = preset.activeDrumPatternId else {
-            return
-        }
-        
-        if let pattern = preset.drumPatterns.first(where: { $0.id == activePatternId }) {
-            playPattern(pattern, preset: preset)
+    /// Stops any playback handled by the central sequencer.
+    func stop() {
+        if isPlaying {
+            midiSequencer.stop()
         }
     }
 
-    func playPattern(_ pattern: DrumPattern, preset: Preset) {
-        if playbackState == .playing {
-            stop()
+    /// Creates a MusicSequence for a given drum pattern, looped for a specified duration.
+    /// This is the core method to be called by PresetArrangerPlayer.
+    /// - Parameters:
+    ///   - pattern: The `DrumPattern` to sequence.
+    ///   - loopDurationInBeats: The total duration in beats the pattern should fill.
+    /// - Returns: A `MusicSequence` containing the looped drum track, or `nil` on failure.
+    func createSequence(from pattern: DrumPattern, loopDurationInBeats: Double) -> MusicSequence? {
+        guard let preset = appData.preset else { return nil }
+
+        var musicSequence: MusicSequence?
+        var status = NewMusicSequence(&musicSequence)
+        guard status == noErr, let sequence = musicSequence else { return nil }
+
+        // Set tempo on the tempo track
+        var tempoTrack: MusicTrack?
+        if MusicSequenceGetTempoTrack(sequence, &tempoTrack) == noErr, let tempoTrack = tempoTrack {
+            MusicTrackNewExtendedTempoEvent(tempoTrack, 0.0, preset.bpm)
         }
 
-        let beatsPerMeasure = preset.timeSignature.beatsPerMeasure
-        let quarterNoteDurationMs = (60.0 / preset.bpm) * 1000.0
-        self.beatDurationMs = quarterNoteDurationMs
-        self.measureDurationMs = Double(beatsPerMeasure) * beatDurationMs
-        self.startTimeMs = ProcessInfo.processInfo.systemUptime * 1000.0
+        // Create a track for the drum events
+        var drumTrack: MusicTrack?
+        status = MusicSequenceNewTrack(sequence, &drumTrack)
+        guard status == noErr, let track = drumTrack else { return nil }
+
+        let stepsPerBeat = pattern.resolution == .sixteenth ? 4.0 : 2.0
+        let singlePatternDurationBeats = Double(pattern.length) / stepsPerBeat
         
-        let schedule = buildSchedule(from: pattern, measureDurationMs: measureDurationMs)
+        guard singlePatternDurationBeats > 0 else { return nil }
 
-        self.playbackState = .playing
-        self.isPlaying = true
-        
-        scheduleBeat(beatIndex: 0, schedule: schedule, measureDurationMs: measureDurationMs)
-    }
-    
-    func previewPattern(_ pattern: DrumPattern, bpm: Double) {
-        if isPlaying || isPreviewing {
-            stop()
-            return
-        }
+        let repeatCount = Int(ceil(loopDurationInBeats / singlePatternDurationBeats))
+        let noteDuration: Float = 0.1 // Short duration for drum hits
 
-        isPreviewing = true
-        let stepDuration = 60.0 / bpm / Double(pattern.length / 4) // Assuming 16th notes per bar
-        var currentStep = 0
+        for i in 0..<repeatCount {
+            let beatOffset = Double(i) * singlePatternDurationBeats
 
-        previewTimer = Timer.scheduledTimer(withTimeInterval: stepDuration, repeats: true) { [weak self] timer in
-            guard let self = self, self.isPreviewing else {
-                timer.invalidate()
-                return
-            }
+            for stepIndex in 0..<pattern.length {
+                let noteBeat = beatOffset + (Double(stepIndex) / stepsPerBeat)
+                
+                // Ensure notes are not scheduled beyond the total required duration
+                guard noteBeat < loopDurationInBeats else { continue }
 
-            for (instrumentIndex, instrumentRow) in pattern.patternGrid.enumerated() {
-                if instrumentRow[currentStep] {
-                    let midiNote = pattern.midiNotes[instrumentIndex]
-                    self.scheduleMidiEvent(notes: [midiNote], at: ProcessInfo.processInfo.systemUptime * 1000.0, durationMs: 100)
+                for instrumentIndex in 0..<pattern.instruments.count {
+                    if pattern.patternGrid[instrumentIndex][stepIndex] {
+                        let midiNote = UInt8(pattern.midiNotes[instrumentIndex])
+                        let velocity = UInt8(100) // Default velocity
+                        
+                        var noteMessage = MIDINoteMessage(
+                            channel: UInt8(appData.drumMidiChannel - 1),
+                            note: midiNote,
+                            velocity: velocity,
+                            releaseVelocity: 0,
+                            duration: noteDuration
+                        )
+                        MusicTrackNewMIDINoteEvent(track, noteBeat, &noteMessage)
+                    }
                 }
             }
-
-            currentStep = (currentStep + 1) % pattern.length
         }
-    }
-
-    private func scheduleBeat(beatIndex: Int, schedule: [(timestampMs: Double, notes: [Int])], measureDurationMs: Double) {
-        let measureIndex = beatIndex / appData.preset!.timeSignature.beatsPerMeasure
-        let beatInMeasure = beatIndex % appData.preset!.timeSignature.beatsPerMeasure
-
-        self.lastBeatTime = ProcessInfo.processInfo.systemUptime * 1000.0
-
-        DispatchQueue.main.async {
-            self.currentBeat = beatInMeasure + 1
-        }
-        beatSubject.send(beatInMeasure + 1)
-
-        let measureStartUptimeMs = self.startTimeMs + (Double(measureIndex) * measureDurationMs)
-
-        for event in schedule {
-            if floor(event.timestampMs / beatDurationMs) == Double(beatInMeasure) {
-                let scheduledOnUptimeMs = measureStartUptimeMs + event.timestampMs
-                scheduleMidiEvent(notes: event.notes, at: scheduledOnUptimeMs)
-            }
-        }
-
-        let nextBeatIndex = beatIndex + 1
-        let nextBeatStartUptimeMs = self.startTimeMs + (Double(nextBeatIndex) * self.beatDurationMs)
-        let nowMs = ProcessInfo.processInfo.systemUptime * 1000.0
-        let delayUntilNextBeatMs = max(0, nextBeatStartUptimeMs - nowMs)
-
-        let work = DispatchWorkItem { [weak self] in
-            guard let self = self, self.playbackState == .playing else { return }
-            self.scheduleBeat(beatIndex: nextBeatIndex, schedule: schedule, measureDurationMs: measureDurationMs)
-        }
-        beatScheduler = work
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + delayUntilNextBeatMs / 1000.0, execute: work)
-    }
-
-    public func stop() {
-        if playbackState == .stopped && !isPreviewing { return }
         
-        self.playbackState = .stopped
-        self.isPlaying = false
-        self.isPreviewing = false
-        
-        beatScheduler?.cancel()
-        beatScheduler = nil
-        previewTimer?.invalidate()
-        previewTimer = nil
-
-        midiManager.sendPanic()
-        midiManager.cancelAllPendingScheduledEvents()
-    }
-    
-    private func buildSchedule(from pattern: DrumPattern, measureDurationMs: Double) -> [(timestampMs: Double, notes: [Int])] {
-        var newSchedule: [(timestampMs: Double, notes: [Int])] = []
-        let stepDurationMs = measureDurationMs / Double(pattern.length)
-
-        for step in 0..<pattern.length {
-            var notesForStep: [Int] = []
-            for instrumentIndex in 0..<pattern.instruments.count {
-                if pattern.patternGrid[instrumentIndex][step] {
-                    let midiNote = pattern.midiNotes[instrumentIndex]
-                    notesForStep.append(midiNote)
-                }
-            }
-            
-            if !notesForStep.isEmpty {
-                let timestampMs = Double(step) * stepDurationMs
-                newSchedule.append((timestampMs: timestampMs, notes: notesForStep))
-            }
-        }
-        return newSchedule
-    }
-    
-    private func scheduleMidiEvent(notes: [Int], at timeMs: Double, velocity: UInt8 = 100, durationMs: Double = 100) {
-        let channel = UInt8(appData.drumMidiChannel - 1)
-        for note in notes {
-            midiManager.scheduleNoteOn(note: UInt8(note), velocity: velocity, channel: channel, scheduledUptimeMs: timeMs)
-            midiManager.scheduleNoteOff(note: UInt8(note), velocity: 0, channel: channel, scheduledUptimeMs: timeMs + durationMs)
-        }
+        return sequence
     }
 }

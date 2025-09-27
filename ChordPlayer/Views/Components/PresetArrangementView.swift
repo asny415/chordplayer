@@ -20,7 +20,7 @@ struct PresetArrangementView: View {
                     if presetArrangerPlayer.isPlaying {
                         presetArrangerPlayer.stop()
                     } else {
-                        presetArrangerPlayer.playCurrentPresetArrangement()
+                        presetArrangerPlayer.play()
                     }
                 }) {
                     Image(systemName: presetArrangerPlayer.isPlaying ? "stop.fill" : "play.fill")
@@ -178,7 +178,7 @@ struct SimplePresetArrangerView: View {
                     if presetArrangerPlayer.isPlaying {
                         presetArrangerPlayer.stop()
                     } else {
-                        presetArrangerPlayer.playCurrentPresetArrangement()
+                        presetArrangerPlayer.play()
                     }
                 },
                 onUpdateLength: { newLength in

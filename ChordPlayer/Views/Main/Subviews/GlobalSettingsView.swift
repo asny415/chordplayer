@@ -183,7 +183,7 @@ struct PlayingModeBadgeView: View {
 }
 
 struct DrumMachineStatusCard: View {
-    @EnvironmentObject var drumPlayer: DrumPlayer
+    @EnvironmentObject var presetArrangerPlayer: PresetArrangerPlayer
     @EnvironmentObject var appData: AppData
 
     var body: some View {
@@ -195,24 +195,24 @@ struct DrumMachineStatusCard: View {
             HStack(alignment: .center, spacing: 10) {
                 PlayingModeBadgeView(playingMode: appData.playingMode)
                 
-                Text(drumPlayer.isPlaying ? "Playing" : "Stopped")
+                Text(presetArrangerPlayer.isPlaying ? "Playing" : "Stopped")
                     .font(.system(.title, design: .rounded).weight(.bold))
             }
-            .foregroundColor(drumPlayer.isPlaying ? .green : .primary)
+            .foregroundColor(presetArrangerPlayer.isPlaying ? .green : .primary)
         }
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 60)
         .padding(8)
         .background(Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture {
-            if drumPlayer.isPlaying {
-                drumPlayer.stop()
+            if presetArrangerPlayer.isPlaying {
+                presetArrangerPlayer.stop()
             } else {
-                drumPlayer.playActivePattern()
+                presetArrangerPlayer.play()
             }
         }
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(drumPlayer.isPlaying ? Color.green : Color.secondary.opacity(0.2), lineWidth: drumPlayer.isPlaying ? 2.5 : 1)
+                .stroke(presetArrangerPlayer.isPlaying ? Color.green : Color.secondary.opacity(0.2), lineWidth: presetArrangerPlayer.isPlaying ? 2.5 : 1)
         )
     }
 }

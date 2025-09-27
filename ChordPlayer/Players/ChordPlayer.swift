@@ -120,7 +120,7 @@ class ChordPlayer: ObservableObject {
 
     // MARK: - Sequence Creation
 
-    private func createSequence(from segment: AccompanimentSegment, onChannel midiChannel: UInt8) -> MusicSequence? {
+    func createSequence(from segment: AccompanimentSegment, onChannel midiChannel: UInt8) -> MusicSequence? {
         guard let preset = appData.preset else { return nil }
         
         var musicSequence: MusicSequence?
@@ -178,7 +178,7 @@ class ChordPlayer: ObservableObject {
         return sequence
     }
     
-    private func createSequenceForPattern(_ pattern: GuitarPattern, onChannel midiChannel: UInt8) -> MusicSequence? {
+    func createSequenceForPattern(_ pattern: GuitarPattern, onChannel midiChannel: UInt8) -> MusicSequence? {
         guard let preset = appData.preset else { return nil }
         
         var musicSequence: MusicSequence?

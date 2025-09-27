@@ -58,7 +58,7 @@ class MelodicLyricPlayer: ObservableObject {
         }
     }
     
-    private func createSequence(from segment: MelodicLyricSegment, onChannel midiChannel: UInt8) -> MusicSequence? {
+    func createSequence(from segment: MelodicLyricSegment, onChannel midiChannel: UInt8) -> MusicSequence? {
         guard let preset = appData.preset else { return nil }
         
         var musicSequence: MusicSequence?

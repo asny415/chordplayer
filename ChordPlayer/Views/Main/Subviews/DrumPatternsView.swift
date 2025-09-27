@@ -37,7 +37,7 @@ struct DrumPatternsView: View {
                         Button(action: {
                             appData.preset?.activeDrumPatternId = pattern.id
                             appData.saveChanges()
-                            drumPlayer.playActivePattern()
+                            drumPlayer.preview(pattern: pattern)
                         }) {
                             DrumPatternCardView(pattern: pattern, isActive: isActive)
                         }
