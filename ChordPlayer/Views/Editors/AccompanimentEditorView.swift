@@ -17,6 +17,7 @@ struct AccompanimentEditorView: View {
 
     @State private var zoomLevel: CGFloat = 1.0
     @State private var selectedEventId: UUID? // Can be either chord or pattern
+    @State private var selectedChordId: UUID? // Track the currently selected chord resource ID
     @State private var isPlaying: Bool = false
     @State private var playbackEndTask: DispatchWorkItem?
     @State private var playbackStartTime: TimeInterval? = nil
@@ -68,7 +69,7 @@ struct AccompanimentEditorView: View {
             HSplitView {
                 // Main content: Libraries on top, timeline on bottom with a draggable splitter
                 VSplitView {
-                    ResourceLibraryView()
+                    ResourceLibraryView(segment: $segment, selectedEventId: $selectedEventId)
                     TimelineContainerView(
                         segment: $segment,
                         timeSignature: timeSignature,
@@ -382,7 +383,9 @@ struct TrackView: View {
                     TimelineEventView(event: event, type: type, isSelected: selectedEventId == event.id)
                         .frame(width: CGFloat(event.durationInBeats) * beatWidth * zoom)
                         .offset(x: (CGFloat(measureStartBeat) + CGFloat(event.startBeat)) * beatWidth * zoom)
-                        .onTapGesture { selectedEventId = event.id }
+                        .onTapGesture {
+                            selectedEventId = event.id
+                        }
                 }
             }
         }
@@ -527,6 +530,8 @@ struct SidePanelView: View {
 // MARK: - Resource Library & Buttons
 struct ResourceLibraryView: View {
     @EnvironmentObject var appData: AppData
+    @Binding var segment: AccompanimentSegment
+    @Binding var selectedEventId: UUID?
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
@@ -537,7 +542,7 @@ struct ResourceLibraryView: View {
                     if let chords = appData.preset?.chords, !chords.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 75))], spacing: 8) {
                             ForEach(chords) { chord in
-                                ResourceChordButton(chord: chord)
+                                ResourceChordButton(chord: chord, isSelected: isSelectedChord(chord.id))
                                     .onDrag {
                                         let dragData = DragData(source: .newResource, type: .chord, resourceId: chord.id, eventId: nil, durationInBeats: 4)
                                         let provider = NSItemProvider()
@@ -557,7 +562,7 @@ struct ResourceLibraryView: View {
                     if let patterns = appData.preset?.playingPatterns, !patterns.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
                             ForEach(patterns) { pattern in
-                                ResourcePatternButton(pattern: pattern)
+                                ResourcePatternButton(pattern: pattern, isSelected: isSelectedPattern(pattern.id))
                                     .onDrag {
                                         let beats = pattern.length / (pattern.resolution == .sixteenth ? 4 : 2)
                                         let dragData = DragData(source: .newResource, type: .pattern, resourceId: pattern.id, eventId: nil, durationInBeats: beats > 0 ? beats : 1)
@@ -574,21 +579,78 @@ struct ResourceLibraryView: View {
         .frame(maxWidth: .infinity)
         .padding()
     }
+    
+    private func isSelectedChord(_ chordId: UUID) -> Bool {
+        guard let selectedId = selectedEventId else { return false }
+        
+        // Find the selected event and check if it's a chord event with the specified chord ID
+        for measure in segment.measures {
+            if let chordEvent = measure.chordEvents.first(where: { $0.id == selectedId }) {
+                return chordEvent.resourceId == chordId
+            }
+        }
+        
+        return false
+    }
+    
+    private func isSelectedPattern(_ patternId: UUID) -> Bool {
+        guard let selectedId = selectedEventId else { return false }
+        
+        // Find the selected chord event
+        var selectedChordId: UUID? = nil
+        for measure in segment.measures {
+            if let chordEvent = measure.chordEvents.first(where: { $0.id == selectedId }) {
+                selectedChordId = chordEvent.resourceId
+                break
+            }
+        }
+        
+        // If a chord is selected, find all pattern events that occur at the same positions as that chord
+        if let chordId = selectedChordId {
+            for measure in segment.measures {
+                // Find chord events with the same chord ID
+                let chordEvents = measure.chordEvents.filter { $0.resourceId == chordId }
+                
+                // Check if any pattern event occurs at the same position as the chord events
+                for chordEvent in chordEvents {
+                    if let patternEvent = measure.patternEvents.first(where: { $0.startBeat == chordEvent.startBeat && $0.resourceId == patternId }) {
+                        return true
+                    }
+                }
+            }
+        }
+        
+        return false
+    }
 }
 
 
 struct ResourceChordButton: View {
     let chord: Chord
+    let isSelected: Bool
+    
     var body: some View {
         VStack(spacing: 2) {
             Text(chord.name).font(.caption).fontWeight(.semibold)
             ChordDiagramView(chord: chord, color: .primary).frame(height: 30)
-        }.padding(4).frame(width: 80, height: 50).background(Material.thin, in: RoundedRectangle(cornerRadius: 6))
+        }
+        .padding(4)
+        .frame(width: 80, height: 50)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.yellow.opacity(0.3) : Color(NSColor.controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isSelected ? Color.yellow : Color.clear, lineWidth: isSelected ? 2 : 0)
+                )
+        )
     }
 }
 
 struct ResourcePatternButton: View {
     let pattern: GuitarPattern
+    let isSelected: Bool
+    
     var body: some View {
         VStack(spacing: 4) {
             Text(pattern.name).font(.caption).fontWeight(.semibold)
@@ -597,7 +659,14 @@ struct ResourcePatternButton: View {
         }
         .padding(4)
         .frame(width: 120, height: 60)
-        .background(Material.thin, in: RoundedRectangle(cornerRadius: 6))
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.yellow.opacity(0.3) : Color(NSColor.controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isSelected ? Color.yellow : Color.clear, lineWidth: isSelected ? 2 : 0)
+                )
+        )
     }
 }
 
