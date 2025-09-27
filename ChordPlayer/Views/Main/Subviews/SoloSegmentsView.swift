@@ -178,7 +178,7 @@ struct SoloSegmentCard: View {
             if !isActive {
                 onSelect()
             }
-            soloPlayer.play(segment: segment, quantization: appData.preset?.quantize ?? .none)
+            soloPlayer.play(segment: segment)
         }
         .contextMenu {
             Button("Edit", action: onEdit)

@@ -3,6 +3,7 @@ import Combine
 
 struct SoloEditorView: View {
     @EnvironmentObject var soloPlayer: SoloPlayer
+    @EnvironmentObject var midiSequencer: MIDISequencer
     @EnvironmentObject var appData: AppData
     
     @Binding var soloSegment: SoloSegment
@@ -54,8 +55,8 @@ struct SoloEditorView: View {
                 gridSize: $gridSize,
                 zoomLevel: $zoomLevel,
                 midiChannel: $midiChannel,
-                isPlaying: .constant(soloPlayer.isPlaying),
-                playbackPosition: .constant(soloPlayer.playbackPosition),
+                isPlaying: $soloPlayer.isPlaying,
+                playbackPosition: $midiSequencer.currentTimeInBeats,
                 segmentLength: $soloSegment.lengthInBeats,
                 onPlay: playToggle,
                 onSetFret: { showingFretPopover = true }
@@ -74,7 +75,7 @@ struct SoloEditorView: View {
                     gridSize: gridSize,
                     zoomLevel: zoomLevel,
                     isPlaying: soloPlayer.isPlaying,
-                    playbackPosition: soloPlayer.playbackPosition,
+                    playbackPosition: midiSequencer.currentTimeInBeats,
                     beatWidth: beatWidth,
                     stringHeight: stringHeight,
                     onNoteSelect: selectNote,
@@ -123,7 +124,7 @@ struct SoloEditorView: View {
             .background(Color(NSColor.controlBackgroundColor))
         }
         .onKeyDown { event in handleKeyDown(event) }
-        .onDisappear(perform: { soloPlayer.stopPlayback() })
+        .onDisappear(perform: { soloPlayer.stop() })
         .onChange(of: soloSegment) { notifyChanges() }
         .onChange(of: selectedNotes) {
             if selectedNotes.count == 1, let selectedNote = soloSegment.notes.first(where: { $0.id == selectedNotes.first! }) {
@@ -140,7 +141,7 @@ struct SoloEditorView: View {
     
     // MARK: - Actions
     private func playToggle() {
-        soloPlayer.play(segment: soloSegment, quantization: .none, channel: midiChannel)
+        soloPlayer.play(segment: soloSegment, channel: midiChannel)
     }
 
     private func notifyChanges() {

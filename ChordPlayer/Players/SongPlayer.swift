@@ -67,8 +67,7 @@ class PresetArrangerPlayer: ObservableObject {
 
         // Stop all sub-players to ensure their internal states and scheduled tasks are cleared.
         chordPlayer.panic()
-        drumPlayer.stop() // Assuming drumPlayer has a similar stop/panic method
-        soloPlayer.stopPlayback()
+        soloPlayer.stop()
 
         // Also cancel any events scheduled directly by this player
         midiManager.cancelAllPendingScheduledEvents()
@@ -89,7 +88,7 @@ class PresetArrangerPlayer: ObservableObject {
         // Stop all sub-players to ensure their internal states and scheduled tasks are cleared.
         chordPlayer.panic()
         drumPlayer.stop()
-        soloPlayer.stopPlayback()
+        soloPlayer.stop()
 
         midiManager.cancelAllPendingScheduledEvents()
         midiManager.sendPanic()

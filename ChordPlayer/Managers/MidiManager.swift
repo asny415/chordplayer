@@ -47,15 +47,23 @@ class MidiManager: ObservableObject {
     private var schedulerTimer: DispatchSourceTimer?
 
     init() {
+        print("[MidiManager] init started")
         setupMidi()
         // Initial scan for outputs
         scanForOutputs()
         // Restore previously selected output
         if let savedID = UserDefaults.standard.value(forKey: "selectedMidiOutputID") as? MIDIUniqueID {
-            selectedOutput = findEndpoint(by: savedID)
+            print("[MidiManager] Found saved MIDI output ID: \(savedID)")
+            let endpoint = findEndpoint(by: savedID)
+            print("[MidiManager] Found endpoint for saved ID: \(String(describing: endpoint))")
+            selectedOutput = endpoint
+            print("[MidiManager] selectedOutput is now: \(String(describing: selectedOutput))")
+        } else {
+            print("[MidiManager] No saved MIDI output ID found.")
         }
         // start scheduler timer on midiQueue
         startScheduler()
+        print("[MidiManager] init finished")
     }
 
     deinit {
@@ -166,10 +174,13 @@ class MidiManager: ObservableObject {
             outputs.append(endpoint)
         }
         DispatchQueue.main.async {
+            print("[MidiManager] scanForOutputs found \(outputs.count) outputs.")
             self.availableOutputs = outputs
             // If no output is selected, or the selected output is no longer available, select the first one
             if self.selectedOutput == nil || !outputs.contains(where: { $0 == self.selectedOutput }) {
+                print("[MidiManager] scanForOutputs: selectedOutput is nil or not available, selecting first output.")
                 self.selectedOutput = outputs.first
+                print("[MidiManager] scanForOutputs: selectedOutput is now \(String(describing: self.selectedOutput))")
             }
         }
     }
