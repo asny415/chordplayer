@@ -76,7 +76,9 @@ class MelodicLyricPlayer: ObservableObject {
 
         enum MusicalAction {
             case playNote(item: MelodicLyricItem, offTimeInBeats: Double)
-            // TODO: Add back slide, bend, vibrato actions
+            case slide(from: MelodicLyricItem, to: MelodicLyricItem, offTimeInBeats: Double)
+            case vibrato(item: MelodicLyricItem, offTimeInBeats: Double)
+            case bend(from: MelodicLyricItem, to: MelodicLyricItem, offTimeInBeats: Double)
         }
 
         let transposition = self.transposition(forKey: preset.key)
@@ -86,9 +88,11 @@ class MelodicLyricPlayer: ObservableObject {
         let itemsSortedByTime = segment.items.sorted { $0.position < $1.position }
         var actions: [MusicalAction] = []
 
+        var consumedItemIDs = Set<UUID>() // Track items that are consumed as part of compound actions
+        
         for i in 0..<itemsSortedByTime.count {
             let currentItem = itemsSortedByTime[i]
-            if currentItem.pitch == 0 { continue } // Skip rests
+            if currentItem.pitch == 0 || consumedItemIDs.contains(currentItem.id) { continue } // Skip rests and consumed items
 
             let noteOffBeat: Double
             if let duration = currentItem.duration {
@@ -101,12 +105,60 @@ class MelodicLyricPlayer: ObservableObject {
                 noteOffBeat = endPositionIn16th * sixteenthNoteDurationInBeats
             }
 
-            // For now, all techniques are simplified to playNote
-            actions.append(.playNote(item: currentItem, offTimeInBeats: noteOffBeat))
+            // Handle techniques
+            if let technique = currentItem.technique {
+                switch technique {
+                case .slide:
+                    // Look for the next item on the same "string" (we'll define this as the same pitch range for melody)
+                    if let nextItem = itemsSortedByTime.dropFirst(i + 1).first(where: { item in
+                        item.pitch > 0 && !consumedItemIDs.contains(item.id)
+                    }) {
+                        consumedItemIDs.insert(nextItem.id)
+                        let slideOffTime = noteOffBeat // Use the original off time
+                        actions.append(.slide(from: currentItem, to: nextItem, offTimeInBeats: slideOffTime))
+                    } else {
+                        actions.append(.playNote(item: currentItem, offTimeInBeats: noteOffBeat))
+                    }
+                case .bend:
+                    if let nextItem = itemsSortedByTime.dropFirst(i + 1).first(where: { item in
+                        item.pitch > 0 && !consumedItemIDs.contains(item.id)
+                    }) {
+                        consumedItemIDs.insert(nextItem.id)
+                        let bendOffTime = noteOffBeat
+                        actions.append(.bend(from: currentItem, to: nextItem, offTimeInBeats: bendOffTime))
+                    } else {
+                        actions.append(.playNote(item: currentItem, offTimeInBeats: noteOffBeat))
+                    }
+                case .vibrato:
+                    actions.append(.vibrato(item: currentItem, offTimeInBeats: noteOffBeat))
+                case .pullOff:
+                    // Pull-off is handled by velocity adjustment
+                    actions.append(.playNote(item: currentItem, offTimeInBeats: noteOffBeat))
+                case .normal:
+                    actions.append(.playNote(item: currentItem, offTimeInBeats: noteOffBeat))
+                }
+            } else {
+                actions.append(.playNote(item: currentItem, offTimeInBeats: noteOffBeat))
+            }
         }
         
         for action in actions {
-            let velocity = UInt8(100) // Default velocity
+            // Determine velocity based on technique
+            var baseVelocity = UInt8(100)
+            
+            var shouldUsePullOffVelocity = false
+            switch action {
+            case .playNote(let item, _):
+                shouldUsePullOffVelocity = (item.technique == .pullOff)
+            case .vibrato(let item, _):
+                shouldUsePullOffVelocity = (item.technique == .pullOff)
+            case .bend(let fromItem, _, _):
+                shouldUsePullOffVelocity = (fromItem.technique == .pullOff)
+            case .slide(let fromItem, _, _):
+                shouldUsePullOffVelocity = (fromItem.technique == .pullOff)
+            }
+            
+            let velocity = shouldUsePullOffVelocity ? UInt8(max(1, Int(baseVelocity) / 2)) : baseVelocity
 
             switch action {
             case .playNote(let item, let offTimeInBeats):
@@ -118,6 +170,134 @@ class MelodicLyricPlayer: ObservableObject {
                     var noteMessage = MIDINoteMessage(channel: midiChannel, note: midiNoteNumber, velocity: velocity, releaseVelocity: 0, duration: Float(durationBeats))
                     MusicTrackNewMIDINoteEvent(track, noteOnBeat, &noteMessage)
                 }
+                
+            case .slide(let fromItem, let toItem, let offTimeInBeats):
+                guard let startMidiNote = midiNote(for: fromItem, transposition: transposition),
+                      let endMidiNote = midiNote(for: toItem, transposition: transposition) else { continue }
+                      
+                let semitoneDifference = Int(endMidiNote) - Int(startMidiNote)
+                let pitchBendRangeSemitones = 2.0
+
+                let noteOnTime = Double(fromItem.position) * sixteenthNoteDurationInBeats
+                let slideTargetTime = Double(toItem.position) * sixteenthNoteDurationInBeats
+                let finalNoteOffTime = offTimeInBeats
+                let noteDuration = finalNoteOffTime - noteOnTime
+
+                // Pluck the first note
+                if noteDuration > 0 {
+                    var noteMessage = MIDINoteMessage(channel: midiChannel, note: startMidiNote, velocity: velocity, releaseVelocity: 0, duration: Float(noteDuration))
+                    MusicTrackNewMIDINoteEvent(track, noteOnTime, &noteMessage)
+                }
+
+                // Add pitch bend events with delayed start
+                let totalSlideDuration = slideTargetTime - noteOnTime
+                let slideDelay = min(totalSlideDuration / 2.0, 0.25) // Half duration or quarter note (0.25), whichever is smaller
+                let actualSlideStartTime = noteOnTime + slideDelay
+                let actualSlideDuration = slideTargetTime - actualSlideStartTime
+                
+                if actualSlideDuration > 0.01 && abs(semitoneDifference) > 0 {
+                    let pitchBendSteps = max(2, Int(actualSlideDuration * 50)) // 50 steps per beat
+                    
+                    for step in 0...pitchBendSteps {
+                        let t = Double(step) / Double(pitchBendSteps)
+                        let bendTime = actualSlideStartTime + t * actualSlideDuration
+                        let finalPitchBendValue = 8192 + Int(Double(semitoneDifference) * (8191.0 / pitchBendRangeSemitones))
+                        let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
+                        let clampedPitch = max(0, min(16383, intermediatePitch))
+                        
+                        var pitchBendMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: UInt8(clampedPitch & 0x7F), data2: UInt8((clampedPitch >> 7) & 0x7F), reserved: 0)
+                        MusicTrackNewMIDIChannelEvent(track, bendTime, &pitchBendMessage)
+                    }
+                }
+                
+                // Reset bend after the note is off
+                var pitchBendResetMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: 0, data2: 64, reserved: 0) // 8192
+                MusicTrackNewMIDIChannelEvent(track, finalNoteOffTime + 0.01, &pitchBendResetMessage)
+                
+            case .vibrato(let item, let offTimeInBeats):
+                guard let midiNoteNumber = midiNote(for: item, transposition: transposition) else { continue }
+                let noteOnTime = Double(item.position) * sixteenthNoteDurationInBeats
+                let noteDuration = offTimeInBeats - noteOnTime
+
+                if noteDuration > 0 {
+                    var noteMessage = MIDINoteMessage(channel: midiChannel, note: midiNoteNumber, velocity: velocity, releaseVelocity: 0, duration: Float(noteDuration))
+                    MusicTrackNewMIDINoteEvent(track, noteOnTime, &noteMessage)
+                }
+
+                let vibratoDurationBeats = noteDuration
+                if vibratoDurationBeats > 0.1 {
+                    let vibratoRateHz = 5.0
+                    let beatsPerSecond = preset.bpm / 60.0
+                    let vibratoRateBeats = vibratoRateHz / beatsPerSecond
+                    
+                    let maxBendSemitones = 0.4
+                    let pitchBendRangeSemitones = 2.0
+                    let maxPitchBendAmount = (maxBendSemitones / pitchBendRangeSemitones) * 8191.0
+                    let totalCycles = vibratoDurationBeats * vibratoRateBeats
+                    let totalSteps = Int(totalCycles * 20.0)
+
+                    if totalSteps > 0 {
+                        for step in 0...totalSteps {
+                            let t_duration = Double(step) / Double(totalSteps)
+                            let t_angle = t_duration * totalCycles * 2.0 * .pi
+                            let sineValue = sin(t_angle)
+                            let pitchBendValue = 8192 + Int(sineValue * maxPitchBendAmount)
+                            let bendTime = noteOnTime + t_duration * vibratoDurationBeats
+                            
+                            var pitchBendMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: UInt8(pitchBendValue & 0x7F), data2: UInt8((pitchBendValue >> 7) & 0x7F), reserved: 0)
+                            MusicTrackNewMIDIChannelEvent(track, bendTime, &pitchBendMessage)
+                        }
+                    }
+                }
+                
+                var pitchBendResetMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: 0, data2: 64, reserved: 0) // 8192
+                MusicTrackNewMIDIChannelEvent(track, offTimeInBeats + 0.01, &pitchBendResetMessage)
+                
+            case .bend(let fromItem, let toItem, let offTimeInBeats):
+                guard let startMidiNote = midiNote(for: fromItem, transposition: transposition) else { continue }
+                
+                let noteOnTime = Double(fromItem.position) * sixteenthNoteDurationInBeats
+                let noteDuration = offTimeInBeats - noteOnTime
+
+                if noteDuration > 0 {
+                    var noteMessage = MIDINoteMessage(channel: midiChannel, note: startMidiNote, velocity: velocity, releaseVelocity: 0, duration: Float(noteDuration))
+                    MusicTrackNewMIDINoteEvent(track, noteOnTime, &noteMessage)
+                }
+
+                let intervalBeats = Double(toItem.position) * sixteenthNoteDurationInBeats - noteOnTime
+                if intervalBeats > 0.1 {
+                    let quarterIntervalBeats = intervalBeats / 4.0
+                    let bendUpStartTimeBeats = noteOnTime + quarterIntervalBeats
+                    let bendUpDurationBeats = quarterIntervalBeats
+                    let releaseStartTimeBeats = bendUpStartTimeBeats + bendUpDurationBeats
+                    let releaseDurationBeats = quarterIntervalBeats
+
+                    let bendAmountSemitones = 2.0
+                    let pitchBendRangeSemitones = 2.0
+                    let finalPitchBendValue = 8192 + Int(bendAmountSemitones * (8191.0 / pitchBendRangeSemitones))
+                    let pitchBendSteps = 10
+
+                    // Bend Up
+                    for step in 0...pitchBendSteps {
+                        let t = Double(step) / Double(pitchBendSteps)
+                        let bendTime = bendUpStartTimeBeats + t * bendUpDurationBeats
+                        let intermediatePitch = 8192 + Int(Double(finalPitchBendValue - 8192) * t)
+                        var msg = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: UInt8(intermediatePitch & 0x7F), data2: UInt8((intermediatePitch >> 7) & 0x7F), reserved: 0)
+                        MusicTrackNewMIDIChannelEvent(track, bendTime, &msg)
+                    }
+
+                    // Bend Down (Release)
+                    for step in 0...pitchBendSteps {
+                        let t = Double(step) / Double(pitchBendSteps)
+                        let bendTime = releaseStartTimeBeats + t * releaseDurationBeats
+                        let intermediatePitch = finalPitchBendValue - Int(Double(finalPitchBendValue - 8192) * t)
+                        var msg = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: UInt8(intermediatePitch & 0x7F), data2: UInt8((intermediatePitch >> 7) & 0x7F), reserved: 0)
+                        MusicTrackNewMIDIChannelEvent(track, bendTime, &msg)
+                    }
+                }
+                
+                var pitchBendResetMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: 0, data2: 64, reserved: 0) // 8192
+                MusicTrackNewMIDIChannelEvent(track, offTimeInBeats + 0.01, &pitchBendResetMessage)
             }
         }
         
