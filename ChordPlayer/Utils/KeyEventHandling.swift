@@ -23,7 +23,14 @@ struct KeyEventHandlingView: NSViewRepresentable {
         return view
     }
     
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // 尝试设置为第一响应者以接收键盘事件
+        DispatchQueue.main.async {
+            if nsView.window != nil {
+                nsView.window?.makeFirstResponder(nsView)
+            }
+        }
+    }
 }
 
 class KeyDownView: NSView {
