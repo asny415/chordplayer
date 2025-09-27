@@ -8,6 +8,7 @@ struct MelodicLyricEditorView: View {
     @EnvironmentObject private var appData: AppData
     @EnvironmentObject private var midiManager: MidiManager
     @EnvironmentObject private var midiSequencer: MIDISequencer
+    @EnvironmentObject private var melodicLyricPlayer: MelodicLyricPlayer
     @Binding var segment: MelodicLyricSegment
 
     // Editor State
@@ -19,15 +20,8 @@ struct MelodicLyricEditorView: View {
     @State private var editingWord: String = ""
     @State private var isTechniqueUpdateInternal = false
     @State private var keyMonitor: Any?
-    @State private var lastPreviewNote: UInt8?
-    @State private var isPlayingSegment = false
-    @State private var scheduledPlaybackEvents: [UUID] = []
-    @State private var playbackCompletionTask: DispatchWorkItem?
-    @State private var playbackProgress: Double = 0.0
-    @State private var playbackProgressTasks: [DispatchWorkItem] = []
-
-    // Player
-    @State private var melodicLyricPlayer: MelodicLyricPlayer?
+    @State private var lastPreviewNote: UInt8? = nil
+    
     @State private var editorMidiChannel: Int = 1
     
     // In-place name editing state
@@ -74,7 +68,7 @@ struct MelodicLyricEditorView: View {
                 zoomLevel: $zoomLevel,
                 segmentLengthInBars: $segment.lengthInBars,
                 midiChannel: $editorMidiChannel,
-                isPlayingSegment: isPlayingSegment,
+                isPlayingSegment: $melodicLyricPlayer.isPlaying,
                 onTogglePlayback: toggleSegmentPlayback
             ).padding().background(Color(NSColor.controlBackgroundColor))
             
@@ -90,13 +84,16 @@ struct MelodicLyricEditorView: View {
                         gridSizeInSteps: gridSizeInSteps
                     )
 
-                    if isPlayingSegment {
-                        let indicatorX = playbackIndicatorOffsetX()
+                    if melodicLyricPlayer.isPlaying {
+                        let totalBeats = Double(segment.lengthInBars * beatsPerBar)
+                        // Ensure we don't divide by zero and stay within bounds
+                        let progress = totalBeats > 0 ? min(max(midiSequencer.currentTimeInBeats / totalBeats, 0.0), 1.0) : 0.0
+                        let indicatorX = CGFloat(progress) * CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel
+
                         Rectangle()
                             .fill(Color.red.opacity(0.8))
                             .frame(width: 2, height: trackHeight)
                             .offset(x: indicatorX)
-                            .animation(.linear(duration: 0.05), value: playbackProgress)
                     }
 
                     if totalSteps > 0 {
@@ -164,7 +161,7 @@ struct MelodicLyricEditorView: View {
         .onChange(of: currentTechnique, perform: techniqueSelectionChanged)
         .onChange(of: segment.lengthInBars) { _ in
             clampSelectedStep()
-            stopSegmentPlayback()
+            melodicLyricPlayer.stop()
             persistSegment()
         }
         .onChange(of: gridSizeInSteps) { newValue in
@@ -175,12 +172,9 @@ struct MelodicLyricEditorView: View {
         .onAppear {
             gridSizeInSteps = segment.gridUnit ?? 1 // Use saved or default
             registerKeyMonitor()
-            if melodicLyricPlayer == nil {
-                melodicLyricPlayer = MelodicLyricPlayer(midiSequencer: midiSequencer, midiManager: midiManager, appData: appData)
-            }
         }
         .onDisappear {
-            stopSegmentPlayback()
+            melodicLyricPlayer.stop()
             stopPreview()
             unregisterKeyMonitor()
         }
@@ -434,10 +428,6 @@ struct MelodicLyricEditorView: View {
         itemIndex(at: selectedStep).map { segment.items[$0] }
     }
 
-    private func playbackIndicatorOffsetX() -> CGFloat {
-        let totalWidth = CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel
-        return CGFloat(playbackProgress) * totalWidth
-    }
 
     private var cellStatusDescription: String {
         guard totalSteps > 0 else { return "No cells" }
@@ -575,34 +565,7 @@ struct MelodicLyricEditorView: View {
     }
 
     private func toggleSegmentPlayback() {
-        if isPlayingSegment {
-            stopSegmentPlayback()
-        } else {
-            startSegmentPlayback()
-        }
-    }
-
-    private func startSegmentPlayback() {
-        guard let player = melodicLyricPlayer else { return }
-        stopSegmentPlayback()
-        stopPreview()
-        
-        player.play(segment: segment)
-        // The isPlayingSegment state should now be driven by the player's @Published property.
-        // For now, we set it manually. A future refactor could bind them.
-        self.isPlayingSegment = true
-    }
-
-    private func stopSegmentPlayback(sendNoteOff: Bool = true) {
-        melodicLyricPlayer?.stop()
-        self.isPlayingSegment = false
-        
-        // Clean up UI-related tasks
-        playbackCompletionTask?.cancel()
-        playbackCompletionTask = nil
-        cancelProgressTasks()
-        playbackProgress = 0.0
-        stopPreview()
+        melodicLyricPlayer.play(segment: segment)
     }
 
     private func previewPitch(pitch: Int, octave: Int) {
@@ -631,10 +594,6 @@ struct MelodicLyricEditorView: View {
         lastPreviewNote = nil
     }
 
-    private func cancelProgressTasks() {
-        playbackProgressTasks.forEach { $0.cancel() }
-        playbackProgressTasks.removeAll()
-    }
 
     private var sanitizedEditorMidiChannel: Int {
         min(max(editorMidiChannel, 1), 16)
@@ -650,7 +609,7 @@ struct MelodicLyricToolbar: View {
     @Binding var segmentLengthInBars: Int
     @Binding var midiChannel: Int
     @State private var showingSettings = false
-    let isPlayingSegment: Bool
+    @Binding var isPlayingSegment: Bool
     let onTogglePlayback: () -> Void
     // Corrected grid options: Label -> Number of 16th-note steps
     private let gridOptions: [(String, Int)] = [("1/4", 4), ("1/8", 2), ("1/16", 1)]

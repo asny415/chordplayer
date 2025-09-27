@@ -10,6 +10,7 @@ struct ChordPlayerApp: App {
     @StateObject private var soloPlayer: SoloPlayer
     @StateObject private var presetArrangerPlayer: PresetArrangerPlayer
     @StateObject private var keyboardHandler: KeyboardHandler
+    @StateObject private var melodicLyricPlayer: MelodicLyricPlayer
 
     init() {
         let initialMidiManager = MidiManager()
@@ -19,7 +20,8 @@ struct ChordPlayerApp: App {
         let initialDrumPlayer = DrumPlayer(midiManager: initialMidiManager, appData: initialAppData)
         let initialChordPlayer = ChordPlayer(midiSequencer: initialMidiSequencer, midiManager: initialMidiManager, appData: initialAppData)
         let initialSoloPlayer = SoloPlayer(midiSequencer: initialMidiSequencer, midiManager: initialMidiManager, appData: initialAppData)
-        let initialPresetArrangerPlayer = PresetArrangerPlayer(midiSequencer: initialMidiSequencer, midiManager: initialMidiManager, appData: initialAppData, chordPlayer: initialChordPlayer, drumPlayer: initialDrumPlayer, soloPlayer: initialSoloPlayer)
+        let initialMelodicLyricPlayer = MelodicLyricPlayer(midiSequencer: initialMidiSequencer, midiManager: initialMidiManager, appData: initialAppData)
+        let initialPresetArrangerPlayer = PresetArrangerPlayer(midiSequencer: initialMidiSequencer, midiManager: initialMidiManager, appData: initialAppData, chordPlayer: initialChordPlayer, drumPlayer: initialDrumPlayer, soloPlayer: initialSoloPlayer, melodicLyricPlayer: initialMelodicLyricPlayer)
         let initialKeyboardHandler = KeyboardHandler(midiManager: initialMidiManager, chordPlayer: initialChordPlayer, drumPlayer: initialDrumPlayer, appData: initialAppData)
 
         _appData = StateObject(wrappedValue: initialAppData)
@@ -30,6 +32,7 @@ struct ChordPlayerApp: App {
         _soloPlayer = StateObject(wrappedValue: initialSoloPlayer)
         _presetArrangerPlayer = StateObject(wrappedValue: initialPresetArrangerPlayer)
         _keyboardHandler = StateObject(wrappedValue: initialKeyboardHandler)
+        _melodicLyricPlayer = StateObject(wrappedValue: initialMelodicLyricPlayer)
 
         
     }
@@ -47,6 +50,7 @@ struct ChordPlayerApp: App {
                 .environmentObject(soloPlayer)
                 .environmentObject(presetArrangerPlayer)
                 .environmentObject(keyboardHandler)
+                .environmentObject(melodicLyricPlayer)
                 .environmentObject(PresetManager.shared)
         }
 

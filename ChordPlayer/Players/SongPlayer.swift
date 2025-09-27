@@ -25,13 +25,13 @@ class PresetArrangerPlayer: ObservableObject {
     private var currentPreset: Preset?
     private let openStringMIDINotes: [UInt8] = [64, 59, 55, 50, 45, 40]
 
-    init(midiSequencer: MIDISequencer, midiManager: MidiManager, appData: AppData, chordPlayer: ChordPlayer, drumPlayer: DrumPlayer, soloPlayer: SoloPlayer) {
+    init(midiSequencer: MIDISequencer, midiManager: MidiManager, appData: AppData, chordPlayer: ChordPlayer, drumPlayer: DrumPlayer, soloPlayer: SoloPlayer, melodicLyricPlayer: MelodicLyricPlayer) {
         self.midiManager = midiManager
         self.appData = appData
         self.chordPlayer = chordPlayer
         self.drumPlayer = drumPlayer
         self.soloPlayer = soloPlayer
-        self.melodicLyricPlayer = MelodicLyricPlayer(midiSequencer: midiSequencer, midiManager: midiManager, appData: appData)
+        self.melodicLyricPlayer = melodicLyricPlayer
     }
 
     // MARK: - Playback Control
