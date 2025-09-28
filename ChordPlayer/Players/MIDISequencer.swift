@@ -180,4 +180,80 @@ class MIDISequencer: ObservableObject {
             }
         }
     }
+
+    // MARK: - Song Model Playback
+    
+    public func play(song: MusicSong, on endpoint: MIDIEndpointRef) {
+        guard let sequence = createMusicSequence(from: song) else {
+            print("Failed to create MusicSequence from Song object.")
+            return
+        }
+        play(sequence: sequence, on: endpoint)
+    }
+    
+    private func createMusicSequence(from song: MusicSong) -> MusicSequence? {
+        var musicSequence: MusicSequence?
+        var status = NewMusicSequence(&musicSequence)
+        guard status == noErr, let sequence = musicSequence else { return nil }
+        
+        // Set Tempo
+        var tempoTrack: MusicTrack?
+        if MusicSequenceGetTempoTrack(sequence, &tempoTrack) == noErr, let tempoTrack = tempoTrack {
+            MusicTrackNewExtendedTempoEvent(tempoTrack, 0.0, song.tempo)
+        }
+        
+        for songTrackModel in song.tracks {
+            var musicTrack: MusicTrack? // This is the AudioToolbox.MusicTrack
+            status = MusicSequenceNewTrack(sequence, &musicTrack)
+            guard status == noErr, let track = musicTrack else { continue }
+            
+            // Process notes
+            for noteModel in songTrackModel.notes {
+                addNote(noteModel, to: track, channel: UInt8(songTrackModel.midiChannel))
+            }
+        }
+        
+        return sequence
+    }
+
+    private func addNote(_ note: MusicNote, to track: MusicTrack, channel: UInt8) {
+        // Add the basic note on/off event
+        var noteMessage = MIDINoteMessage(channel: channel,
+                                          note: UInt8(note.pitch),
+                                          velocity: UInt8(note.velocity),
+                                          releaseVelocity: 0,
+                                          duration: Float32(note.duration))
+        
+        MusicTrackNewMIDINoteEvent(track, note.startTime, &noteMessage)
+        
+        // Handle techniques
+        switch note.technique {
+        case .bend(let amount):
+            let bendValue = UInt16(8192 + (amount / 2.0) * 4096) // Assuming a +/- 2 semitone range
+            addPitchBendEvent(to: track, at: note.startTime, value: 8192, channel: channel) // Reset bend
+            addPitchBendEvent(to: track, at: note.startTime + 0.01, value: bendValue, channel: channel) // Apply bend
+            addPitchBendEvent(to: track, at: note.startTime + note.duration, value: 8192, channel: channel) // Reset at end
+
+        case .slide(let toPitch, let durationAtTarget):
+            let pitchDifference = toPitch - note.pitch
+            let slideDuration = note.duration - durationAtTarget
+            
+            if slideDuration > 0 {
+                let bendValue = UInt16(8192 + (Double(pitchDifference) / 2.0) * 4096) // Assuming +/- 2 semitone range
+                addPitchBendEvent(to: track, at: note.startTime, value: 8192, channel: channel) // Reset bend
+                addPitchBendEvent(to: track, at: note.startTime + slideDuration, value: bendValue, channel: channel) // Apply slide
+                addPitchBendEvent(to: track, at: note.startTime + note.duration, value: bendValue, channel: channel) // Keep bend until end
+            }
+
+        case .vibrato, .hammerOn, .pullOff, .none:
+            break
+        }
+    }
+    
+    private func addPitchBendEvent(to track: MusicTrack, at time: MusicTimeStamp, value: UInt16, channel: UInt8) {
+        let lsb = UInt8(value & 0x7F)
+        let msb = UInt8((value >> 7) & 0x7F)
+        var pitchBendMessage = MIDIChannelMessage(status: 0xE0 | channel, data1: lsb, data2: msb, reserved: 0)
+        MusicTrackNewMIDIChannelEvent(track, time, &pitchBendMessage)
+    }
 }
