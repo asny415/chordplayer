@@ -42,35 +42,26 @@ class SoloPlayer: ObservableObject {
     }
 
     func play(segment: SoloSegment, channel: UInt8 = 0) {
-        print("[SoloPlayer] play() called.")
+        print("[SoloPlayer] play() called with new MusicSong interface.")
         if isPlaying && currentlyPlayingSegmentID == segment.id {
             print("[SoloPlayer] play() -> stopping existing playback.")
             stop()
             return
         }
         
-        print("[SoloPlayer] play() -> stopping any previous playback.")
         stop() // Stop any previous playback
 
-        // Set the pitch bend range for the channel before playing
-        midiManager.setPitchBendRange(channel: channel, rangeInSemitones: 2)
+        // The new sequencer handles pitch bend range internally if needed.
+        // midiManager.setPitchBendRange(channel: channel, rangeInSemitones: 2)
 
-        guard let sequence = createSequence(from: segment, onChannel: channel),
-              let endpoint = midiManager.selectedOutput else {
-            print("Failed to create sequence or get MIDI endpoint.")
+        let song = createSong(from: segment, onChannel: channel)
+        guard let endpoint = midiManager.selectedOutput else {
+            print("Failed to get MIDI endpoint.")
             return
         }
         
+        midiSequencer.play(song: song, on: endpoint)
         
-        // MARK: - DEBUG: Print MusicSequence
-        let sequenceDescription = MIDIDebugger.describe(sequence: sequence)
-        print(sequenceDescription)
-        // END DEBUG
-        
-        midiSequencer.play(sequence: sequence, on: endpoint)
-        
-        // Update local state
-        print("[SoloPlayer] play() -> setting self.isPlaying = true")
         self.isPlaying = true
         self.currentlyPlayingSegmentID = segment.id
     }
@@ -78,7 +69,6 @@ class SoloPlayer: ObservableObject {
     func stop() {
         print("[SoloPlayer] stop() called.")
         midiSequencer.stop()
-        // Directly update state here to be more robust, not just relying on the sink.
         if isPlaying {
             self.isPlaying = false
             self.currentlyPlayingSegmentID = nil
@@ -86,6 +76,73 @@ class SoloPlayer: ObservableObject {
         }
     }
     
+    private func createSong(from segment: SoloSegment, onChannel midiChannel: UInt8) -> MusicSong {
+        let notesSortedByTime = segment.notes.sorted { $0.startTime < $1.startTime }
+        let transposition = self.transposition(forKey: appData.preset?.key ?? "C")
+        var consumedNoteIDs = Set<UUID>()
+        var musicNotes: [MusicNote] = []
+
+        for i in 0..<notesSortedByTime.count {
+            let currentNote = notesSortedByTime[i]
+            if consumedNoteIDs.contains(currentNote.id) || currentNote.fret < 0 { continue }
+
+            let noteOffTime: Double
+            if let nextNoteOnSameString = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
+                noteOffTime = nextNoteOnSameString.startTime
+            } else {
+                noteOffTime = currentNote.startTime + (currentNote.duration ?? 1.0)
+            }
+            let duration = noteOffTime - currentNote.startTime
+            guard duration > 0 else { continue }
+
+            let pitch = midiNote(from: currentNote.string, fret: currentNote.fret, transposition: transposition)
+            var technique: MusicPlayingTechnique? = nil
+
+            switch currentNote.technique {
+            case .slide:
+                if let targetNote = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
+                    consumedNoteIDs.insert(targetNote.id)
+                    let targetPitch = midiNote(from: targetNote.string, fret: targetNote.fret, transposition: transposition)
+                    let durationAtTarget = targetNote.duration ?? 1.0
+                    technique = .slide(toPitch: Int(targetPitch), durationAtTarget: durationAtTarget)
+                } else {
+                    technique = nil // Slide to nowhere, treat as normal
+                }
+            case .bend:
+                // The old logic bent to a note on the same string. We simplify this to a standard 2-semitone bend.
+                technique = .bend(amount: 2.0)
+            case .vibrato:
+                technique = .vibrato
+            case .pullOff:
+                technique = .pullOff
+            case .normal:
+                technique = nil
+            }
+            
+            let velocity = (currentNote.technique == .pullOff) ? 50 : 100
+
+            let musicNote = MusicNote(startTime: currentNote.startTime,
+                                      duration: duration,
+                                      pitch: Int(pitch),
+                                      velocity: velocity,
+                                      technique: technique)
+            musicNotes.append(musicNote)
+        }
+
+        let soloTrack = SongTrack(instrumentName: "Solo Guitar",
+                                  midiChannel: Int(midiChannel),
+                                  notes: musicNotes)
+        
+        let song = MusicSong(tempo: appData.preset?.bpm ?? 120.0,
+                             key: appData.preset?.key ?? "C",
+                             timeSignature: MusicTimeSignature(numerator: 4, denominator: 4),
+                             tracks: [soloTrack])
+        
+        return song
+    }
+
+    // MARK: - Deprecated API for Backward Compatibility
+
     func createSequence(from segment: SoloSegment, onChannel midiChannel: UInt8) -> MusicSequence? {
         var musicSequence: MusicSequence?
         var status = NewMusicSequence(&musicSequence)
@@ -93,13 +150,11 @@ class SoloPlayer: ObservableObject {
 
         let bpm = appData.preset?.bpm ?? 120.0
 
-        // Get the tempo track and set the BPM.
         var tempoTrack: MusicTrack?
         if MusicSequenceGetTempoTrack(sequence, &tempoTrack) == noErr, let tempoTrack = tempoTrack {
             status = MusicTrackNewExtendedTempoEvent(tempoTrack, 0.0, bpm)
             if status != noErr {
                 print("Failed to set tempo. Status: \(status)")
-                // Not returning nil here, as we can proceed without the tempo event if needed.
             }
         } else {
             print("Failed to get tempo track.")
@@ -115,7 +170,6 @@ class SoloPlayer: ObservableObject {
         var consumedNoteIDs = Set<UUID>()
         var actions: [MusicalAction] = []
 
-        // 1. Build a list of `MusicalAction`s (reusing existing logic)
         for i in 0..<notesSortedByTime.count {
             let currentNote = notesSortedByTime[i]
             if consumedNoteIDs.contains(currentNote.id) || currentNote.fret < 0 { continue }
@@ -153,11 +207,9 @@ class SoloPlayer: ObservableObject {
             }
         }
 
-        // 2. Process actions and add events to the MusicTrack
         for action in actions {
             var baseVelocity = UInt8(100)
             
-            // Determine the note to check for pull-off technique
             var shouldUsePullOffVelocity = false
             switch action {
             case .playNote(let note, _):
@@ -192,20 +244,18 @@ class SoloPlayer: ObservableObject {
                 let finalNoteOffTime = offTime
                 let noteDuration = finalNoteOffTime - noteOnTime
 
-                // Pluck the first note
                 if noteDuration > 0 {
                     var noteMessage = MIDINoteMessage(channel: midiChannel, note: startMidiNote, velocity: velocity, releaseVelocity: 0, duration: Float(noteDuration))
                     MusicTrackNewMIDINoteEvent(musicTrack, noteOnTime, &noteMessage)
                 }
 
-                // Add pitch bend events with delayed start
                 let totalSlideDuration = slideTargetTime - noteOnTime
-                let slideDelay = min(totalSlideDuration / 2.0, 0.25) // Half duration or quarter note (0.25), whichever is smaller
+                let slideDelay = min(totalSlideDuration / 2.0, 0.25)
                 let actualSlideStartTime = noteOnTime + slideDelay
                 let actualSlideDuration = slideTargetTime - actualSlideStartTime
                 
                 if actualSlideDuration > 0.01 && abs(semitoneDifference) > 0 {
-                    let pitchBendSteps = max(2, Int(actualSlideDuration * 50)) // 50 steps per beat
+                    let pitchBendSteps = max(2, Int(actualSlideDuration * 50))
                     
                     for step in 0...pitchBendSteps {
                         let t = Double(step) / Double(pitchBendSteps)
@@ -219,8 +269,7 @@ class SoloPlayer: ObservableObject {
                     }
                 }
                 
-                // Reset bend after the note is off
-                var pitchBendResetMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: 0, data2: 64, reserved: 0) // 8192
+                var pitchBendResetMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: 0, data2: 64, reserved: 0)
                 MusicTrackNewMIDIChannelEvent(musicTrack, finalNoteOffTime + 0.01, &pitchBendResetMessage)
 
             case .vibrato(let note, let offTime):
@@ -259,7 +308,7 @@ class SoloPlayer: ObservableObject {
                     }
                 }
                 
-                var pitchBendResetMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: 0, data2: 64, reserved: 0) // 8192
+                var pitchBendResetMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: 0, data2: 64, reserved: 0)
                 MusicTrackNewMIDIChannelEvent(musicTrack, offTime + 0.01, &pitchBendResetMessage)
 
             case .bend(let fromNote, let toNote, let offTime):
@@ -304,13 +353,15 @@ class SoloPlayer: ObservableObject {
                     }
                 }
                 
-                var pitchBendResetMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: 0, data2: 64, reserved: 0) // 8192
+                var pitchBendResetMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: 0, data2: 64, reserved: 0)
                 MusicTrackNewMIDIChannelEvent(musicTrack, offTime + 0.01, &pitchBendResetMessage)
             }
         }
         
         return sequence
     }
+
+
 
     private func transposition(forKey key: String) -> Int {
         let keyMap: [String: Int] = [
