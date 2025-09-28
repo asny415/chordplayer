@@ -51,8 +51,7 @@ class SoloPlayer: ObservableObject {
         
         stop() // Stop any previous playback
 
-        // The new sequencer handles pitch bend range internally if needed.
-        // midiManager.setPitchBendRange(channel: channel, rangeInSemitones: 2)
+        midiManager.setPitchBendRange(channel: channel, rangeInSemitones: 2)
 
         let song = createSong(from: segment, onChannel: channel)
         guard let endpoint = midiManager.selectedOutput else {
