@@ -113,27 +113,17 @@ struct MelodicLyricEditorView: View {
                                                 cellWidth: cellWidth,
                                                 unitWidth: stepWidth
                                             )
-                                            .offset(x: CGFloat(item.position) * stepWidth)
                                             .contentShape(Rectangle())
-                                            .onTapGesture(count: 2, coordinateSpace: .named("timeline")) { location in
-                                                let rawStep = Int(location.x / stepWidth)
-                                                let clamped = min(max(rawStep, 0), totalSteps > 0 ? totalSteps - 1 : 0)
-                                                let snapped = snapStep(clamped)
-
-                                                if let itemIndex = segment.items.firstIndex(where: {
-                                                    let item = $0
-                                                    let start = item.position
-                                                    let end = start + (item.duration ?? stepStride)
-                                                    return (start..<end).contains(snapped)
-                                                }) {
-                                                    let clickedItem = segment.items[itemIndex]
-                                                    selectStep(clickedItem.position)
-                                                    startWordEditing()
-                                                }
+                                            .onTapGesture(count: 2) { 
+                                                selectStep(item.position)
+                                                startWordEditing()
                                             }
-                                            .onTapGesture(count: 1, coordinateSpace: .named("timeline")) { location in
-                                                handleBackgroundTap(at: location)
+                                            .onTapGesture(count: 1) { location in
+                                                let tappedSubStep = Int(location.x / stepWidth)
+                                                let newSelectedStep = item.position + tappedSubStep
+                                                selectStep(newSelectedStep)
                                             }
+                                            .offset(x: CGFloat(item.position) * stepWidth)
                                         }
                     if let editingStep = editingWordStep {
                         let editorWidth = max(stepWidth * CGFloat(max(gridSizeInSteps, 1)) - 8, 100)
@@ -149,7 +139,6 @@ struct MelodicLyricEditorView: View {
                             )
                     }
                 }
-                .coordinateSpace(name: "timeline")
                 .frame(width: CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel, height: trackHeight)
                 .padding(.vertical, 12)
                 .contentShape(Rectangle())
