@@ -287,9 +287,9 @@ class MIDISequencer: ObservableObject {
                 let pitchBendRange = Double(MidiManager.pitchBendRange)
                 let bendValue = UInt16(8192 + (amount / pitchBendRange) * 8191.0)
 
-                addPitchBendEvent(to: track, at: note.startTime, value: 8192, channel: channel)
-                addPitchBendEvent(to: track, at: note.startTime + 0.01, value: bendValue, channel: channel)
-                addPitchBendEvent(to: track, at: note.startTime + note.duration, value: 8192, channel: channel)
+                addPitchBendEvent(to: track, at: note.startTime, value: 8192, channel: channel) // Reset bend
+                addPitchBendEvent(to: track, at: note.startTime + 0.01, value: bendValue, channel: channel) // Apply bend
+                addPitchBendEvent(to: track, at: note.startTime + note.duration, value: 8192, channel: channel) // Reset at end
             }
         }
     }

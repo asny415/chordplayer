@@ -35,20 +35,94 @@ class MelodicLyricPlayer: ObservableObject {
         stop()
 
         // TODO: Add a dedicated MIDI channel for melody in AppData
-        let channel: UInt8 = 3 
+        let channel: UInt8 = 3
         midiManager.setPitchBendRange(channel: channel)
 
-        guard let sequence = createSequence(from: segment, onChannel: channel),
-              let endpoint = midiManager.selectedOutput else {
-            print("[MelodicLyricPlayer] Failed to create sequence or get MIDI endpoint.")
+        let song = createSong(from: segment, onChannel: channel)
+        guard let endpoint = midiManager.selectedOutput else {
+            print("[MelodicLyricPlayer] Failed to get MIDI endpoint.")
             return
         }
         
-        midiSequencer.play(sequence: sequence, on: endpoint)
+        midiSequencer.play(song: song, on: endpoint)
         
         self.isPlaying = true
         self.currentlyPlayingSegmentID = segment.id
     }
+
+    private func createSong(from segment: MelodicLyricSegment, onChannel midiChannel: UInt8) -> MusicSong {
+        guard let preset = appData.preset else {
+            return MusicSong(tempo: 120, key: "C", timeSignature: .init(numerator: 4, denominator: 4), tracks: [])
+        }
+        
+        var musicNotes: [MusicNote] = []
+        let itemsSorted = segment.items.sorted { $0.position < $1.position }
+        var consumedItemIDs = Set<UUID>()
+        let transposition = self.transposition(forKey: preset.key)
+        let sixteenthNote = 0.25
+        let segmentEndBeat = Double(segment.lengthInBars * preset.timeSignature.beatsPerMeasure)
+
+        for i in 0..<itemsSorted.count {
+            let currentItem = itemsSorted[i]
+            if consumedItemIDs.contains(currentItem.id) || currentItem.pitch == 0 { continue }
+
+            let startTime = Double(currentItem.position) * sixteenthNote
+            var duration: Double
+            var technique: MusicPlayingTechnique? = nil
+
+            // Default duration calculation
+            let noteOffBeat: Double
+            if let duration16ths = currentItem.duration {
+                noteOffBeat = Double(currentItem.position + duration16ths) * sixteenthNote
+            } else {
+                let nextNoteStartBeat = itemsSorted.dropFirst(i + 1).first(where: { $0.pitch > 0 })
+                    .map { Double($0.position) * sixteenthNote }
+                noteOffBeat = nextNoteStartBeat ?? segmentEndBeat
+            }
+            duration = noteOffBeat - startTime
+
+            // Technique handling
+            if currentItem.technique == .slide, let targetItem = itemsSorted.dropFirst(i + 1).first(where: { $0.pitch > 0 && !consumedItemIDs.contains($0.id) }) {
+                consumedItemIDs.insert(targetItem.id)
+                
+                guard let targetPitch = midiNote(for: targetItem, transposition: transposition) else { continue }
+                
+                let slideTransitionDuration = (Double(targetItem.position) * sixteenthNote) - startTime
+                
+                // Calculate target item's duration in beats
+                let targetNoteOffBeat: Double
+                if let targetDuration16ths = targetItem.duration {
+                    targetNoteOffBeat = Double(targetItem.position + targetDuration16ths) * sixteenthNote
+                } else {
+                    let nextTargetNoteStartBeat = itemsSorted.dropFirst(i + 2).first(where: { $0.pitch > 0 })
+                        .map { Double($0.position) * sixteenthNote }
+                    targetNoteOffBeat = nextTargetNoteStartBeat ?? segmentEndBeat
+                }
+                let durationAtTarget = targetNoteOffBeat - (Double(targetItem.position) * sixteenthNote)
+
+                duration = slideTransitionDuration
+                technique = .slide(toPitch: Int(targetPitch), durationAtTarget: durationAtTarget)
+
+            } else if currentItem.technique == .bend {
+                technique = .bend(amount: 2.0)
+            } else if currentItem.technique == .vibrato {
+                technique = .vibrato
+            } else if currentItem.technique == .pullOff {
+                technique = .pullOff
+            }
+
+            guard duration > 0, let pitch = midiNote(for: currentItem, transposition: transposition) else { continue }
+            
+            let velocity = (currentItem.technique == .pullOff) ? 50 : 100
+            let musicNote = MusicNote(startTime: startTime, duration: duration, pitch: Int(pitch), velocity: velocity, technique: technique)
+            musicNotes.append(musicNote)
+        }
+
+        let track = SongTrack(instrumentName: "Melody", midiChannel: Int(midiChannel), notes: musicNotes)
+        let song = MusicSong(tempo: preset.bpm, key: preset.key, timeSignature: .init(numerator: preset.timeSignature.beatsPerMeasure, denominator: preset.timeSignature.beatUnit), tracks: [track])
+        return song
+    }
+
 
     func stop() {
         midiSequencer.stop()
