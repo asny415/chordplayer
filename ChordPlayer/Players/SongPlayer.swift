@@ -46,13 +46,13 @@ class PresetArrangerPlayer: ObservableObject {
             return
         }
 
-        guard let masterSequence = createMasterSequence(for: preset),
+        guard let masterSong = createMasterSong(for: preset),
               let endpoint = midiManager.selectedOutput else {
-            print("[PresetArrangerPlayer] Failed to create master sequence or get MIDI endpoint.")
+            print("[PresetArrangerPlayer] Failed to create master song or get MIDI endpoint.")
             return
         }
         
-        midiSequencer.play(sequence: masterSequence, on: endpoint)
+        midiSequencer.play(song: masterSong, on: endpoint)
     }
 
     func stop() {
@@ -73,7 +73,72 @@ class PresetArrangerPlayer: ObservableObject {
         midiSequencer.seek(to: beat)
     }
 
-    // MARK: - Master Sequence Creation
+    // MARK: - Master Song Creation (New)
+
+    private func createMasterSong(for preset: Preset) -> MusicSong? {
+        var masterSong = MusicSong(
+            tempo: preset.bpm,
+            key: preset.key,
+            timeSignature: .init(numerator: preset.timeSignature.beatsPerMeasure, denominator: preset.timeSignature.beatUnit),
+            tracks: []
+        )
+
+        // 1. Drum Track
+        if !preset.arrangement.drumTrack.isMuted {
+            for segment in preset.arrangement.drumTrack.segments {
+                guard let pattern = appData.getDrumPattern(for: segment.patternId),
+                      let drumSong = drumPlayer.createSong(from: pattern, loopDurationInBeats: segment.durationInBeats) else {
+                    continue
+                }
+                masterSong.merge(with: drumSong, at: segment.startBeat)
+            }
+        }
+        
+        // 2. Guitar Tracks (Solo & Accompaniment)
+        for guitarTrack in preset.arrangement.guitarTracks where !guitarTrack.isMuted {
+            for segment in guitarTrack.segments {
+                let channel = UInt8((guitarTrack.midiChannel ?? appData.chordMidiChannel) - 1)
+                // Set pitch bend range for this channel before creating the song
+                midiManager.setPitchBendRange(channel: channel)
+                
+                var segmentSong: MusicSong?
+                
+                switch segment.type {
+                case .solo(let segmentId):
+                    if let soloData = appData.getSoloSegment(for: segmentId) {
+                        segmentSong = soloPlayer.createSong(from: soloData, onChannel: channel)
+                    }
+                case .accompaniment(let segmentId):
+                    if let accompData = appData.getAccompanimentSegment(for: segmentId) {
+                        segmentSong = chordPlayer.createSong(from: accompData, onChannel: channel)
+                    }
+                }
+                
+                if let song = segmentSong {
+                    masterSong.merge(with: song, at: segment.startBeat)
+                }
+            }
+        }
+        
+        // 3. Lyrics Tracks (Melody)
+        for lyricsTrack in preset.arrangement.lyricsTracks where !lyricsTrack.isMuted {
+            for segment in lyricsTrack.lyrics {
+                 if let melodicData = preset.melodicLyricSegments.first(where: { $0.id == segment.id }) {
+                    let channel = UInt8((lyricsTrack.midiChannel ?? 4) - 1) // Default to channel 4
+                    // Set pitch bend range for this channel before creating the song
+                    midiManager.setPitchBendRange(channel: channel)
+
+                    if let lyricSong = melodicLyricPlayer.createSong(from: melodicData, onChannel: channel) {
+                        masterSong.merge(with: lyricSong, at: segment.startBeat)
+                    }
+                 }
+            }
+        }
+
+        return masterSong
+    }
+
+    // MARK: - Master Sequence Creation (Legacy)
 
     private func createMasterSequence(for preset: Preset) -> MusicSequence? {
         var masterSequence: MusicSequence?

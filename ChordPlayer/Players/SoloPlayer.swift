@@ -53,9 +53,9 @@ class SoloPlayer: ObservableObject {
 
         midiManager.setPitchBendRange(channel: channel)
 
-        let song = createSong(from: segment, onChannel: channel)
-        guard let endpoint = midiManager.selectedOutput else {
-            print("Failed to get MIDI endpoint.")
+        guard let song = createSong(from: segment, onChannel: channel),
+              let endpoint = midiManager.selectedOutput else {
+            print("Failed to create song or get MIDI endpoint.")
             return
         }
         
@@ -75,9 +75,11 @@ class SoloPlayer: ObservableObject {
         }
     }
     
-    private func createSong(from segment: SoloSegment, onChannel midiChannel: UInt8) -> MusicSong {
+    func createSong(from segment: SoloSegment, onChannel midiChannel: UInt8) -> MusicSong? {
+        guard let preset = appData.preset else { return nil }
+
         let notesSortedByTime = segment.notes.sorted { $0.startTime < $1.startTime }
-        let transposition = self.transposition(forKey: appData.preset?.key ?? "C")
+        let transposition = self.transposition(forKey: preset.key)
         var consumedNoteIDs = Set<UUID>()
         var musicNotes: [MusicNote] = []
 

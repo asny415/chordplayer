@@ -70,6 +70,22 @@ public enum MusicPlayingTechnique: Codable {
     case slide(toPitch: Int, durationAtTarget: Double)
 }
 
+// MARK: - Merge Utility
+
+extension MusicSong {
+    mutating func merge(with otherSong: MusicSong, at beatOffset: Double) {
+        for var track in otherSong.tracks {
+            // Offset all notes in the track
+            track.notes = track.notes.map { note in
+                var offsetNote = note
+                offsetNote.startTime += beatOffset
+                return offsetNote
+            }
+            self.tracks.append(track)
+        }
+    }
+}
+
 // MARK: - JSON Dump Utility
 
 extension MusicSong {

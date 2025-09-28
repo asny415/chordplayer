@@ -38,9 +38,9 @@ class MelodicLyricPlayer: ObservableObject {
         let channel: UInt8 = 3
         midiManager.setPitchBendRange(channel: channel)
 
-        let song = createSong(from: segment, onChannel: channel)
-        guard let endpoint = midiManager.selectedOutput else {
-            print("[MelodicLyricPlayer] Failed to get MIDI endpoint.")
+        guard let song = createSong(from: segment, onChannel: channel),
+              let endpoint = midiManager.selectedOutput else {
+            print("[MelodicLyricPlayer] Failed to create song or get MIDI endpoint.")
             return
         }
         
@@ -50,10 +50,8 @@ class MelodicLyricPlayer: ObservableObject {
         self.currentlyPlayingSegmentID = segment.id
     }
 
-    private func createSong(from segment: MelodicLyricSegment, onChannel midiChannel: UInt8) -> MusicSong {
-        guard let preset = appData.preset else {
-            return MusicSong(tempo: 120, key: "C", timeSignature: .init(numerator: 4, denominator: 4), tracks: [])
-        }
+    func createSong(from segment: MelodicLyricSegment, onChannel midiChannel: UInt8) -> MusicSong? {
+        guard let preset = appData.preset else { return nil }
         
         var musicNotes: [MusicNote] = []
         let itemsSorted = segment.items.sorted { $0.position < $1.position }

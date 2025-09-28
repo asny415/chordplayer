@@ -30,12 +30,60 @@ class DrumPlayer: ObservableObject {
         let singlePatternBeats = Double(pattern.length) / (pattern.resolution == .sixteenth ? 4.0 : 2.0)
         let previewDuration = singlePatternBeats * 2.0 // Preview for 2 loops
 
-        guard let sequence = createSequence(from: pattern, loopDurationInBeats: previewDuration),
+        guard let song = createSong(from: pattern, loopDurationInBeats: previewDuration),
               let endpoint = midiManager.selectedOutput else {
-            print("[DrumPlayer] Failed to create preview sequence.")
+            print("[DrumPlayer] Failed to create preview song.")
             return
         }
-        midiSequencer.play(sequence: sequence, on: endpoint)
+        midiSequencer.play(song: song, on: endpoint)
+    }
+
+    func createSong(from pattern: DrumPattern, loopDurationInBeats: Double) -> MusicSong? {
+        guard let preset = appData.preset else { return nil }
+
+        var musicNotes: [MusicNote] = []
+        let channel = UInt8(appData.drumMidiChannel - 1)
+
+        let stepsPerBeat = pattern.resolution == .sixteenth ? 4.0 : 2.0
+        let singlePatternDurationBeats = Double(pattern.length) / stepsPerBeat
+        
+        guard singlePatternDurationBeats > 0 else { return nil }
+
+        let repeatCount = Int(ceil(loopDurationInBeats / singlePatternDurationBeats))
+        let noteDuration: Float = 0.1 // Short duration for drum hits
+
+        for i in 0..<repeatCount {
+            let beatOffset = Double(i) * singlePatternDurationBeats
+
+            for stepIndex in 0..<pattern.length {
+                let noteBeat = beatOffset + (Double(stepIndex) / stepsPerBeat)
+                
+                // Ensure notes are not scheduled beyond the total required duration
+                guard noteBeat < loopDurationInBeats else { continue }
+
+                for instrumentIndex in 0..<pattern.instruments.count {
+                    if pattern.patternGrid[instrumentIndex][stepIndex] {
+                        let midiNote = pattern.midiNotes[instrumentIndex]
+                        let velocity = 100
+                        
+                        let musicNote = MusicNote(startTime: noteBeat, 
+                                                  duration: Double(noteDuration), 
+                                                  pitch: midiNote, 
+                                                  velocity: velocity, 
+                                                  technique: nil)
+                        musicNotes.append(musicNote)
+                    }
+                }
+            }
+        }
+
+        let track = SongTrack(instrumentName: "Drums", midiChannel: Int(channel), notes: musicNotes)
+        let song = MusicSong(tempo: preset.bpm, 
+                             key: preset.key, 
+                             timeSignature: .init(numerator: preset.timeSignature.beatsPerMeasure, 
+                                                  denominator: preset.timeSignature.beatUnit), 
+                             tracks: [track])
+        return song
     }
 
     func playNote(midiNote: Int) {

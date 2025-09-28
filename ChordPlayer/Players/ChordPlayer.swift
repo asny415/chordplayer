@@ -118,7 +118,7 @@ class ChordPlayer: ObservableObject {
 
     // MARK: - Sequence Creation
 
-    private func createSong(from segment: AccompanimentSegment, onChannel midiChannel: UInt8) -> MusicSong? {
+    func createSong(from segment: AccompanimentSegment, onChannel midiChannel: UInt8) -> MusicSong? {
         guard let preset = appData.preset else { return nil }
         
         var allNotes: [MusicNote] = []
