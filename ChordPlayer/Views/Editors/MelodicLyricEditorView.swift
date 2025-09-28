@@ -39,6 +39,7 @@ struct MelodicLyricEditorView: View {
 
     init(segment: Binding<MelodicLyricSegment>) {
         self._segment = segment
+        self._selectedStep = State(initialValue: 0)
     }
 
     var body: some View {
@@ -114,14 +115,24 @@ struct MelodicLyricEditorView: View {
                                             )
                                             .offset(x: CGFloat(item.position) * stepWidth)
                                             .contentShape(Rectangle())
-                                            .onTapGesture(count: 2) { 
-                                                selectStep(item.position)
-                                                startWordEditing()
+                                            .onTapGesture(count: 2, coordinateSpace: .named("timeline")) { location in
+                                                let rawStep = Int(location.x / stepWidth)
+                                                let clamped = min(max(rawStep, 0), totalSteps > 0 ? totalSteps - 1 : 0)
+                                                let snapped = snapStep(clamped)
+
+                                                if let itemIndex = segment.items.firstIndex(where: {
+                                                    let item = $0
+                                                    let start = item.position
+                                                    let end = start + (item.duration ?? stepStride)
+                                                    return (start..<end).contains(snapped)
+                                                }) {
+                                                    let clickedItem = segment.items[itemIndex]
+                                                    selectStep(clickedItem.position)
+                                                    startWordEditing()
+                                                }
                                             }
-                                            .onTapGesture(count: 1) { location in
-                                                let tappedSubStep = Int(location.x / stepWidth)
-                                                let newSelectedStep = item.position + tappedSubStep
-                                                selectStep(newSelectedStep)
+                                            .onTapGesture(count: 1, coordinateSpace: .named("timeline")) { location in
+                                                handleBackgroundTap(at: location)
                                             }
                                         }
                     if let editingStep = editingWordStep {
@@ -138,6 +149,7 @@ struct MelodicLyricEditorView: View {
                             )
                     }
                 }
+                .coordinateSpace(name: "timeline")
                 .frame(width: CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel, height: trackHeight)
                 .padding(.vertical, 12)
                 .contentShape(Rectangle())
@@ -186,15 +198,29 @@ struct MelodicLyricEditorView: View {
     // MARK: - Private Methods
 
     private func handleBackgroundTap(at location: CGPoint) {
+        print("--- handleBackgroundTap ---")
+        print("Location.x: \(location.x), stepWidth: \(stepWidth), totalSteps: \(totalSteps)")
         guard totalSteps > 0 else { return }
         let rawStep = Int(location.x / stepWidth)
+        print("Raw step: \(rawStep)")
         let clamped = min(max(rawStep, 0), totalSteps - 1)
         let snapped = snapStep(clamped)
+        print("Snapped step: \(snapped)")
+
+        // Add detailed calculation logging
+        let stepsPerMeasure = beatsPerBar * stepsPerBeat
+        let bar = snapped / stepsPerMeasure + 1
+        let beat = (snapped % stepsPerMeasure) / stepsPerBeat + 1
+        let subdivision = (snapped % stepsPerBeat) + 1
+        print("Calculated from tap -> Bar: \(bar), Beat: \(beat), Step: \(subdivision)")
+
         selectStep(snapped)
     }
 
     private func selectStep(_ step: Int) {
         let snapped = snapStep(step)
+        print("--- selectStep ---")
+        print("Setting selectedStep to: \(snapped)")
         selectedStep = snapped
         editingWordStep = nil
         isInlineEditorFocused = false
@@ -393,10 +419,14 @@ struct MelodicLyricEditorView: View {
     }
 
     private func clampSelectedStep() {
+        print("--- clampSelectedStep triggered ---")
+        print("selectedStep before clamp: \(selectedStep)")
         selectedStep = snapStep(selectedStep)
     }
 
     private func alignSelectionToGrid() {
+        print("--- alignSelectionToGrid triggered ---")
+        print("selectedStep before align: \(selectedStep)")
         selectedStep = snapStep(selectedStep)
     }
 
@@ -435,6 +465,10 @@ struct MelodicLyricEditorView: View {
         let bar = selectedStep / stepsPerMeasure + 1
         let beat = (selectedStep % stepsPerMeasure) / stepsPerBeat + 1
         let subdivision = (selectedStep % stepsPerBeat) + 1
+        
+        print("--- cellStatusDescription Update ---")
+        print("selectedStep: \(selectedStep), stepsPerMeasure: \(stepsPerMeasure), calculated bar: \(bar)")
+
         return "Cell: Bar \(bar) Beat \(beat) Step \(subdivision)"
     }
 
