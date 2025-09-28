@@ -38,17 +38,15 @@ class ChordPlayer: ObservableObject {
         stop() // Stop any previous playback
 
         let channel = UInt8((appData.chordMidiChannel) - 1)
-        guard let sequence = createSequence(from: segment, onChannel: channel),
+        midiManager.setPitchBendRange(channel: channel)
+
+        guard let song = createSong(from: segment, onChannel: channel),
               let endpoint = midiManager.selectedOutput else {
-            print("[ChordPlayer] Failed to create sequence or get MIDI endpoint.")
+            print("[ChordPlayer] Failed to create song or get MIDI endpoint.")
             return
         }
         
-        // DEBUG
-        // let sequenceDescription = MIDIDebugger.describe(sequence: sequence)
-        // print(sequenceDescription)
-        
-        midiSequencer.play(sequence: sequence, on: endpoint)
+        midiSequencer.play(song: song, on: endpoint)
         
         self.isPlaying = true
         self.currentlyPlayingSegmentID = segment.id
@@ -119,6 +117,47 @@ class ChordPlayer: ObservableObject {
     }
 
     // MARK: - Sequence Creation
+
+    private func createSong(from segment: AccompanimentSegment, onChannel midiChannel: UInt8) -> MusicSong? {
+        guard let preset = appData.preset else { return nil }
+        
+        var allNotes: [MusicNote] = []
+
+        let absoluteChordEvents = segment.measures.enumerated().flatMap { (measureIndex, measure) -> [TimelineEvent] in
+            measure.chordEvents.map { event in
+                var absoluteEvent = event
+                absoluteEvent.startBeat += measureIndex * preset.timeSignature.beatsPerMeasure
+                return absoluteEvent
+            }
+        }.sorted { $0.startBeat < $1.startBeat }
+
+        for (measureIndex, measure) in segment.measures.enumerated() {
+            for patternEvent in measure.patternEvents {
+                let absolutePatternStartBeatInt = measureIndex * preset.timeSignature.beatsPerMeasure + patternEvent.startBeat
+                let activeChordEvent = absoluteChordEvents.last { $0.startBeat <= absolutePatternStartBeatInt }
+
+                guard let chordEvent = activeChordEvent,
+                      let chordToPlay = preset.chords.first(where: { $0.id == chordEvent.resourceId }),
+                      let patternToPlay = preset.playingPatterns.first(where: { $0.id == patternEvent.resourceId }) else {
+                    continue
+                }
+                
+                let notesForPattern = createNotesForPattern(
+                    chord: chordToPlay,
+                    pattern: patternToPlay,
+                    preset: preset,
+                    patternStartBeat: Double(absolutePatternStartBeatInt),
+                    patternDurationBeats: Double(patternEvent.durationInBeats),
+                    dynamics: measure.dynamics
+                )
+                allNotes.append(contentsOf: notesForPattern)
+            }
+        }
+        
+        let track = SongTrack(instrumentName: "Accompaniment", midiChannel: Int(midiChannel), notes: allNotes)
+        let song = MusicSong(tempo: preset.bpm, key: preset.key, timeSignature: .init(numerator: preset.timeSignature.beatsPerMeasure, denominator: preset.timeSignature.beatUnit), tracks: [track])
+        return song
+    }
 
     func createSequence(from segment: AccompanimentSegment, onChannel midiChannel: UInt8) -> MusicSequence? {
         guard let preset = appData.preset else { return nil }
@@ -211,7 +250,8 @@ class ChordPlayer: ObservableObject {
         return sequence
     }
 
-    private func addPatternToTrack(_ track: MusicTrack, chord: Chord, pattern: GuitarPattern, preset: Preset, patternStartBeat: MusicTimeStamp, patternDurationBeats: MusicTimeStamp, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100, midiChannel: UInt8) {
+    private func createNotesForPattern(chord: Chord, pattern: GuitarPattern, preset: Preset, patternStartBeat: MusicTimeStamp, patternDurationBeats: MusicTimeStamp, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100) -> [MusicNote] {
+        var musicNotes: [MusicNote] = []
         
         let transpositionOffset = MusicTheory.KEY_CYCLE.firstIndex(of: preset.key) ?? 0
         let fretsForPlayback = Array(chord.frets.reversed())
@@ -262,13 +302,23 @@ class ChordPlayer: ObservableObject {
                     let finalVelocity = isStrum ? adaptiveVelocity : velocityWithDynamics
                     
                     if calculatedDurationBeats > 0 {
-                        var noteMessage = MIDINoteMessage(channel: midiChannel, note: noteItem.note, velocity: finalVelocity, releaseVelocity: 0, duration: Float(calculatedDurationBeats))
-                        MusicTrackNewMIDINoteEvent(track, noteStartTimeBeat, &noteMessage)
+                        let musicNote = MusicNote(startTime: noteStartTimeBeat, duration: calculatedDurationBeats, pitch: Int(noteItem.note), velocity: Int(finalVelocity), technique: nil)
+                        musicNotes.append(musicNote)
                     }
                 }
             case .rest:
                 break
             }
+        }
+        return musicNotes
+    }
+
+    private func addPatternToTrack(_ track: MusicTrack, chord: Chord, pattern: GuitarPattern, preset: Preset, patternStartBeat: MusicTimeStamp, patternDurationBeats: MusicTimeStamp, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100, midiChannel: UInt8) {
+        let notes = createNotesForPattern(chord: chord, pattern: pattern, preset: preset, patternStartBeat: patternStartBeat, patternDurationBeats: patternDurationBeats, dynamics: dynamics, baseVelocity: baseVelocity)
+        
+        for note in notes {
+            var noteMessage = MIDINoteMessage(channel: midiChannel, note: UInt8(note.pitch), velocity: UInt8(note.velocity), releaseVelocity: 0, duration: Float(note.duration))
+            MusicTrackNewMIDINoteEvent(track, note.startTime, &noteMessage)
         }
     }
     
