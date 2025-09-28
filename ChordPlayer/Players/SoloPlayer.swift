@@ -86,13 +86,7 @@ class SoloPlayer: ObservableObject {
             let currentNote = notesSortedByTime[i]
             if consumedNoteIDs.contains(currentNote.id) || currentNote.fret < 0 { continue }
 
-            let noteOffTime: Double
-            if let nextNoteOnSameString = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string }) {
-                noteOffTime = nextNoteOnSameString.startTime
-            } else {
-                noteOffTime = currentNote.startTime + (currentNote.duration ?? 1.0)
-            }
-            let duration = noteOffTime - currentNote.startTime
+            let duration = currentNote.duration ?? 1.0
             guard duration > 0 else { continue }
 
             let pitch = midiNote(from: currentNote.string, fret: currentNote.fret, transposition: transposition)
