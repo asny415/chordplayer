@@ -191,6 +191,14 @@ struct PlayingPatternEditorView: View {
     }
     
     private func handleKeyDown(_ event: NSEvent) -> Bool {
+        // Check if text field is currently focused - if so, don't handle custom keyboard events
+        if let currentFirstResponder = NSApp.keyWindow?.firstResponder,
+           currentFirstResponder is NSTextField || 
+           currentFirstResponder is NSTextView {
+            // Text field or text view is focused, allow normal text input processing
+            return false
+        }
+        
         guard let selection = selectedCell else { return false }
         
         switch event.keyCode {

@@ -472,6 +472,14 @@ struct MelodicLyricEditorView: View {
     }
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {
+        // Check if text field is currently focused - if so, don't handle custom keyboard events
+        if let currentFirstResponder = NSApp.keyWindow?.firstResponder,
+           currentFirstResponder is NSTextField || 
+           currentFirstResponder is NSTextView {
+            // Text field or text view is focused, allow normal text input processing
+            return false
+        }
+        
         if editingWordStep != nil {
             switch event.keyCode {
             case 53: // Escape
@@ -487,14 +495,6 @@ struct MelodicLyricEditorView: View {
 
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let characters = event.charactersIgnoringModifiers ?? ""
-        // Allow default behaviour when the title field is being edited to preserve standard text editing keys.
-        if isEditingName {
-            return false
-        }
-
-        if let textView = NSApp.keyWindow?.firstResponder as? NSTextView, textView.isEditable {
-            return false
-        }
 
         if characters.count == 1 && modifiers.isDisjoint(with: [.command, .option, .control]) {
             let char = characters.first!

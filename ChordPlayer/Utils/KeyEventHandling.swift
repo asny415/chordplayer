@@ -24,10 +24,12 @@ struct KeyEventHandlingView: NSViewRepresentable {
     }
     
     func updateNSView(_ nsView: NSView, context: Context) {
-        // 尝试设置为第一响应者以接收键盘事件
+        // Only try to set as first responder if no text field or text view currently has focus
         DispatchQueue.main.async {
-            if nsView.window != nil {
-                nsView.window?.makeFirstResponder(nsView)
+            if let window = nsView.window,
+               let currentFirstResponder = window.firstResponder,
+               !(currentFirstResponder is NSTextField) && !(currentFirstResponder is NSTextView) {
+                window.makeFirstResponder(nsView)
             }
         }
     }
