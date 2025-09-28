@@ -175,12 +175,40 @@ class MelodicLyricPlayer: ObservableObject {
                 guard let startMidiNote = midiNote(for: fromItem, transposition: transposition),
                       let endMidiNote = midiNote(for: toItem, transposition: transposition) else { continue }
                       
-                let semitoneDifference = Int(endMidiNote) - Int(startMidiNote)
+                var semitoneDifference = Int(endMidiNote) - Int(startMidiNote)
                 let pitchBendRangeSemitones = 2.0
+
+                // 如果 semitoneDifference 大于 pitchBendRangeSemitones，则限制在范围内
+                let clampedSemitoneDifference = max(-Int(pitchBendRangeSemitones), min(Int(pitchBendRangeSemitones), semitoneDifference))
+                if semitoneDifference != clampedSemitoneDifference {
+                    print("[MelodicLyricPlayer] Slide exceeds pitch bend range. Clamping from \(semitoneDifference) to \(clampedSemitoneDifference).")
+                }
+                semitoneDifference = clampedSemitoneDifference
 
                 let noteOnTime = Double(fromItem.position) * sixteenthNoteDurationInBeats
                 let slideTargetTime = Double(toItem.position) * sixteenthNoteDurationInBeats
-                let finalNoteOffTime = offTimeInBeats
+                var finalNoteOffTime = offTimeInBeats
+                //如果 semitoneDifference == clampedSemitoneDifference，说明没有超出范围，正常滑音，将 toItem 的时长也算上
+                if semitoneDifference == clampedSemitoneDifference {
+                    // Extend the final note off time to include the toItem's duration
+                    let toItemOffTime: Double
+                    if let duration = toItem.duration {
+                        toItemOffTime = Double(toItem.position + duration) * sixteenthNoteDurationInBeats
+                    } else {
+                        var endPositionIn16th = segmentDurationInBeats / sixteenthNoteDurationInBeats
+                        if let nextItem = itemsSortedByTime.first(where: { $0.position > toItem.position && $0.pitch > 0 }) {
+                            endPositionIn16th = Double(nextItem.position)
+                        }
+                        toItemOffTime = endPositionIn16th * sixteenthNoteDurationInBeats
+                    }
+                    // Use the later of the two off times
+                    let extendedFinalOffTime = max(finalNoteOffTime, toItemOffTime)
+                    // Update finalNoteOffTime
+                    // Note: This won't affect the note duration calculation below since it's already been calculated
+                    // But it will ensure the pitch bend reset happens after the full duration
+                    finalNoteOffTime = extendedFinalOffTime
+                }
+
                 let noteDuration = finalNoteOffTime - noteOnTime
 
                 // Pluck the first note
