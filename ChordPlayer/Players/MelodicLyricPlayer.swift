@@ -183,11 +183,11 @@ class MelodicLyricPlayer: ObservableObject {
                 if semitoneDifference != clampedSemitoneDifference {
                     print("[MelodicLyricPlayer] Slide exceeds pitch bend range. Clamping from \(semitoneDifference) to \(clampedSemitoneDifference).")
                 }
-                semitoneDifference = clampedSemitoneDifference
 
                 let noteOnTime = Double(fromItem.position) * sixteenthNoteDurationInBeats
                 let slideTargetTime = Double(toItem.position) * sixteenthNoteDurationInBeats
                 var finalNoteOffTime = offTimeInBeats
+                var needPlayToItem = false
                 //如果 semitoneDifference == clampedSemitoneDifference，说明没有超出范围，正常滑音，将 toItem 的时长也算上
                 if semitoneDifference == clampedSemitoneDifference {
                     // Extend the final note off time to include the toItem's duration
@@ -207,8 +207,12 @@ class MelodicLyricPlayer: ObservableObject {
                     // Note: This won't affect the note duration calculation below since it's already been calculated
                     // But it will ensure the pitch bend reset happens after the full duration
                     finalNoteOffTime = extendedFinalOffTime
+                } else {
+                    // 如果超出弯音范围，需要正常演奏目标音符
+                    needPlayToItem = true
                 }
 
+                semitoneDifference = clampedSemitoneDifference
                 let noteDuration = finalNoteOffTime - noteOnTime
 
                 // Pluck the first note
@@ -240,7 +244,26 @@ class MelodicLyricPlayer: ObservableObject {
                 
                 // Reset bend after the note is off
                 var pitchBendResetMessage = MIDIChannelMessage(status: 0xE0 | midiChannel, data1: 0, data2: 64, reserved: 0) // 8192
-                MusicTrackNewMIDIChannelEvent(track, finalNoteOffTime + 0.01, &pitchBendResetMessage)
+                MusicTrackNewMIDIChannelEvent(track, finalNoteOffTime - 0.01, &pitchBendResetMessage)
+
+                if needPlayToItem {
+                    // Pluck the target note if slide exceeded pitch bend range
+                    let toItemOnTime = Double(toItem.position) * sixteenthNoteDurationInBeats
+                    let toItemDuration: Double
+                    if let duration = toItem.duration {
+                        toItemDuration = Double(duration) * sixteenthNoteDurationInBeats
+                    } else {
+                        var endPositionIn16th = segmentDurationInBeats / sixteenthNoteDurationInBeats
+                        if let nextItem = itemsSortedByTime.first(where: { $0.position > toItem.position && $0.pitch > 0 }) {
+                            endPositionIn16th = Double(nextItem.position)
+                        }
+                        toItemDuration = (endPositionIn16th * sixteenthNoteDurationInBeats) - toItemOnTime
+                    }
+                    if toItemDuration > 0 {
+                        var noteMessage = MIDINoteMessage(channel: midiChannel, note: endMidiNote, velocity: velocity, releaseVelocity: 0, duration: Float(toItemDuration))
+                        MusicTrackNewMIDINoteEvent(track, toItemOnTime, &noteMessage)
+                    }
+                }
                 
             case .vibrato(let item, let offTimeInBeats):
                 guard let midiNoteNumber = midiNote(for: item, transposition: transposition) else { continue }
