@@ -51,7 +51,7 @@ class SoloPlayer: ObservableObject {
         
         stop() // Stop any previous playback
 
-        midiManager.setPitchBendRange(channel: channel, rangeInSemitones: 2)
+        midiManager.setPitchBendRange(channel: channel)
 
         let song = createSong(from: segment, onChannel: channel)
         guard let endpoint = midiManager.selectedOutput else {

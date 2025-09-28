@@ -36,7 +36,7 @@ class MelodicLyricPlayer: ObservableObject {
 
         // TODO: Add a dedicated MIDI channel for melody in AppData
         let channel: UInt8 = 3 
-        midiManager.setPitchBendRange(channel: channel, rangeInSemitones: 2)
+        midiManager.setPitchBendRange(channel: channel)
 
         guard let sequence = createSequence(from: segment, onChannel: channel),
               let endpoint = midiManager.selectedOutput else {
