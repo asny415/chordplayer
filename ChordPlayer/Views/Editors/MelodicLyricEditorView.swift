@@ -198,29 +198,15 @@ struct MelodicLyricEditorView: View {
     // MARK: - Private Methods
 
     private func handleBackgroundTap(at location: CGPoint) {
-        print("--- handleBackgroundTap ---")
-        print("Location.x: \(location.x), stepWidth: \(stepWidth), totalSteps: \(totalSteps)")
         guard totalSteps > 0 else { return }
         let rawStep = Int(location.x / stepWidth)
-        print("Raw step: \(rawStep)")
         let clamped = min(max(rawStep, 0), totalSteps - 1)
         let snapped = snapStep(clamped)
-        print("Snapped step: \(snapped)")
-
-        // Add detailed calculation logging
-        let stepsPerMeasure = beatsPerBar * stepsPerBeat
-        let bar = snapped / stepsPerMeasure + 1
-        let beat = (snapped % stepsPerMeasure) / stepsPerBeat + 1
-        let subdivision = (snapped % stepsPerBeat) + 1
-        print("Calculated from tap -> Bar: \(bar), Beat: \(beat), Step: \(subdivision)")
-
         selectStep(snapped)
     }
 
     private func selectStep(_ step: Int) {
         let snapped = snapStep(step)
-        print("--- selectStep ---")
-        print("Setting selectedStep to: \(snapped)")
         selectedStep = snapped
         editingWordStep = nil
         isInlineEditorFocused = false
@@ -465,9 +451,6 @@ struct MelodicLyricEditorView: View {
         let bar = selectedStep / stepsPerMeasure + 1
         let beat = (selectedStep % stepsPerMeasure) / stepsPerBeat + 1
         let subdivision = (selectedStep % stepsPerBeat) + 1
-        
-        print("--- cellStatusDescription Update ---")
-        print("selectedStep: \(selectedStep), stepsPerMeasure: \(stepsPerMeasure), calculated bar: \(bar)")
 
         return "Cell: Bar \(bar) Beat \(beat) Step \(subdivision)"
     }
