@@ -36,7 +36,7 @@ struct KaraokeLineView: View {
     
     var body: some View {
         GeometryReader { proxy in
-            ZStack(alignment: .leading) {
+            ZStack(alignment: .center) {
                 // Background text (inactive color) - using monospaced font for consistent width
                 Text(line.lineText)
                     .font(.system(isActive ? .largeTitle : .title2, design: .monospaced).weight(.bold))
@@ -52,6 +52,7 @@ struct KaraokeLineView: View {
                     }
                     .animation(.linear(duration: 0.05), value: playbackTime)
             }
+            .frame(width: proxy.size.width, height: proxy.size.height) // This ensures the ZStack fills the reader
         }
         .frame(height: isActive ? 60 : 40) // Adjust frame height based on active state
     }
@@ -117,24 +118,31 @@ struct KaraokeView: View {
                     // Previous Line (if exists)
                     if currentIndex > 0 {
                         Text(displayLines[currentIndex - 1].lineText)
-                            .font(.system(size: 24, weight: .medium))
+                            .font(.system(.title3, design: .monospaced).weight(.medium))
                             .foregroundColor(.white.opacity(0.3))
                             .padding(.horizontal)
+                            .id("prev_\(currentIndex)")
+                            .transition(.opacity.combined(with: .offset(y: -10)))
                     } else {
-                        Spacer().frame(height: 30)
+                        // Use a spacer with a specific ID to ensure stable transitions
+                        Spacer().frame(height: 30).id("prev_spacer")
                     }
                     
                     // Active Line
                     KaraokeLineView(line: displayLines[currentIndex], playbackTime: songPlayer.playbackPosition, isActive: true)
+                        .id("active_\(currentIndex)")
+                        .transition(.opacity.combined(with: .offset(y: -10)))
                     
                     // Next Line (if exists)
                     if displayLines.indices.contains(currentIndex + 1) {
                         Text(displayLines[currentIndex + 1].lineText)
-                            .font(.system(size: 32, weight: .bold))
+                            .font(.system(.title2, design: .monospaced).weight(.bold))
                             .foregroundColor(.white.opacity(0.7))
                             .padding(.horizontal)
+                            .id("next_\(currentIndex)")
+                            .transition(.opacity.combined(with: .offset(y: -10)))
                     } else {
-                        Spacer().frame(height: 40)
+                        Spacer().frame(height: 40).id("next_spacer")
                     }
                     
                 } else {
@@ -254,14 +262,24 @@ struct KaraokeView: View {
         // Find the index of the line that should be currently active
         if let index = displayLines.firstIndex(where: { time >= $0.startTime && time < $0.endTime }) {
             if index != currentLineIndex {
-                currentLineIndex = index
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    currentLineIndex = index
+                }
             }
         } else if time >= (displayLines.last?.endTime ?? 0) {
             // After the last line
-            currentLineIndex = displayLines.count - 1
+            if currentLineIndex != displayLines.count - 1 {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    currentLineIndex = displayLines.count - 1
+                }
+            }
         } else if time < (displayLines.first?.startTime ?? 0) {
             // Before the first line
-            currentLineIndex = 0
+            if currentLineIndex != 0 {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    currentLineIndex = 0
+                }
+            }
         }
     }
 }
