@@ -46,6 +46,9 @@ class PresetArrangerPlayer: ObservableObject {
             return
         }
 
+        // 从头开始播放
+        midiSequencer.seek(to: 0.0)
+
         guard let masterSong = createMasterSong(for: preset),
               let endpoint = midiManager.selectedOutput else {
             print("[PresetArrangerPlayer] Failed to create master song or get MIDI endpoint.")
@@ -53,6 +56,30 @@ class PresetArrangerPlayer: ObservableObject {
         }
         
         midiSequencer.play(song: masterSong, on: endpoint)
+    }
+    
+    func playFromCurrentPosition() {
+        guard let preset = appData.preset else { return }
+        
+        if isPlaying {
+            stop()
+            return
+        }
+
+        guard let masterSong = createMasterSong(for: preset),
+              let endpoint = midiManager.selectedOutput else {
+            print("[PresetArrangerPlayer] Failed to create master song or get MIDI endpoint.")
+            return
+        }
+        
+        // 获取当前播放位置
+        let currentPosition = midiSequencer.currentTimeInBeats
+        
+        // 播放歌曲
+        midiSequencer.play(song: masterSong, on: endpoint)
+        
+        // 跳转到当前位置
+        midiSequencer.seek(to: currentPosition)
     }
 
     func stop() {

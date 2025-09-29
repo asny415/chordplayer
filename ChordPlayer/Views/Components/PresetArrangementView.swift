@@ -20,7 +20,7 @@ struct PresetArrangementView: View {
                     if presetArrangerPlayer.isPlaying {
                         presetArrangerPlayer.stop()
                     } else {
-                        presetArrangerPlayer.play()
+                        presetArrangerPlayer.playFromCurrentPosition()
                     }
                 }) {
                     Image(systemName: presetArrangerPlayer.isPlaying ? "stop.fill" : "play.fill")
@@ -178,7 +178,7 @@ struct SimplePresetArrangerView: View {
                     if presetArrangerPlayer.isPlaying {
                         presetArrangerPlayer.stop()
                     } else {
-                        presetArrangerPlayer.play()
+                        presetArrangerPlayer.playFromCurrentPosition()
                     }
                 },
                 onUpdateLength: { newLength in
@@ -417,13 +417,13 @@ struct ArrangementToolbar: View {
     var body: some View {
         HStack(spacing: 16) {
             // 播放控制
-            Button(action: onPlay) {
-                HStack {
-                    Image(systemName: isPlaying ? "stop.fill" : "play.fill")
-                    Text(isPlaying ? "Stop" : "Play")
+                Button(action: onPlay) {
+                    HStack {
+                        Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                        Text(isPlaying ? "Stop" : "Play")
+                    }
                 }
-            }
-            .buttonStyle(.borderedProminent)
+                .buttonStyle(.borderedProminent)
 
             Menu {
                 Button(action: onAddGuitarTrack) {
@@ -486,6 +486,7 @@ struct ArrangementTimelineView: View {
     let onDeleteLyricsTrack: ((UUID) -> Void)?
 
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var presetArrangerPlayer: PresetArrangerPlayer
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
@@ -500,7 +501,8 @@ struct ArrangementTimelineView: View {
                         trackHeight: trackHeight,
                         zoomLevel: zoomLevel,
                         onEditDrumSegment: onEditDrumSegment,
-                        onDeleteSegment: onDeleteSegment
+                        onDeleteSegment: onDeleteSegment,
+                        presetArrangerPlayer: presetArrangerPlayer
                     )
 
                     // 吉他轨道
@@ -514,7 +516,8 @@ struct ArrangementTimelineView: View {
                             zoomLevel: zoomLevel,
                             onEditGuitarSegment: onEditGuitarSegment,
                             onDeleteSegment: onDeleteSegment,
-                            onDeleteTrack: onDeleteTrack
+                            onDeleteTrack: onDeleteTrack,
+                            presetArrangerPlayer: presetArrangerPlayer
                         )
                     }
 
@@ -528,20 +531,20 @@ struct ArrangementTimelineView: View {
                             zoomLevel: zoomLevel,
                             onEditLyricsSegment: onEditLyricsSegment,
                             onDeleteSegment: onDeleteSegment,
-                            onDeleteTrack: onDeleteLyricsTrack
+                            onDeleteTrack: onDeleteLyricsTrack,
+                            presetArrangerPlayer: presetArrangerPlayer
                         )
                     }
                 }
                 .frame(width: max(800, beatWidth * CGFloat(arrangement.lengthInBeats) * zoomLevel + 200))
                 
                 // 播放进度指示器 (Playhead)
-                if isPlaying {
-                    Rectangle()
-                        .fill(Color.red)
-                        .frame(width: 2)
-                        .frame(maxHeight: .infinity)
-                        .offset(x: 120 + CGFloat(playbackPosition) * beatWidth * zoomLevel)
-                }
+                Rectangle()
+                    .fill(Color.red)
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
+                    .offset(x: 120 + CGFloat(playbackPosition) * beatWidth * zoomLevel)
+                    .opacity(isPlaying ? 1.0 : 0.7) // 播放时更明显，静止时稍淡
             }
         }
     }
@@ -613,6 +616,7 @@ struct ArrangementDrumTrackView: View {
     let zoomLevel: CGFloat
     let onEditDrumSegment: ((DrumSegment) -> Void)?
     let onDeleteSegment: ((UUID) -> Void)?
+    let presetArrangerPlayer: PresetArrangerPlayer?
 
     @EnvironmentObject var appData: AppData
     @State private var isDragOver: Bool = false
@@ -638,7 +642,7 @@ struct ArrangementDrumTrackView: View {
 
             // 时间轴内容
             ZStack(alignment: .topLeading) {
-                // 背景
+                // 带有颜色的背景
                 Rectangle()
                     .fill(Color.orange.opacity(isDragOver ? 0.15 : 0.05))
                     .stroke(isDragOver ? Color.orange : Color.clear, lineWidth: 2)
@@ -669,10 +673,39 @@ struct ArrangementDrumTrackView: View {
                         }
                     )
                     .offset(x: CGFloat(segment.startBeat) * beatWidth * zoomLevel)
-                    .onTapGesture {
-                        selectedSegmentId = segment.id
-                    }
                 }
+                
+                // 透明覆盖层，用于处理所有点击事件（片段选择和播放头设置）
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        // 计算点击位置对应的拍子
+                        let clickX = location.x
+                        let clickedBeat = max(0, Double(clickX) / (beatWidth * zoomLevel))
+                        
+                        // 检查点击是否在某个片段上
+                        var clickedOnSegment = false
+                        for segment in track.segments {
+                            let segmentStart = segment.startBeat
+                            let segmentEnd = segment.startBeat + segment.durationInBeats
+                            let segmentStartX = segmentStart * Double(beatWidth * zoomLevel)
+                            let segmentEndX = segmentEnd * Double(beatWidth * zoomLevel)
+                            
+                            // 检查点击的X坐标是否在片段的X坐标范围内
+                            if clickX >= segmentStartX && clickX <= segmentEndX {
+                                // 点击在片段上，选择该片段
+                                selectedSegmentId = segment.id
+                                clickedOnSegment = true
+                                break
+                            }
+                        }
+                        
+                        // 如果没有点击在片段上，则设置播放头
+                        if !clickedOnSegment {
+                            presetArrangerPlayer?.seekTo(beat: clickedBeat)
+                        }
+                    }
             }
             .frame(height: trackHeight)
             .onDrop(of: [.data, .text], delegate: EnhancedDrumTrackDropDelegate(
@@ -698,6 +731,7 @@ struct ArrangementGuitarTrackView: View {
     let onEditGuitarSegment: ((GuitarSegment) -> Void)?
     let onDeleteSegment: ((UUID) -> Void)?
     let onDeleteTrack: ((UUID) -> Void)?
+    let presetArrangerPlayer: PresetArrangerPlayer?
 
     @EnvironmentObject var appData: AppData
     @State private var isDragOver: Bool = false
@@ -727,7 +761,7 @@ struct ArrangementGuitarTrackView: View {
 
             // 时间轴内容
             ZStack(alignment: .topLeading) {
-                // 背景
+                // 带有颜色的背景
                 Rectangle()
                     .fill(Color.blue.opacity(isDragOver ? 0.15 : 0.05))
                     .stroke(isDragOver ? Color.blue : Color.clear, lineWidth: 2)
@@ -758,10 +792,39 @@ struct ArrangementGuitarTrackView: View {
                         }
                     )
                     .offset(x: CGFloat(segment.startBeat) * beatWidth * zoomLevel)
-                    .onTapGesture {
-                        selectedSegmentId = segment.id
-                    }
                 }
+                
+                // 透明覆盖层，用于处理所有点击事件（片段选择和播放头设置）
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        // 计算点击位置对应的拍子
+                        let clickX = location.x
+                        let clickedBeat = max(0, Double(clickX) / (beatWidth * zoomLevel))
+                        
+                        // 检查点击是否在某个片段上
+                        var clickedOnSegment = false
+                        for segment in track.segments {
+                            let segmentStart = segment.startBeat
+                            let segmentEnd = segment.startBeat + segment.durationInBeats
+                            let segmentStartX = segmentStart * Double(beatWidth * zoomLevel)
+                            let segmentEndX = segmentEnd * Double(beatWidth * zoomLevel)
+                            
+                            // 检查点击的X坐标是否在片段的X坐标范围内
+                            if clickX >= segmentStartX && clickX <= segmentEndX {
+                                // 点击在片段上，选择该片段
+                                selectedSegmentId = segment.id
+                                clickedOnSegment = true
+                                break
+                            }
+                        }
+                        
+                        // 如果没有点击在片段上，则设置播放头
+                        if !clickedOnSegment {
+                            presetArrangerPlayer?.seekTo(beat: clickedBeat)
+                        }
+                    }
             }
             .frame(height: trackHeight)
             .onDrop(of: [.data, .text], delegate: EnhancedGuitarTrackDropDelegate(
@@ -786,6 +849,7 @@ struct ArrangementLyricsTrackView: View {
     let onEditLyricsSegment: ((LyricsSegment) -> Void)?
     let onDeleteSegment: ((UUID) -> Void)?
     let onDeleteTrack: ((UUID) -> Void)?
+    let presetArrangerPlayer: PresetArrangerPlayer?
 
     @EnvironmentObject var appData: AppData
     @State private var isDragOver: Bool = false
@@ -841,10 +905,39 @@ struct ArrangementLyricsTrackView: View {
                         }
                     )
                     .offset(x: CGFloat(segment.startBeat) * beatWidth * zoomLevel)
-                    .onTapGesture {
-                        selectedSegmentId = segment.id
-                    }
                 }
+                
+                // 透明覆盖层，用于处理所有点击事件（片段选择和播放头设置）
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        // 计算点击位置对应的拍子
+                        let clickX = location.x
+                        let clickedBeat = max(0, Double(clickX) / (beatWidth * zoomLevel))
+                        
+                        // 检查点击是否在某个片段上
+                        var clickedOnSegment = false
+                        for segment in track.lyrics {
+                            let segmentStart = segment.startBeat
+                            let segmentEnd = segment.startBeat + segment.durationInBeats
+                            let segmentStartX = segmentStart * Double(beatWidth * zoomLevel)
+                            let segmentEndX = segmentEnd * Double(beatWidth * zoomLevel)
+                            
+                            // 检查点击的X坐标是否在片段的X坐标范围内
+                            if clickX >= segmentStartX && clickX <= segmentEndX {
+                                // 点击在片段上，选择该片段
+                                selectedSegmentId = segment.id
+                                clickedOnSegment = true
+                                break
+                            }
+                        }
+                        
+                        // 如果没有点击在片段上，则设置播放头
+                        if !clickedOnSegment {
+                            presetArrangerPlayer?.seekTo(beat: clickedBeat)
+                        }
+                    }
             }
             .frame(height: trackHeight)
             .onDrop(of: [.data, .text], delegate: EnhancedLyricsTrackDropDelegate(
