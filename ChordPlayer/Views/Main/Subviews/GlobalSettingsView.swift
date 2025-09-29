@@ -19,14 +19,6 @@ struct GlobalSettingsView: View {
                 }
             )
             
-            let quantizeBinding = Binding<QuantizationMode>(
-                get: { appData.preset?.quantize ?? .none },
-                set: { newValue in
-                    appData.preset?.quantize = newValue
-                    appData.saveChanges()
-                }
-            )
-            
             let keyBinding = Binding<String>(
                 get: { appData.preset?.key ?? "C" },
                 set: { newValue in
@@ -53,10 +45,6 @@ struct GlobalSettingsView: View {
 
                 // Tempo card
                 TempoDashboardCard(tempo: tempoBinding)
-                    .frame(maxWidth: .infinity)
-
-                // Quantize selector
-                DraggableValueCard(label: "Quantize", selection: quantizeBinding, options: QuantizationMode.allCases)
                     .frame(maxWidth: .infinity)
 
                 // Song Arrangement Playback Card
@@ -192,20 +180,16 @@ struct ArrangementPlaybackCard: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            HStack(alignment: .center, spacing: 10) {
-                PlayingModeBadgeView(playingMode: appData.playingMode)
+            VStack(spacing: 2) {
+                Text(presetArrangerPlayer.isPlaying ? "Playing" : "Stopped")
+                    .font(.system(.title2, design: .rounded).weight(.bold))
                 
-                VStack(spacing: 2) {
-                    Text(presetArrangerPlayer.isPlaying ? "Playing" : "Stopped")
-                        .font(.system(.title2, design: .rounded).weight(.bold))
-                    
-                    if let currentPreset = appData.preset {
-                        let totalBeats = currentPreset.arrangement.lengthInBeats
-                        if totalBeats > 0 {
-                            Text(String(format: "%.1f / %.1f", presetArrangerPlayer.playbackPosition, totalBeats))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                if let currentPreset = appData.preset {
+                    let totalBeats = currentPreset.arrangement.lengthInBeats
+                    if totalBeats > 0 {
+                        Text(String(format: "%.1f / %.1f", presetArrangerPlayer.playbackPosition, totalBeats))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
