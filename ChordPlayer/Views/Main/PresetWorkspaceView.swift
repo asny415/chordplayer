@@ -7,42 +7,44 @@ struct PresetWorkspaceView: View {
     @EnvironmentObject var keyboardHandler: KeyboardHandler
     @State private var segmentToEdit: SoloSegment?
     @State private var lyricSegmentToEdit: MelodicLyricSegment?
+    @State private var isPlayingKaraoke = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-
-                GroupBox {
-                    GlobalSettingsView()
+        ZStack {
+            if isPlayingKaraoke {
+                KaraokeView()
+                    .transition(.opacity.combined(with: .scale(scale: 1.05)))
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        GroupBox {
+                            GlobalSettingsView(isPlayingKaraoke: $isPlayingKaraoke)
+                        }
+                        GroupBox {
+                            DrumPatternsView()
+                        }
+                        GroupBox {
+                            ChordProgressionView()
+                        }
+                        GroupBox {
+                            PlayingPatternsView()
+                        }
+                        GroupBox {
+                            SoloSegmentsView(segmentToEdit: $segmentToEdit)
+                        }
+                        GroupBox {
+                            AccompanimentSegmentsView()
+                        }
+                        GroupBox {
+                            MelodicLyricSegmentsView(segmentToEdit: $lyricSegmentToEdit)
+                        }
+                    }
+                    .padding()
                 }
-
-                GroupBox {
-                    DrumPatternsView()
-                }
-
-                GroupBox {
-                    ChordProgressionView()
-                }
-
-                GroupBox {
-                    PlayingPatternsView()
-                }
-
-                GroupBox {
-                    SoloSegmentsView(segmentToEdit: $segmentToEdit)
-                }
-
-                GroupBox {
-                    AccompanimentSegmentsView()
-                }
-
-                GroupBox {
-                    MelodicLyricSegmentsView(segmentToEdit: $lyricSegmentToEdit)
-                }
-
+                .transition(.opacity)
             }
-            .padding()
         }
+        .animation(.easeInOut(duration: 0.4), value: isPlayingKaraoke)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
         .sheet(item: $segmentToEdit) { segment in

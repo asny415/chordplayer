@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GlobalSettingsView: View {
     @EnvironmentObject var appData: AppData
+    @Binding var isPlayingKaraoke: Bool
     
     // Define constants for cycles locally
     private let KEY_CYCLE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -48,7 +49,7 @@ struct GlobalSettingsView: View {
                     .frame(maxWidth: .infinity)
 
                 // Song Arrangement Playback Card
-                ArrangementPlaybackCard()
+                ArrangementPlaybackCard(isPlayingKaraoke: $isPlayingKaraoke)
                     .frame(maxWidth: .infinity)
             }
             .padding(.vertical, 4)
@@ -173,6 +174,7 @@ struct PlayingModeBadgeView: View {
 struct ArrangementPlaybackCard: View {
     @EnvironmentObject var presetArrangerPlayer: PresetArrangerPlayer
     @EnvironmentObject var appData: AppData
+    @Binding var isPlayingKaraoke: Bool
 
     var body: some View {
         VStack(spacing: 4) {
@@ -201,8 +203,17 @@ struct ArrangementPlaybackCard: View {
         .onTapGesture {
             if presetArrangerPlayer.isPlaying {
                 presetArrangerPlayer.stop()
+                isPlayingKaraoke = false // Explicitly set to false on stop
             } else {
                 presetArrangerPlayer.play()
+                isPlayingKaraoke = true
+            }
+        }
+        .onChange(of: presetArrangerPlayer.isPlaying) { newIsPlaying in
+            // If the sequencer stops playing for any reason (e.g., song ends),
+            // ensure we exit the karaoke view.
+            if !newIsPlaying {
+                isPlayingKaraoke = false
             }
         }
         .overlay(
