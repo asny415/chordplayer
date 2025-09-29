@@ -59,8 +59,8 @@ struct GlobalSettingsView: View {
                 DraggableValueCard(label: "Quantize", selection: quantizeBinding, options: QuantizationMode.allCases)
                     .frame(maxWidth: .infinity)
 
-                // Drum Machine Card
-                DrumMachineStatusCard()
+                // Song Arrangement Playback Card
+                ArrangementPlaybackCard()
                     .frame(maxWidth: .infinity)
             }
             .padding(.vertical, 4)
@@ -182,21 +182,32 @@ struct PlayingModeBadgeView: View {
     }
 }
 
-struct DrumMachineStatusCard: View {
+struct ArrangementPlaybackCard: View {
     @EnvironmentObject var presetArrangerPlayer: PresetArrangerPlayer
     @EnvironmentObject var appData: AppData
 
     var body: some View {
         VStack(spacing: 4) {
-            Text("Drums".uppercased())
+            Text("Playback".uppercased())
                 .font(.caption)
                 .foregroundColor(.secondary)
 
             HStack(alignment: .center, spacing: 10) {
                 PlayingModeBadgeView(playingMode: appData.playingMode)
                 
-                Text(presetArrangerPlayer.isPlaying ? "Playing" : "Stopped")
-                    .font(.system(.title, design: .rounded).weight(.bold))
+                VStack(spacing: 2) {
+                    Text(presetArrangerPlayer.isPlaying ? "Playing" : "Stopped")
+                        .font(.system(.title2, design: .rounded).weight(.bold))
+                    
+                    if let currentPreset = appData.preset {
+                        let totalBeats = currentPreset.arrangement.lengthInBeats
+                        if totalBeats > 0 {
+                            Text(String(format: "%.1f / %.1f", presetArrangerPlayer.playbackPosition, totalBeats))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
             }
             .foregroundColor(presetArrangerPlayer.isPlaying ? .green : .primary)
         }
