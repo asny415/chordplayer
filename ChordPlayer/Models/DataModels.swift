@@ -858,13 +858,15 @@ struct LyricsTrack: Codable, Identifiable, Hashable, Equatable {
 
 struct LyricsSegment: Codable, Identifiable, Hashable, Equatable {
     var id = UUID()
+    var melodicLyricSegmentId: UUID? // References the MelodicLyricSegment this lyrics segment represents
     var startBeat: Double
     var durationInBeats: Double
     var text: String
     var language: String = "zh" // 支持多语言歌词
 
-    init(id: UUID = UUID(), startBeat: Double, durationInBeats: Double, text: String, language: String = "zh") {
+    init(id: UUID = UUID(), melodicLyricSegmentId: UUID? = nil, startBeat: Double, durationInBeats: Double, text: String, language: String = "zh") {
         self.id = id
+        self.melodicLyricSegmentId = melodicLyricSegmentId
         self.startBeat = startBeat
         self.durationInBeats = durationInBeats
         self.text = text

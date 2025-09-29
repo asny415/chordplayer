@@ -706,12 +706,15 @@ struct EnhancedLyricsTrackDropDelegate: DropDelegate {
                     let durationBeats = Double(max(1, melodicSegment.lengthInBars)) * beatsPerMeasure
                     let text = self.makeLyricText(from: melodicSegment)
                     let language = track.lyrics.first?.language ?? "zh"
+                    print("[DEBUG] Creating new LyricsSegment for melodicLyricSegmentId: \(dragData.resourceId), at startBeat: \(snappedBeat)")
                     let newSegment = LyricsSegment(
+                        melodicLyricSegmentId: dragData.resourceId, // Reference the original MelodicLyricSegment
                         startBeat: snappedBeat,
                         durationInBeats: durationBeats,
                         text: text,
                         language: language
                     )
+                    print("[DEBUG] Created LyricsSegment with id: \(newSegment.id), referencing melodicLyricSegmentId: \(newSegment.melodicLyricSegmentId?.uuidString ?? "nil")")
                     self.updateLyricsTrack(with: newSegment, appData: self.appData)
                 }
             }
@@ -730,7 +733,11 @@ struct EnhancedLyricsTrackDropDelegate: DropDelegate {
     private func updateLyricsTrack(with segment: LyricsSegment, appData: AppData) {
         guard var preset = appData.preset else { return }
         if let trackIndex = preset.arrangement.lyricsTracks.firstIndex(where: { $0.id == self.track.id }) {
+            print("[DEBUG] Adding LyricsSegment \(segment.id) to track \(self.track.id) at index \(trackIndex)")
+            let originalCount = preset.arrangement.lyricsTracks[trackIndex].lyrics.count
             preset.arrangement.lyricsTracks[trackIndex].addLyrics(segment)
+            let newCount = preset.arrangement.lyricsTracks[trackIndex].lyrics.count
+            print("[DEBUG] Lyrics track \(trackIndex) now has \(newCount) segments (was \(originalCount))")
             appData.updateArrangement(preset.arrangement)
         }
     }
