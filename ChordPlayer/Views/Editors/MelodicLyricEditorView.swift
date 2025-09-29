@@ -43,144 +43,163 @@ struct MelodicLyricEditorView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // 1. In-place Editable Title
-            HStack {
-                Spacer()
-                if isEditingName {
-                    TextField("Segment Name", text: $segment.name)
-                        .font(.largeTitle).textFieldStyle(.plain).multilineTextAlignment(.center)
-                        .focused($isNameFieldFocused)
-                        .onSubmit { isEditingName = false }.onDisappear { isEditingName = false }
-                } else {
-                    Text(segment.name).font(.largeTitle).fontWeight(.bold)
-                        .onTapGesture(count: 2) { isEditingName = true; isNameFieldFocused = true }
+        ScrollViewReader { proxy in
+            VStack(alignment: .leading, spacing: 0) {
+                // 1. In-place Editable Title
+                HStack {
+                    Spacer()
+                    if isEditingName {
+                        TextField("Segment Name", text: $segment.name)
+                            .font(.largeTitle).textFieldStyle(.plain).multilineTextAlignment(.center)
+                            .focused($isNameFieldFocused)
+                            .onSubmit { isEditingName = false }.onDisappear { isEditingName = false }
+                    } else {
+                        Text(segment.name).font(.largeTitle).fontWeight(.bold)
+                            .onTapGesture(count: 2) { isEditingName = true; isNameFieldFocused = true }
+                    }
+                    Spacer()
                 }
-                Spacer()
+                .padding(.top, 12)
+                .padding(.horizontal)
+                .padding(.bottom, 4)
+
+                // 2. Toolbar
+                MelodicLyricToolbar(
+                    currentTechnique: $currentTechnique,
+                    gridSizeInSteps: $gridSizeInSteps,
+                    zoomLevel: $zoomLevel,
+                    segmentLengthInBars: $segment.lengthInBars,
+                    midiChannel: $editorMidiChannel,
+                    isPlayingSegment: $melodicLyricPlayer.isPlaying,
+                    onTogglePlayback: toggleSegmentPlayback
+                ).padding().background(Color(NSColor.controlBackgroundColor))
+                
+                Divider()
+
+                // 3. Main Content Editor
+                ScrollView([.horizontal]) {
+                    ZStack(alignment: .topLeading) {
+                        // Layer 1: Background Grid
+                        MelodicLyricGridBackground(
+                            lengthInBars: segment.lengthInBars, beatsPerBar: beatsPerBar, beatWidth: beatWidth,
+                            trackHeight: trackHeight, zoomLevel: zoomLevel, stepsPerBeat: stepsPerBeat,
+                            gridSizeInSteps: gridSizeInSteps
+                        )
+
+                        if melodicLyricPlayer.isPlaying {
+                            let totalBeats = Double(segment.lengthInBars * beatsPerBar)
+                            // Ensure we don't divide by zero and stay within bounds
+                            let progress = totalBeats > 0 ? min(max(midiSequencer.currentTimeInBeats / totalBeats, 0.0), 1.0) : 0.0
+                            let indicatorX = CGFloat(progress) * CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel
+
+                            Rectangle()
+                                .fill(Color.red.opacity(0.8))
+                                .frame(width: 2, height: trackHeight)
+                                .offset(x: indicatorX)
+                        }
+
+                        if totalSteps > 0 {
+                            // Add a static grid of invisible anchor views for the ScrollViewReader to target.
+                            HStack(spacing: 0) {
+                                ForEach(0..<totalSteps, id: \.self) { step in
+                                    Color.clear
+                                        .frame(width: stepWidth, height: 1)
+                                        .id(step)
+                                }
+                            }
+                            .frame(height: 1)
+
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
+                                .frame(width: selectionHighlightWidth, height: trackHeight - 8)
+                                .offset(x: highlightOffsetX(), y: 4)
+                                .animation(.easeInOut(duration: 0.12), value: selectedStep)
+                        }
+
+                                            ForEach(segment.items) { item in
+                                                let cellWidth = stepWidth * CGFloat(item.duration ?? stepStride)
+                                                MelodicLyricCellView(
+                                                    item: item,
+                                                    isSelected: item.position == selectedStep,
+                                                    cellWidth: cellWidth,
+                                                    unitWidth: stepWidth
+                                                )
+                                                .contentShape(Rectangle())
+                                                .onTapGesture(count: 2) { 
+                                                    selectStep(item.position)
+                                                    startWordEditing()
+                                                }
+                                                .onTapGesture(count: 1) { location in
+                                                    let tappedSubStep = Int(location.x / stepWidth)
+                                                    let newSelectedStep = item.position + tappedSubStep
+                                                    selectStep(newSelectedStep)
+                                                }
+                                                .offset(x: CGFloat(item.position) * stepWidth)
+                                            }
+                        if let editingStep = editingWordStep {
+                            let editorWidth = max(stepWidth * CGFloat(max(gridSizeInSteps, 1)) - 8, 100)
+                            let editorHeight: CGFloat = 28
+                            TextField("Lyric", text: $editingWord)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: editorWidth, height: editorHeight)
+                                .focused($isInlineEditorFocused)
+                                .onSubmit { commitWordEditing() }
+                                .offset(
+                                    x: inlineEditorOffsetX(for: editingStep, width: editorWidth),
+                                    y: inlineEditorOffsetY(height: editorHeight)
+                                )
+                        }
+                    }
+                    .frame(width: CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel, height: trackHeight)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in handleBackgroundTap(at: location) }
+                }
+                .background(Color(NSColor.textBackgroundColor))
+                
+                Divider()
+                
+                // 4. Status Bar
+                HStack(spacing: 0) {
+                    Text(cellStatusDescription).padding(.horizontal)
+                    Spacer()
+                    Text(itemStatusDescription).padding(.horizontal)
+                    Spacer()
+                    Text("Items: \(segment.items.count)").padding(.horizontal)
+                }
+                .padding(.vertical, 6)
+                .background(Color(NSColor.controlBackgroundColor))
             }
-            .padding(.top, 12)
-            .padding(.horizontal)
-            .padding(.bottom, 4)
-
-            // 2. Toolbar
-            MelodicLyricToolbar(
-                currentTechnique: $currentTechnique,
-                gridSizeInSteps: $gridSizeInSteps,
-                zoomLevel: $zoomLevel,
-                segmentLengthInBars: $segment.lengthInBars,
-                midiChannel: $editorMidiChannel,
-                isPlayingSegment: $melodicLyricPlayer.isPlaying,
-                onTogglePlayback: toggleSegmentPlayback
-            ).padding().background(Color(NSColor.controlBackgroundColor))
-            
-            Divider()
-
-            // 3. Main Content Editor
-            ScrollView([.horizontal]) {
-                ZStack(alignment: .topLeading) {
-                    // Layer 1: Background Grid
-                    MelodicLyricGridBackground(
-                        lengthInBars: segment.lengthInBars, beatsPerBar: beatsPerBar, beatWidth: beatWidth,
-                        trackHeight: trackHeight, zoomLevel: zoomLevel, stepsPerBeat: stepsPerBeat,
-                        gridSizeInSteps: gridSizeInSteps
-                    )
-
-                    if melodicLyricPlayer.isPlaying {
-                        let totalBeats = Double(segment.lengthInBars * beatsPerBar)
-                        // Ensure we don't divide by zero and stay within bounds
-                        let progress = totalBeats > 0 ? min(max(midiSequencer.currentTimeInBeats / totalBeats, 0.0), 1.0) : 0.0
-                        let indicatorX = CGFloat(progress) * CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel
-
-                        Rectangle()
-                            .fill(Color.red.opacity(0.8))
-                            .frame(width: 2, height: trackHeight)
-                            .offset(x: indicatorX)
-                    }
-
-                    if totalSteps > 0 {
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
-                            .frame(width: selectionHighlightWidth, height: trackHeight - 8)
-                            .offset(x: highlightOffsetX(), y: 4)
-                            .animation(.easeInOut(duration: 0.12), value: selectedStep)
-                    }
-
-                                        ForEach(segment.items) { item in
-                                            let cellWidth = stepWidth * CGFloat(item.duration ?? stepStride)
-                                            MelodicLyricCellView(
-                                                item: item,
-                                                isSelected: item.position == selectedStep,
-                                                cellWidth: cellWidth,
-                                                unitWidth: stepWidth
-                                            )
-                                            .contentShape(Rectangle())
-                                            .onTapGesture(count: 2) { 
-                                                selectStep(item.position)
-                                                startWordEditing()
-                                            }
-                                            .onTapGesture(count: 1) { location in
-                                                let tappedSubStep = Int(location.x / stepWidth)
-                                                let newSelectedStep = item.position + tappedSubStep
-                                                selectStep(newSelectedStep)
-                                            }
-                                            .offset(x: CGFloat(item.position) * stepWidth)
-                                        }
-                    if let editingStep = editingWordStep {
-                        let editorWidth = max(stepWidth * CGFloat(max(gridSizeInSteps, 1)) - 8, 100)
-                        let editorHeight: CGFloat = 28
-                        TextField("Lyric", text: $editingWord)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: editorWidth, height: editorHeight)
-                            .focused($isInlineEditorFocused)
-                            .onSubmit { commitWordEditing() }
-                            .offset(
-                                x: inlineEditorOffsetX(for: editingStep, width: editorWidth),
-                                y: inlineEditorOffsetY(height: editorHeight)
-                            )
+            .onChange(of: selectedStep) { newStep in
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        proxy.scrollTo(newStep, anchor: .center)
                     }
                 }
-                .frame(width: CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel, height: trackHeight)
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-                .onTapGesture { location in handleBackgroundTap(at: location) }
             }
-            .background(Color(NSColor.textBackgroundColor))
-            
-            Divider()
-            
-            // 4. Status Bar
-            HStack(spacing: 0) {
-                Text(cellStatusDescription).padding(.horizontal)
-                Spacer()
-                Text(itemStatusDescription).padding(.horizontal)
-                Spacer()
-                Text("Items: \(segment.items.count)").padding(.horizontal)
+            .onChange(of: currentTechnique, perform: techniqueSelectionChanged)
+            .onChange(of: segment.lengthInBars) { _ in
+                clampSelectedStep()
+                melodicLyricPlayer.stop()
+                persistSegment()
             }
-            .padding(.vertical, 6)
-            .background(Color(NSColor.controlBackgroundColor))
-        }
-        .onChange(of: currentTechnique, perform: techniqueSelectionChanged)
-        .onChange(of: segment.lengthInBars) { _ in
-            clampSelectedStep()
-            melodicLyricPlayer.stop()
-            persistSegment()
-        }
-        .onChange(of: gridSizeInSteps) { newValue in
-            alignSelectionToGrid()
-            segment.gridUnit = newValue
-            persistSegment()
-        }
-        .onAppear {
-            gridSizeInSteps = segment.gridUnit ?? 1 // Use saved or default
-            registerKeyMonitor()
-        }
-        .onDisappear {
-            melodicLyricPlayer.stop()
-            stopPreview()
-            unregisterKeyMonitor()
-        }
-        .onChange(of: isEditingName) { editing in
-            if !editing { persistSegment() }
+            .onChange(of: gridSizeInSteps) { newValue in
+                alignSelectionToGrid()
+                segment.gridUnit = newValue
+                persistSegment()
+            }
+            .onAppear {
+                gridSizeInSteps = segment.gridUnit ?? 1 // Use saved or default
+                registerKeyMonitor()
+            }
+            .onDisappear {
+                melodicLyricPlayer.stop()
+                stopPreview()
+                unregisterKeyMonitor()
+            }
+            .onChange(of: isEditingName) { editing in
+                if !editing { persistSegment() }
+            }
         }
     }
 
@@ -394,14 +413,10 @@ struct MelodicLyricEditorView: View {
     }
 
     private func clampSelectedStep() {
-        print("--- clampSelectedStep triggered ---")
-        print("selectedStep before clamp: \(selectedStep)")
         selectedStep = snapStep(selectedStep)
     }
 
     private func alignSelectionToGrid() {
-        print("--- alignSelectionToGrid triggered ---")
-        print("selectedStep before align: \(selectedStep)")
         selectedStep = snapStep(selectedStep)
     }
 
@@ -475,6 +490,9 @@ struct MelodicLyricEditorView: View {
         // Update the duration and persist.
         segment.items[finalItemIndex].duration = newDuration
         persistSegment()
+        
+        // UX Improvement: Move to the next cell after applying sustain.
+        moveSelection(by: stepStride)
     }
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {
