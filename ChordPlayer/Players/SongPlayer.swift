@@ -148,39 +148,28 @@ class PresetArrangerPlayer: ObservableObject {
         }
         
         // 3. Lyrics Tracks (Melody)
-        for (trackIndex, lyricsTrack) in preset.arrangement.lyricsTracks.enumerated() where !lyricsTrack.isMuted {
-            print("[DEBUG] Processing lyrics track \(trackIndex) with \(lyricsTrack.lyrics.count) segments")
-            for (segmentIndex, segment) in lyricsTrack.lyrics.enumerated() {
-                print("[DEBUG] Processing lyrics segment \(segmentIndex): id=\(segment.id), startBeat=\(segment.startBeat), melodicLyricSegmentId=\(segment.melodicLyricSegmentId?.uuidString ?? "nil")")
-                
-                // Try to find melodic data using the new reference field first (for new arrangements with repeated segments)
-                // If that's nil, try the old method for backward compatibility
-                var melodicData: MelodicLyricSegment?
-                if let melodicLyricSegmentId = segment.melodicLyricSegmentId {
-                    // New method: use the explicit reference
-                    melodicData = preset.melodicLyricSegments.first(where: { $0.id == melodicLyricSegmentId })
-                    print("[DEBUG] Using new reference method, looking for melodicLyricSegmentId: \(melodicLyricSegmentId)")
-                } else {
-                    // Old method: direct ID match (for backward compatibility with old saved data)
-                    melodicData = preset.melodicLyricSegments.first(where: { $0.id == segment.id })
-                    print("[DEBUG] Using old direct ID match method, looking for segment.id: \(segment.id)")
-                }
-                
-                if let foundMelodicData = melodicData {
-                    print("[DEBUG] Found matching melodic data: \(foundMelodicData.id), name: \(foundMelodicData.name)")
+        for lyricsTrack in preset.arrangement.lyricsTracks where !lyricsTrack.isMuted {
+            for segment in lyricsTrack.lyrics {
+                 // Try to find melodic data using the new reference field first (for new arrangements with repeated segments)
+                 // If that's nil, try the old method for backward compatibility
+                 var melodicData: MelodicLyricSegment?
+                 if let melodicLyricSegmentId = segment.melodicLyricSegmentId {
+                     // New method: use the explicit reference
+                     melodicData = preset.melodicLyricSegments.first(where: { $0.id == melodicLyricSegmentId })
+                 } else {
+                     // Old method: direct ID match (for backward compatibility with old saved data)
+                     melodicData = preset.melodicLyricSegments.first(where: { $0.id == segment.id })
+                 }
+                 
+                 if let melodicData = melodicData {
                     let channel = UInt8((lyricsTrack.midiChannel ?? 4) - 1) // Default to channel 4
                     // Set pitch bend range for this channel before creating the song
                     midiManager.setPitchBendRange(channel: channel)
 
-                    if let lyricSong = melodicLyricPlayer.createSong(from: foundMelodicData, onChannel: channel) {
-                        print("[DEBUG] Successfully created lyric song with \(lyricSong.tracks.flatMap { $0.notes }.count) notes, merging at beat \(segment.startBeat)")
+                    if let lyricSong = melodicLyricPlayer.createSong(from: melodicData, onChannel: channel) {
                         masterSong.merge(with: lyricSong, at: segment.startBeat)
-                    } else {
-                        print("[DEBUG] Failed to create lyric song from melodic data \(foundMelodicData.id)")
                     }
-                } else {
-                    print("[DEBUG] No matching melodic data found for segment \(segment.id)")
-                }
+                 }
             }
         }
 
