@@ -184,11 +184,11 @@ class MIDISequencer: ObservableObject {
     // MARK: - Song Model Playback
     
     public func play(song: MusicSong, on endpoint: MIDIEndpointRef) {
-        if let json = song.dumpJSON() {
-            print("--- Playing MusicSong ---")
-            print(json)
-            print("-----------------------")
-        }
+        // if let json = song.dumpJSON() {
+        //     print("--- Playing MusicSong ---")
+        //     print(json)
+        //     print("-----------------------")
+        // }
 
         guard let sequence = createMusicSequence(from: song) else {
             print("Failed to create MusicSequence from Song object.")
