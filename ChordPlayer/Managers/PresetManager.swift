@@ -175,7 +175,6 @@ class PresetManager: ObservableObject {
     }
     
     func scheduleAutoSave() {
-        print("[DEBUG] PresetManager.scheduleAutoSave called.")
         autoSaveTimer?.invalidate()
         autoSaveTimer = Timer.scheduledTimer(withTimeInterval: autoSaveDelay, repeats: false) { [weak self] _ in
             self?.saveCurrentPresetToFile()
