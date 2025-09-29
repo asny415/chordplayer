@@ -69,13 +69,13 @@ struct KaraokeLineView: View {
                 // Background text (inactive color) - using monospaced font for consistent width
                 Text(line.lineText)
                     .font(.system(isActive ? .largeTitle : .title2, design: .monospaced).weight(.bold))
-                    .foregroundColor(isActive ? .white.opacity(0.4) : .white.opacity(0.6))
+                    .foregroundStyle(.secondary)
 
                 // Foreground text (active color, clipped) - using monospaced font
                 Text(line.lineText)
                     .font(.system(isActive ? .largeTitle : .title2, design: .monospaced).weight(.bold))
-                    .foregroundColor(isActive ? Color(hex: "#FFFF00") : .white.opacity(0.6))
-                    .shadow(color: Color(hex: "#FFFF00").opacity(0.8), radius: 5, x: 0, y: 0)
+                    .foregroundColor(.accentColor)
+                    .shadow(color: .accentColor.opacity(0.6), radius: 8, x: 0, y: 0)
                     .mask(alignment: .leading) {
                         Rectangle()
                             .frame(width: calculateMaskWidth(fullWidth: proxy.size.width), height: 60)
@@ -135,13 +135,8 @@ struct KaraokeView: View {
     
     var body: some View {
         ZStack {
-            // Background
-            LinearGradient(
-                gradient: Gradient(colors: [Color(hex: "#1a2a6c"), Color(hex: "#000033"), Color(hex: "#1a2a6c")]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Background: Use system material for a modern, adaptive look
+            Color.clear.background(.ultraThinMaterial)
             
             // Main Content: Countdown or Lyrics
             ZStack {
@@ -152,7 +147,7 @@ struct KaraokeView: View {
                         if currentIndex > 0 {
                             Text(displayLines[currentIndex - 1].lineText)
                                 .font(.system(.title3, design: .monospaced).weight(.medium))
-                                .foregroundColor(.white.opacity(0.3))
+                                .foregroundStyle(.tertiary) // Use modern foregroundStyle
                                 .padding(.horizontal)
                                 .id("prev_\(currentIndex)")
                                 .transition(.opacity.combined(with: .offset(y: -10)))
@@ -170,7 +165,7 @@ struct KaraokeView: View {
                         if displayLines.indices.contains(currentIndex + 1) {
                             Text(displayLines[currentIndex + 1].lineText)
                                 .font(.system(.title2, design: .monospaced).weight(.bold))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundStyle(.secondary) // Use modern foregroundStyle
                                 .padding(.horizontal)
                                 .id("next_\(currentIndex)")
                                 .transition(.opacity.combined(with: .offset(y: -10)))
@@ -186,13 +181,13 @@ struct KaraokeView: View {
                             Spacer().frame(height: 60) // Placeholder for active line
                             Text(firstLine.lineText)
                                 .font(.system(.title2, design: .monospaced).weight(.bold))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundStyle(.secondary) // Use modern foregroundStyle
                                 .padding(.horizontal)
                                 .transition(.opacity)
                         } else {
                             Text("...")
                                 .font(.largeTitle)
-                                .foregroundColor(.white.opacity(0.5))
+                                .foregroundStyle(.secondary) // Use modern foregroundStyle
                         }
                     }
                     
