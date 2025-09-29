@@ -27,13 +27,42 @@ struct KaraokeDisplayLine: Identifiable, Hashable {
     }
 }
 
+// MARK: - Countdown View
+struct CountdownView: View {
+    let beats: Double
+    
+    private var countdownNumber: Int {
+        Int(ceil(beats))
+    }
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(lineWidth: 10)
+                .foregroundColor(.white.opacity(0.3))
+            
+            Circle()
+                .trim(from: 0, to: (beats - Double(countdownNumber - 1)))
+                .stroke(style: StrokeStyle(lineWidth: 10, lineCap: .round, lineJoin: .round))
+                .foregroundColor(.white)
+                .rotationEffect(.degrees(-90))
+            
+            Text("\(countdownNumber)")
+                .font(.system(size: 80, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+        }
+        .frame(width: 150, height: 150)
+        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+    }
+}
+
 // MARK: - Karaoke Line View
 /// A view that displays a single line of lyrics with a real-time "wipe" animation.
 struct KaraokeLineView: View {
     let line: KaraokeDisplayLine
     let playbackTime: Double
     let isActive: Bool
-    
+
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .center) {
@@ -41,11 +70,12 @@ struct KaraokeLineView: View {
                 Text(line.lineText)
                     .font(.system(isActive ? .largeTitle : .title2, design: .monospaced).weight(.bold))
                     .foregroundColor(isActive ? .white.opacity(0.4) : .white.opacity(0.6))
-                
+
                 // Foreground text (active color, clipped) - using monospaced font
                 Text(line.lineText)
                     .font(.system(isActive ? .largeTitle : .title2, design: .monospaced).weight(.bold))
                     .foregroundColor(isActive ? Color(hex: "#FFFF00") : .white.opacity(0.6))
+                    .shadow(color: Color(hex: "#FFFF00").opacity(0.8), radius: 5, x: 0, y: 0)
                     .mask(alignment: .leading) {
                         Rectangle()
                             .frame(width: calculateMaskWidth(fullWidth: proxy.size.width), height: 60)
@@ -56,7 +86,7 @@ struct KaraokeLineView: View {
         }
         .frame(height: isActive ? 60 : 40) // Adjust frame height based on active state
     }
-    
+
     private func calculateMaskWidth(fullWidth: CGFloat) -> CGFloat {
         var accumulatedWidth: CGFloat = 0
 
@@ -86,7 +116,7 @@ struct KaraokeLineView: View {
         // If the loop completes, it means playbackTime is past all words.
         return fullWidth
     }
-    
+
     private func width(of text: String) -> CGFloat {
         // Using a more tuned estimation for monospaced fonts.
         let charWidth: CGFloat = isActive ? 28.8 : 19.2 // largeTitle ~28.8pt, title2 ~19.2pt
@@ -101,6 +131,7 @@ struct KaraokeView: View {
     
     @State private var displayLines: [KaraokeDisplayLine] = []
     @State private var currentLineIndex: Int? = nil
+    @State private var countdownBeats: Double? = nil
     
     var body: some View {
         ZStack {
@@ -112,49 +143,69 @@ struct KaraokeView: View {
             )
             .ignoresSafeArea()
             
-            // Lyrics
-            VStack(spacing: 20) {
-                if let currentIndex = currentLineIndex, displayLines.indices.contains(currentIndex) {
-                    // Previous Line (if exists)
-                    if currentIndex > 0 {
-                        Text(displayLines[currentIndex - 1].lineText)
-                            .font(.system(.title3, design: .monospaced).weight(.medium))
-                            .foregroundColor(.white.opacity(0.3))
-                            .padding(.horizontal)
-                            .id("prev_\(currentIndex)")
+            // Main Content: Countdown or Lyrics
+            ZStack {
+                // Lyrics View (always present, but may be overlaid)
+                VStack(spacing: 20) {
+                    if let currentIndex = currentLineIndex, displayLines.indices.contains(currentIndex) {
+                        // Previous Line (if exists)
+                        if currentIndex > 0 {
+                            Text(displayLines[currentIndex - 1].lineText)
+                                .font(.system(.title3, design: .monospaced).weight(.medium))
+                                .foregroundColor(.white.opacity(0.3))
+                                .padding(.horizontal)
+                                .id("prev_\(currentIndex)")
+                                .transition(.opacity.combined(with: .offset(y: -10)))
+                        } else {
+                            // Use a spacer with a specific ID to ensure stable transitions
+                            Spacer().frame(height: 30).id("prev_spacer")
+                        }
+                        
+                        // Active Line
+                        KaraokeLineView(line: displayLines[currentIndex], playbackTime: songPlayer.playbackPosition, isActive: true)
+                            .id("active_\(currentIndex)")
                             .transition(.opacity.combined(with: .offset(y: -10)))
+                        
+                        // Next Line (if exists)
+                        if displayLines.indices.contains(currentIndex + 1) {
+                            Text(displayLines[currentIndex + 1].lineText)
+                                .font(.system(.title2, design: .monospaced).weight(.bold))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(.horizontal)
+                                .id("next_\(currentIndex)")
+                                .transition(.opacity.combined(with: .offset(y: -10)))
+                        } else {
+                            Spacer().frame(height: 40).id("next_spacer")
+                        }
+                        
                     } else {
-                        // Use a spacer with a specific ID to ensure stable transitions
-                        Spacer().frame(height: 30).id("prev_spacer")
+                        // Placeholder for when no line is active (e.g., before the first line)
+                        if countdownBeats != nil, let firstLine = displayLines.first {
+                            // Show the upcoming first line during the initial countdown
+                            Spacer().frame(height: 30) // Placeholder for prev line
+                            Spacer().frame(height: 60) // Placeholder for active line
+                            Text(firstLine.lineText)
+                                .font(.system(.title2, design: .monospaced).weight(.bold))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(.horizontal)
+                                .transition(.opacity)
+                        } else {
+                            Text("...")
+                                .font(.largeTitle)
+                                .foregroundColor(.white.opacity(0.5))
+                        }
                     }
                     
-                    // Active Line
-                    KaraokeLineView(line: displayLines[currentIndex], playbackTime: songPlayer.playbackPosition, isActive: true)
-                        .id("active_\(currentIndex)")
-                        .transition(.opacity.combined(with: .offset(y: -10)))
-                    
-                    // Next Line (if exists)
-                    if displayLines.indices.contains(currentIndex + 1) {
-                        Text(displayLines[currentIndex + 1].lineText)
-                            .font(.system(.title2, design: .monospaced).weight(.bold))
-                            .foregroundColor(.white.opacity(0.7))
-                            .padding(.horizontal)
-                            .id("next_\(currentIndex)")
-                            .transition(.opacity.combined(with: .offset(y: -10)))
-                    } else {
-                        Spacer().frame(height: 40).id("next_spacer")
-                    }
-                    
-                } else {
-                    Text("...")
-                        .font(.largeTitle)
-                        .foregroundColor(.white.opacity(0.5))
+                    Spacer()
                 }
+                .padding(.top, 50)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
-                Spacer()
+                // Countdown View (overlay)
+                if let beats = countdownBeats {
+                    CountdownView(beats: beats)
+                }
             }
-            .padding(.top, 50)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear(perform: setupAndProcessLyrics)
         .onReceive(songPlayer.$playbackPosition) { time in
@@ -259,26 +310,56 @@ struct KaraokeView: View {
     }
     
     private func updateCurrentLine(at time: Double) {
-        // Find the index of the line that should be currently active
-        if let index = displayLines.firstIndex(where: { time >= $0.startTime && time < $0.endTime }) {
-            if index != currentLineIndex {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    currentLineIndex = index
+        let COUNTDOWN_THRESHOLD: Double = 4.0
+        var nextCountdownValue: Double? = nil
+        var newActiveIndex: Int? = nil
+
+        // Try to find a line that is currently active
+        if let activeIndex = displayLines.firstIndex(where: { time >= $0.startTime && time < $0.endTime }) {
+            newActiveIndex = activeIndex
+        } else {
+            // If no line is active, we are in a gap. Find the last line that we passed.
+            if let lastPassedIndex = displayLines.lastIndex(where: { time >= $0.endTime }) {
+                newActiveIndex = lastPassedIndex
+                
+                // Check if there's a next line and if the gap is long enough for a countdown.
+                let nextIndex = lastPassedIndex + 1
+                if displayLines.indices.contains(nextIndex) {
+                    let nextLine = displayLines[nextIndex]
+                    let gap = nextLine.startTime - displayLines[lastPassedIndex].endTime
+                    if gap > COUNTDOWN_THRESHOLD {
+                        let beatsToNextLine = nextLine.startTime - time
+                        if beatsToNextLine <= COUNTDOWN_THRESHOLD && beatsToNextLine > 0 {
+                            nextCountdownValue = beatsToNextLine
+                        }
+                    }
+                }
+            } else {
+                // We are before the first line.
+                newActiveIndex = nil
+                if let firstLine = displayLines.first {
+                    let gap = firstLine.startTime
+                    if gap > COUNTDOWN_THRESHOLD {
+                        let beatsToFirstLine = firstLine.startTime - time
+                        if beatsToFirstLine <= COUNTDOWN_THRESHOLD && beatsToFirstLine > 0 {
+                            nextCountdownValue = beatsToFirstLine
+                        }
+                    }
                 }
             }
-        } else if time >= (displayLines.last?.endTime ?? 0) {
-            // After the last line
-            if currentLineIndex != displayLines.count - 1 {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    currentLineIndex = displayLines.count - 1
-                }
+        }
+
+        // Update the currentLineIndex state with animation
+        if newActiveIndex != currentLineIndex {
+            withAnimation(.easeInOut(duration: 0.4)) {
+                currentLineIndex = newActiveIndex
             }
-        } else if time < (displayLines.first?.startTime ?? 0) {
-            // Before the first line
-            if currentLineIndex != 0 {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    currentLineIndex = 0
-                }
+        }
+
+        // Update countdown state
+        if countdownBeats != nextCountdownValue {
+            withAnimation(.spring()) {
+                countdownBeats = nextCountdownValue
             }
         }
     }
