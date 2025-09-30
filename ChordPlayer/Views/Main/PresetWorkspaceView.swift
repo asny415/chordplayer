@@ -10,16 +10,21 @@ struct PresetWorkspaceView: View {
     @State private var isPlayingKaraoke = false
 
     var body: some View {
-        ZStack {
+        VStack(alignment: .leading, spacing: 0) {
+            GroupBox {
+                GlobalSettingsView(isPlayingKaraoke: $isPlayingKaraoke)
+            }
+            .padding(.horizontal)
+            .padding(.top)
+
             if isPlayingKaraoke {
                 KaraokeView()
                     .transition(.opacity.combined(with: .scale(scale: 1.05)))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        GroupBox {
-                            GlobalSettingsView(isPlayingKaraoke: $isPlayingKaraoke)
-                        }
                         GroupBox {
                             DrumPatternsView()
                         }
@@ -39,7 +44,8 @@ struct PresetWorkspaceView: View {
                             MelodicLyricSegmentsView(segmentToEdit: $lyricSegmentToEdit)
                         }
                     }
-                    .padding()
+                    .padding(.horizontal)
+                    .padding(.bottom)
                 }
                 .transition(.opacity)
             }
