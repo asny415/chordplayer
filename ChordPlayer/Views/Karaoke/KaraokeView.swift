@@ -115,42 +115,50 @@ struct KaraokeView: View {
                 HStack {
                     Spacer()
 
-                    // The "Sandwich" layout block.
-                    HStack(alignment: .firstTextBaseline, spacing: 16) { // FIX 2: Use .firstTextBaseline for precise text alignment.
-                        
-                        // --- LEFT: THE COUNTDOWN ---
-                        Text(String(repeating: "•", count: countdown))
-                            .font(.system(.title3, design: .monospaced).weight(.bold))
-                            .foregroundStyle(highlightColor)
-                            .frame(width: 100, alignment: .trailing)
-                            .lineLimit(1)
-                            .opacity(countdown > 0 ? 1 : 0)
-
-                        // --- MIDDLE: THE LYRICS ---
-                        VStack(alignment: .leading, spacing: 20) {
-                            if let line = currentLine {
-                                KaraokeLineView(line: line, playbackTime: songPlayer.playbackPosition)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            } else {
-                                Rectangle().fill(Color.clear).frame(height: 60)
-                            }
+                    // This VStack contains both the content and the proportional spacer below it.
+                    // Centering this entire VStack achieves the "slightly above center" effect.
+                    VStack(spacing: 0) {
+                        // The "Sandwich" layout block for lyrics and countdown.
+                        HStack(alignment: .firstTextBaseline, spacing: 16) {
                             
-                            if let line = nextLine {
-                                Text(line.lineText)
-                                    .font(.system(.title2, design: .monospaced).weight(.bold))
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .trailing)
-                            } else {
-                                Rectangle().fill(Color.clear).frame(height: 40)
+                            // --- LEFT: THE COUNTDOWN ---
+                            Text(String(repeating: "•", count: countdown))
+                                .font(.system(.title3, design: .monospaced).weight(.bold))
+                                .foregroundStyle(highlightColor)
+                                .frame(width: 100, alignment: .trailing)
+                                .lineLimit(1)
+                                .opacity(countdown > 0 ? 1 : 0)
+
+                            // --- MIDDLE: THE LYRICS ---
+                            VStack(alignment: .leading, spacing: 20) {
+                                if let line = currentLine {
+                                    KaraokeLineView(line: line, playbackTime: songPlayer.playbackPosition)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                } else {
+                                    Rectangle().fill(Color.clear).frame(height: 60)
+                                }
+                                
+                                if let line = nextLine {
+                                    Text(line.lineText)
+                                        .font(.system(.title2, design: .monospaced).weight(.bold))
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .trailing)
+                                } else {
+                                    Rectangle().fill(Color.clear).frame(height: 40)
+                                }
                             }
+
+                            // --- RIGHT: THE DUMMY BALANCER ---
+                            Rectangle()
+                                .fill(Color.clear)
+                                .frame(width: 100)
                         }
 
-                        // --- RIGHT: THE DUMMY BALANCER ---
+                        // The user-designed proportional spacer for responsive vertical positioning.
                         Rectangle()
                             .fill(Color.clear)
-                            .frame(width: 100)
+                            .frame(height: geometry.size.height / 5)
                     }
-                    .offset(y: -100) // FIX 1: Shift the entire block up for better visual centering.
                     
                     Spacer()
                 }
