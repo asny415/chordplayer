@@ -149,8 +149,7 @@ struct KaraokeView: View {
                             }
 
                             // --- RIGHT: THE DUMMY BALANCER ---
-                            Rectangle()
-                                .fill(Color.clear)
+                            Text(" ")
                                 .frame(width: 100)
                         }
 
