@@ -220,6 +220,25 @@ class PresetManager: ObservableObject {
         guard let preset = currentPreset else { return }
         savePresetToFile(preset)
     }
+
+    func savePresetAs(to url: URL) {
+        guard let preset = currentPreset else {
+            print("[PresetManager] ❌ No current preset to save.")
+            return
+        }
+        
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = .prettyPrinted
+        
+        do {
+            let data = try encoder.encode(preset)
+            try data.write(to: url, options: .atomic)
+            print("[PresetManager] ✅ Successfully saved preset to \(url.path)")
+        } catch {
+            print("[PresetManager] ❌ Failed to save preset to \(url.path): \(error)")
+        }
+    }
     
     private func savePresetToFile(_ preset: Preset) {
         let url = presetFileURL(for: preset.id)

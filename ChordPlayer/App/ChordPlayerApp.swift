@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 @main
 struct ChordPlayerApp: App {
@@ -53,6 +54,14 @@ struct ChordPlayerApp: App {
                 .environmentObject(melodicLyricPlayer)
                 .environmentObject(PresetManager.shared)
         }
+        .commands {
+            CommandGroup(after: .saveItem) {
+                Button("Save As...") {
+                    showSavePanel()
+                }
+                .keyboardShortcut("S", modifiers: [.shift, .command])
+            }
+        }
 
         
         Settings {
@@ -65,7 +74,7 @@ struct ChordPlayerApp: App {
                 // We need to ensure a preset is loaded. A simple check and message is best.
                 if let preset = appData.preset {
                     SimplePresetArrangerView()
-                        .navigationTitle("Arrange: \(preset.name)")
+                        .navigationTitle("Arrange: \\(preset.name)")
                         .environmentObject(appData)
                         .environmentObject(presetArrangerPlayer)
                 } else {
@@ -81,5 +90,22 @@ struct ChordPlayerApp: App {
         .defaultSize(width: 1200, height: 700)
         .windowResizability(.contentSize)
         .keyboardShortcut("r", modifiers: .command)
+    }
+    
+    private func showSavePanel() {
+        let presetManager = PresetManager.shared
+        guard let preset = presetManager.currentPreset else { return }
+
+        let savePanel = NSSavePanel()
+        savePanel.canCreateDirectories = true
+        savePanel.showsTagField = false
+        savePanel.allowedContentTypes = [.json]
+        savePanel.nameFieldStringValue = "\(preset.name).json"
+        
+        savePanel.begin { result in
+            if result == .OK, let url = savePanel.url {
+                presetManager.savePresetAs(to: url)
+            }
+        }
     }
 }
