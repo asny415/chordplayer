@@ -1,4 +1,3 @@
-
 import SwiftUI
 import Combine
 
@@ -18,17 +17,18 @@ struct KaraokeDisplayLine: Identifiable, Hashable {
     
     var lineText: String {
         let joined = words.map { $0.text }.joined()
+        // Clean up trailing commas often found in lyric data
         if joined.hasSuffix(",") { return String(joined.dropLast()) }
         return joined
     }
 }
 
-// MARK: - Karaoke Line View (Refactored for Simplicity)
+// MARK: - Karaoke Line View (Unchanged)
+// This view is responsible for the word-by-word highlighting and doesn't need changes.
 struct KaraokeLineView: View {
     let line: KaraokeDisplayLine
     let playbackTime: Double
     
-    // A vibrant, eye-catching highlight color
     private let highlightColor = Color(red: 0, green: 1, blue: 0.9)
 
     var body: some View {
@@ -75,130 +75,126 @@ struct KaraokeLineView: View {
     }
 
     private func estimateWidth(for text: String) -> CGFloat {
-        // Estimation for a monospaced font. A more robust solution would use AppKit/UIKit text measurement.
         let charWidth: CGFloat = 28.8 // .largeTitle monospaced estimation
         return CGFloat(text.count) * charWidth
     }
 }
 
-// MARK: - Main Karaoke View (Complete Refactor)
+// MARK: - Main Karaoke View (NEW IMPLEMENTATION)
 struct KaraokeView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var songPlayer: PresetArrangerPlayer
     
-    @State private var displayLines: [KaraokeDisplayLine] = []
+    // Processed lyric data
+    @State private var allDisplayLines: [KaraokeDisplayLine] = []
     
-    // State for the new, simplified architecture
-    @State private var activeLineIndex: Int? = nil
-    @State private var showPreRollDots: Bool = false
+    // State for the new "rolling" display logic
+    @State private var currentLine: KaraokeDisplayLine?
+    @State private var nextLine: KaraokeDisplayLine?
 
     var body: some View {
-        ZStack {
-            Color.clear.background(.ultraThinMaterial)
-            
+        GeometryReader { geometry in
             VStack(spacing: 20) {
-                // 1. Active Line Slot
-                ZStack {
-                    if showPreRollDots {
-                        Text("...")
-                            .font(.system(.largeTitle, design: .monospaced).weight(.bold))
-                            .foregroundStyle(.secondary)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    } else if let index = activeLineIndex, displayLines.indices.contains(index) {
-                        KaraokeLineView(line: displayLines[index], playbackTime: songPlayer.playbackPosition)
-                            .id("active_\(index)")
-                            .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .move(edge: .top).combined(with: .opacity)))
-                    }
+                // 1. Current Line (Top, Left-aligned)
+                // This is the line currently being sung.
+                if let line = currentLine {
+                    KaraokeLineView(line: line, playbackTime: songPlayer.playbackPosition)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    // Placeholder to maintain layout
+                    Rectangle().fill(Color.clear).frame(height: 60)
                 }
-                .frame(height: 60)
-                
-                // 2. Next Line Slot
-                ZStack {
-                    if let nextLine = getNextLine() {
-                        Text(nextLine.lineText)
-                            .font(.system(.title2, design: .monospaced).weight(.bold))
-                            .foregroundStyle(.secondary)
-                            .id("next_\(nextLine.id)")
-                            .transition(.opacity)
-                    }
+
+                // 2. Next Line (Bottom, Right-aligned)
+                // This is the upcoming line, shown for preparation.
+                if let line = nextLine {
+                    Text(line.lineText)
+                        .font(.system(.title2, design: .monospaced).weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                } else {
+                    // Placeholder to maintain layout
+                    Rectangle().fill(Color.clear).frame(height: 40)
                 }
-                .frame(height: 40)
                 
                 Spacer()
             }
+            .frame(width: geometry.size.width * 2 / 3) // Fixed width as requested
+            .frame(maxWidth: .infinity) // Center the VStack horizontally
             .padding(.top, 50)
         }
         .onAppear(perform: setupAndProcessLyrics)
         .onReceive(songPlayer.$playbackPosition) { time in
-            updateState(at: time)
+            // No animation wrapper here for instant updates
+            updateVisibleLines(at: time)
         }
     }
     
-    private func getNextLine() -> KaraokeDisplayLine? {
-        guard let currentIndex = activeLineIndex, displayLines.indices.contains(currentIndex + 1) else {
-            return nil
+    private func updateVisibleLines(at time: Double) {
+        // Find the index of the line that *should* be active right now.
+        let activeLineIndex = allDisplayLines.firstIndex { line in
+            time >= line.startTime && time < line.endTime
         }
         
-        let currentLine = displayLines[currentIndex]
-        let nextLine = displayLines[currentIndex + 1]
+        // Find the index of the line that is truly "current" for our display logic.
+        // This can be the active line, or the one about to start.
+        var currentDisplayIndex: Int?
         
-        // Per rule #1: Only show next line if the gap is less than 10 seconds (40 beats @ 240bpm, a safe high number)
-        let beatsIn10Seconds = 10.0 * (appData.preset?.bpm ?? 120) / 60.0
-        if (nextLine.startTime - currentLine.endTime) > beatsIn10Seconds {
-            return nil
-        }
-        
-        return nextLine
-    }
-
-    private func updateState(at time: Double) {
-        let beatsIn10Seconds = 10.0 * (appData.preset?.bpm ?? 120) / 60.0
-        let COUNTDOWN_THRESHOLD: Double = 4.0
-
-        // Determine the new active index
-        let newActiveIndex = displayLines.firstIndex { time >= $0.startTime && time < $0.endTime }
-        
-        if newActiveIndex != activeLineIndex {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                activeLineIndex = newActiveIndex
-            }
-        }
-        
-        // Determine if pre-roll dots or countdown should be shown
-        var shouldShowDots = false
-        if newActiveIndex == nil { // We are in a gap
-            // Find the next line to determine if it's a segment start
-            let nextLineIndex = displayLines.firstIndex { $0.startTime > time }
-            if let nextIndex = nextLineIndex, displayLines.indices.contains(nextIndex) {
-                let nextLine = displayLines[nextIndex]
-                let prevLineIndex = nextIndex - 1
+        if let activeIndex = activeLineIndex {
+            // We are currently singing a line.
+            currentDisplayIndex = activeIndex
+        } else {
+            // We are in a gap between lines. Find the next line.
+            if let nextLineIndex = allDisplayLines.firstIndex(where: { $0.startTime > time }) {
+                let prevLineIndex = nextLineIndex - 1
                 
-                let gap: Double
                 if prevLineIndex >= 0 {
-                    gap = nextLine.startTime - displayLines[prevLineIndex].endTime
+                    // This is a gap between two lines.
+                    let prevLine = allDisplayLines[prevLineIndex]
+                    let nextLine = allDisplayLines[nextLineIndex]
+                    let gapMidpoint = prevLine.endTime + (nextLine.startTime - prevLine.endTime) / 2
+                    
+                    // If we are past the midpoint, show the next line as current. Otherwise, stick to the previous one.
+                    if time >= gapMidpoint {
+                        currentDisplayIndex = nextLineIndex
+                    } else {
+                        currentDisplayIndex = prevLineIndex
+                    }
                 } else {
-                    gap = nextLine.startTime // Gap before the first line
-                }
-                
-                if gap > beatsIn10Seconds {
-                    let beatsToNextLine = nextLine.startTime - time
-                    if beatsToNextLine <= COUNTDOWN_THRESHOLD && beatsToNextLine > 0 {
-                        shouldShowDots = true
+                    // This is the gap before the very first line.
+                    let firstLine = allDisplayLines[nextLineIndex]
+                    // If we are close enough to the start, show the first line.
+                    if firstLine.startTime - time < 4.0 { // Pre-roll time
+                         currentDisplayIndex = nextLineIndex
+                    } else {
+                        currentDisplayIndex = nil
                     }
                 }
+            } else {
+                // No more lines, we are after the last line has finished.
+                // Check if the last line was very recent
+                if let lastLine = allDisplayLines.last, time < lastLine.endTime + 2.0 {
+                    currentDisplayIndex = allDisplayLines.count - 1
+                } else {
+                    currentDisplayIndex = nil
+                }
             }
         }
         
-        if showPreRollDots != shouldShowDots {
-            withAnimation(.easeInOut) {
-                showPreRollDots = shouldShowDots
-            }
+        // Based on the determined index, update the current and next lines.
+        let newCurrentLine = currentDisplayIndex.flatMap { allDisplayLines.indices.contains($0) ? allDisplayLines[$0] : nil }
+        let newNextLine = currentDisplayIndex.flatMap { allDisplayLines.indices.contains($0 + 1) ? allDisplayLines[$0 + 1] : nil }
+
+        // Update state only if there's a change, to avoid unnecessary view re-renders.
+        if newCurrentLine?.id != self.currentLine?.id {
+            self.currentLine = newCurrentLine
+            self.nextLine = newNextLine
         }
     }
     
-    // This function remains the same as the last correct version
+    // This function remains the same for parsing the raw data.
     private func setupAndProcessLyrics() {
-        guard let preset = appData.preset else { self.displayLines = []; return }
+        guard let preset = appData.preset else { self.allDisplayLines = []; return }
         let sixteenthNoteDurationInBeats = 0.25
         var allWords: [KaraokeDisplayWord] = []
         let allLyricSegments = preset.arrangement.lyricsTracks.flatMap { $0.lyrics }.sorted { $0.startBeat < $1.startBeat }
@@ -243,8 +239,9 @@ struct KaraokeView: View {
             let lineEndTime = currentLineWords.last!.startTime + currentLineWords.last!.duration
             newDisplayLines.append(KaraokeDisplayLine(words: currentLineWords, startTime: lineStartTime, endTime: lineEndTime))
         }
-        self.displayLines = newDisplayLines
-        updateState(at: 0)
+        self.allDisplayLines = newDisplayLines
+        // Set initial state
+        updateVisibleLines(at: 0)
     }
 }
 
