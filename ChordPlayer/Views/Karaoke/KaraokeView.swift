@@ -149,30 +149,40 @@ struct KaraokeView: View {
                 let prevLineIndex = nextLineIndex - 1
                 
                 if prevLineIndex >= 0 {
-                    // This is a gap between two lines.
+                    // --- GAP BETWEEN TWO LINES ---
                     let prevLine = allDisplayLines[prevLineIndex]
                     let nextLine = allDisplayLines[nextLineIndex]
-                    let gapMidpoint = prevLine.endTime + (nextLine.startTime - prevLine.endTime) / 2
+                    let gapDuration = nextLine.startTime - prevLine.endTime
                     
-                    // If we are past the midpoint, show the next line as current. Otherwise, stick to the previous one.
-                    if time >= gapMidpoint {
-                        currentDisplayIndex = nextLineIndex
+                    if gapDuration > 10.0 {
+                        // LONG GAP (> 10s): Treat as a new paragraph. Show 5s before.
+                        if time >= nextLine.startTime - 5.0 {
+                            currentDisplayIndex = nextLineIndex
+                        } else {
+                            currentDisplayIndex = prevLineIndex
+                        }
                     } else {
-                        currentDisplayIndex = prevLineIndex
+                        // SHORT GAP (<= 10s): Update at the midpoint.
+                        let gapMidpoint = prevLine.endTime + gapDuration / 2.0
+                        if time >= gapMidpoint {
+                            currentDisplayIndex = nextLineIndex
+                        } else {
+                            currentDisplayIndex = prevLineIndex
+                        }
                     }
                 } else {
-                    // This is the gap before the very first line.
+                    // --- GAP BEFORE THE VERY FIRST LINE ---
+                    // This is always treated as a "long gap".
                     let firstLine = allDisplayLines[nextLineIndex]
-                    // If we are close enough to the start, show the first line.
-                    if firstLine.startTime - time < 4.0 { // Pre-roll time
-                         currentDisplayIndex = nextLineIndex
+                    if time >= firstLine.startTime - 5.0 {
+                        currentDisplayIndex = nextLineIndex
                     } else {
-                        currentDisplayIndex = nil
+                        currentDisplayIndex = nil // Show nothing before the pre-roll window
                     }
                 }
             } else {
-                // No more lines, we are after the last line has finished.
-                // Check if the last line was very recent
+                // --- AFTER THE LAST LINE ---
+                // Check if the last line was very recent, if so, keep it on screen.
                 if let lastLine = allDisplayLines.last, time < lastLine.endTime + 2.0 {
                     currentDisplayIndex = allDisplayLines.count - 1
                 } else {
