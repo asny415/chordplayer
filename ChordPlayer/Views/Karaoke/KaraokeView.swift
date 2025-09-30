@@ -106,69 +106,79 @@ struct KaraokeView: View {
     private let countdownViewWidth: CGFloat = 100
 
     var body: some View {
-        GeometryReader { geometry in
-            // This parent VStack with two Spacers handles the overall vertical centering.
-            VStack {
-                Spacer()
-
-                // This parent HStack with two Spacers handles the overall horizontal centering.
-                HStack {
+        ZStack {
+            GeometryReader { geometry in
+                // This parent VStack with two Spacers handles the overall vertical centering.
+                VStack {
                     Spacer()
 
-                    // This VStack contains both the content and the proportional spacer below it.
-                    // Centering this entire VStack achieves the "slightly above center" effect.
-                    VStack(spacing: 0) {
-                        // The "Sandwich" layout block for lyrics and countdown.
-                        HStack(alignment: .firstTextBaseline, spacing: 16) {
-                            
-                            // --- LEFT: THE COUNTDOWN ---
-                            Text(String(repeating: "•", count: countdown))
-                                .font(.system(.title3, design: .monospaced).weight(.bold))
-                                .foregroundStyle(highlightColor)
-                                .frame(width: 100, alignment: .trailing)
-                                .lineLimit(1)
-                                .opacity(countdown > 0 ? 1 : 0)
+                    // This parent HStack with two Spacers handles the overall horizontal centering.
+                    HStack {
+                        Spacer()
 
-                            // --- MIDDLE: THE LYRICS ---
-                            VStack(alignment: .leading, spacing: 20) {
-                                if let line = currentLine {
-                                    KaraokeLineView(line: line, playbackTime: songPlayer.playbackPosition)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                } else {
-                                    Rectangle().fill(Color.clear).frame(height: 60)
-                                }
+                        // This VStack contains both the content and the proportional spacer below it.
+                        // Centering this entire VStack achieves the "slightly above center" effect.
+                        VStack(spacing: 0) {
+                            // The "Sandwich" layout block for lyrics and countdown.
+                            HStack(alignment: .firstTextBaseline, spacing: 16) {
                                 
-                                if let line = nextLine {
-                                    Text(line.lineText)
-                                        .font(.system(.title2, design: .monospaced).weight(.bold))
-                                        .foregroundStyle(.secondary)
-                                        .frame(maxWidth: .infinity, alignment: .trailing)
-                                } else {
-                                    Rectangle().fill(Color.clear).frame(height: 40)
+                                // --- LEFT: THE COUNTDOWN ---
+                                Text(String(repeating: "•", count: countdown))
+                                    .font(.system(.title3, design: .monospaced).weight(.bold))
+                                    .foregroundStyle(highlightColor)
+                                    .frame(width: 100, alignment: .trailing)
+                                    .lineLimit(1)
+                                    .opacity(countdown > 0 ? 1 : 0)
+
+                                // --- MIDDLE: THE LYRICS ---
+                                VStack(alignment: .leading, spacing: 20) {
+                                    if let line = currentLine {
+                                        KaraokeLineView(line: line, playbackTime: songPlayer.playbackPosition)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    } else {
+                                        Rectangle().fill(Color.clear).frame(height: 60)
+                                    }
+                                    
+                                    if let line = nextLine {
+                                        Text(line.lineText)
+                                            .font(.system(.title2, design: .monospaced).weight(.bold))
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    } else {
+                                        Rectangle().fill(Color.clear).frame(height: 40)
+                                    }
                                 }
+
+                                // --- RIGHT: THE DUMMY BALANCER ---
+                                Text(" ")
+                                    .frame(width: 100)
                             }
 
-                            // --- RIGHT: THE DUMMY BALANCER ---
-                            Text(" ")
-                                .frame(width: 100)
+                            // The user-designed proportional spacer for responsive vertical positioning.
+                            Rectangle()
+                                .fill(Color.clear)
+                                .frame(height: geometry.size.height / 5)
                         }
-
-                        // The user-designed proportional spacer for responsive vertical positioning.
-                        Rectangle()
-                            .fill(Color.clear)
-                            .frame(height: geometry.size.height / 5)
+                        
+                        Spacer()
                     }
                     
                     Spacer()
                 }
-                
-                Spacer()
             }
-        }
-        .onAppear(perform: setupAndProcessLyrics)
-        .onReceive(songPlayer.$playbackPosition) { time in
-            withAnimation(.linear(duration: 0.05)) {
-                updateVisibleLines(at: time)
+            .onAppear(perform: setupAndProcessLyrics)
+            .onReceive(songPlayer.$playbackPosition) { time in
+                withAnimation(.linear(duration: 0.05)) {
+                    updateVisibleLines(at: time)
+                }
+            }
+            
+            if let presetName = appData.preset?.name {
+                Text(presetName)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
         }
     }
