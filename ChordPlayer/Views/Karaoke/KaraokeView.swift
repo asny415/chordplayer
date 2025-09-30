@@ -1,5 +1,15 @@
+
 import SwiftUI
 import Combine
+
+// 1. PreferenceKey for measuring the width of the lyric text.
+struct LyricWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        // Use the maximum width found, as views might render multiple times.
+        value = max(value, nextValue())
+    }
+}
 
 // MARK: - Data Models (Unchanged)
 struct KaraokeDisplayWord: Identifiable, Hashable {
@@ -17,14 +27,12 @@ struct KaraokeDisplayLine: Identifiable, Hashable {
     
     var lineText: String {
         let joined = words.map { $0.text }.joined()
-        // Clean up trailing commas often found in lyric data
         if joined.hasSuffix(",") { return String(joined.dropLast()) }
         return joined
     }
 }
 
 // MARK: - Karaoke Line View (Unchanged)
-// This view is responsible for the word-by-word highlighting and doesn't need changes.
 struct KaraokeLineView: View {
     let line: KaraokeDisplayLine
     let playbackTime: Double
@@ -75,92 +83,152 @@ struct KaraokeLineView: View {
     }
 
     private func estimateWidth(for text: String) -> CGFloat {
-        let charWidth: CGFloat = 28.8 // .largeTitle monospaced estimation
+        let charWidth: CGFloat = 28.8
         return CGFloat(text.count) * charWidth
     }
 }
 
-// MARK: - Main Karaoke View (NEW IMPLEMENTATION)
+// MARK: - Main Karaoke View (FINAL IMPLEMENTATION with PreferenceKey)
 struct KaraokeView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var songPlayer: PresetArrangerPlayer
     
-    // Processed lyric data
     @State private var allDisplayLines: [KaraokeDisplayLine] = []
     
-    // State for the new "rolling" display logic
     @State private var currentLine: KaraokeDisplayLine?
     @State private var nextLine: KaraokeDisplayLine?
+    @State private var countdown: Int = 0
+    
+    // 2. State variable to hold the measured width of the active lyric line.
+    @State private var activeLineWidth: CGFloat = 0
+    
+    private let highlightColor = Color(red: 0, green: 1, blue: 0.9)
+    private let countdownViewWidth: CGFloat = 100
 
     var body: some View {
         GeometryReader { geometry in
-            VStack(spacing: 20) {
-                // 1. Current Line (Top, Left-aligned)
-                // This is the line currently being sung.
-                if let line = currentLine {
-                    KaraokeLineView(line: line, playbackTime: songPlayer.playbackPosition)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    // Placeholder to maintain layout
-                    Rectangle().fill(Color.clear).frame(height: 60)
-                }
+            // A parent HStack to absolutely center the entire content block.
+            HStack {
+                Spacer()
 
-                // 2. Next Line (Bottom, Right-aligned)
-                // This is the upcoming line, shown for preparation.
-                if let line = nextLine {
-                    Text(line.lineText)
-                        .font(.system(.title2, design: .monospaced).weight(.bold))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                } else {
-                    // Placeholder to maintain layout
-                    Rectangle().fill(Color.clear).frame(height: 40)
+                VStack(spacing: 20) {
+                    // This HStack implements the brilliant "Sandwich Layout".
+                    HStack(alignment: .top, spacing: 16) {
+                        
+                        // --- LEFT: THE COUNTDOWN --- 
+                        // Fixed width, right-aligned content. It is always in the layout,
+                        // but invisible when not needed, ensuring perfect stability.
+                        Text(String(repeating: "•", count: countdown))
+                            .font(.system(.title3, design: .monospaced).weight(.bold))
+                            .foregroundStyle(highlightColor)
+                            .frame(width: 100, alignment: .trailing)
+                            .lineLimit(1)
+                            .opacity(countdown > 0 ? 1 : 0)
+
+                        // --- MIDDLE: THE LYRICS --- 
+                        // This is guaranteed to be centered because of the symmetrical views on either side.
+                        VStack(alignment: .leading, spacing: 20) {
+                            // Current Line, with left-alignment to prevent any internal jitter.
+                            if let line = currentLine {
+                                KaraokeLineView(line: line, playbackTime: songPlayer.playbackPosition)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } else {
+                                Rectangle().fill(Color.clear).frame(height: 60)
+                            }
+                            
+                            // Next Line, with right-alignment.
+                            if let line = nextLine {
+                                Text(line.lineText)
+                                    .font(.system(.title2, design: .monospaced).weight(.bold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                            } else {
+                                Rectangle().fill(Color.clear).frame(height: 40)
+                            }
+                        }
+
+                        // --- RIGHT: THE DUMMY BALANCER --- 
+                        // This invisible view has the exact same width as the countdown view,
+                        // acting as a counterweight to force the lyrics into the perfect center.
+                        Rectangle()
+                            .fill(Color.clear)
+                            .frame(width: 100)
+                    }
+                    
+                    Spacer() // Pushes the content to the top.
                 }
+                .padding(.top, 50)
                 
                 Spacer()
             }
-            .frame(width: geometry.size.width * 2 / 3) // Fixed width as requested
-            .frame(maxWidth: .infinity) // Center the VStack horizontally
-            .padding(.top, 50)
         }
         .onAppear(perform: setupAndProcessLyrics)
         .onReceive(songPlayer.$playbackPosition) { time in
-            // No animation wrapper here for instant updates
-            updateVisibleLines(at: time)
+            withAnimation(.linear(duration: 0.05)) {
+                updateVisibleLines(at: time)
+            }
         }
     }
     
+    // 6. Function to calculate the precise X coordinate for the countdown.
+    private func calculateCountdownX(screenWidth: CGFloat) -> CGFloat {
+        let screenCenterX = screenWidth / 2
+        let lyricStartX = screenCenterX - (activeLineWidth / 2)
+        let countdownCenterX = lyricStartX - (countdownViewWidth / 2) - 16 // 16 is for spacing
+        return countdownCenterX
+    }
+    
     private func updateVisibleLines(at time: Double) {
-        var currentDisplayIndex: Int?
+        var newCountdown = 0
+        if let nextLineIndex = allDisplayLines.firstIndex(where: { $0.startTime > time }) {
+            let nextLine = allDisplayLines[nextLineIndex]
+            let prevLineIndex = nextLineIndex - 1
+            var isSegmentStart = false
 
-        // Find the line that is currently singing, if any.
+            if prevLineIndex >= 0 {
+                if (nextLine.startTime - allDisplayLines[prevLineIndex].endTime) > 10.0 {
+                    isSegmentStart = true
+                }
+            } else {
+                isSegmentStart = true
+            }
+
+            if isSegmentStart {
+                let timeToStart = nextLine.startTime - time
+                if timeToStart > 2 && timeToStart <= 3 {
+                    newCountdown = 3
+                } else if timeToStart > 1 && timeToStart <= 2 {
+                    newCountdown = 2
+                } else if timeToStart > 0 && timeToStart <= 1 {
+                    newCountdown = 1
+                }
+            }
+        }
+        if self.countdown != newCountdown {
+            self.countdown = newCountdown
+        }
+
+        var currentDisplayIndex: Int?
         if let activeIndex = allDisplayLines.firstIndex(where: { time >= $0.startTime && time < $0.endTime }) {
             currentDisplayIndex = activeIndex
         } else {
-            // We are in a gap. Find the next line to decide what to do.
             if let nextLineIndex = allDisplayLines.firstIndex(where: { $0.startTime > time }) {
                 let prevLineIndex = nextLineIndex - 1
-
                 if prevLineIndex >= 0 {
-                    // --- GAP BETWEEN TWO LINES ---
                     let prevLine = allDisplayLines[prevLineIndex]
                     let nextLine = allDisplayLines[nextLineIndex]
                     let gapDuration = nextLine.startTime - prevLine.endTime
 
                     if gapDuration > 10.0 {
-                        // LONG GAP: Blank screen, then 5s pre-roll.
                         if time >= nextLine.startTime - 5.0 {
-                            currentDisplayIndex = nextLineIndex // Pre-roll window
+                            currentDisplayIndex = nextLineIndex
                         } else {
-                            currentDisplayIndex = nil // Blank screen during gap
+                            currentDisplayIndex = nil
                         }
                     } else {
-                        // SHORT GAP: Switch immediately after the previous line ends.
                         currentDisplayIndex = nextLineIndex
                     }
                 } else {
-                    // --- GAP BEFORE THE VERY FIRST LINE ---
-                    // Treat as a long gap: blank, then 5s pre-roll.
                     let firstLine = allDisplayLines[nextLineIndex]
                     if time >= firstLine.startTime - 5.0 {
                         currentDisplayIndex = nextLineIndex
@@ -169,40 +237,31 @@ struct KaraokeView: View {
                     }
                 }
             } else {
-                // --- AFTER THE LAST LINE HAS FINISHED ---
-                // The song is over, show a blank screen.
                 currentDisplayIndex = nil
             }
         }
 
-        // --- SET THE STATE BASED ON THE NEW LOGIC ---
         let newCurrentLine = currentDisplayIndex.flatMap { allDisplayLines.indices.contains($0) ? allDisplayLines[$0] : nil }
-        var newNextLine: KaraokeDisplayLine? = nil // Default to nil
+        var newNextLine: KaraokeDisplayLine? = nil
 
-        // Determine if a "next line" should be shown.
         if let currentIndex = currentDisplayIndex {
             let nextPotentialIndex = currentIndex + 1
             if allDisplayLines.indices.contains(nextPotentialIndex) {
                 let currentLine = allDisplayLines[currentIndex]
                 let nextPotentialLine = allDisplayLines[nextPotentialIndex]
-                
                 let gapToNext = nextPotentialLine.startTime - currentLine.endTime
-
-                // Only show the next line if it's part of the same segment (short gap).
                 if gapToNext <= 10.0 {
                     newNextLine = nextPotentialLine
                 }
             }
         }
 
-        // Update state only if there's a change to avoid unnecessary view re-renders.
         if newCurrentLine?.id != self.currentLine?.id || newNextLine?.id != self.nextLine?.id {
             self.currentLine = newCurrentLine
             self.nextLine = newNextLine
         }
     }
     
-    // This function remains the same for parsing the raw data.
     private func setupAndProcessLyrics() {
         guard let preset = appData.preset else { self.allDisplayLines = []; return }
         let sixteenthNoteDurationInBeats = 0.25
@@ -250,7 +309,6 @@ struct KaraokeView: View {
             newDisplayLines.append(KaraokeDisplayLine(words: currentLineWords, startTime: lineStartTime, endTime: lineEndTime))
         }
         self.allDisplayLines = newDisplayLines
-        // Set initial state
         updateVisibleLines(at: 0)
     }
 }
