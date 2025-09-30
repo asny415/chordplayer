@@ -131,72 +131,72 @@ struct KaraokeView: View {
     }
     
     private func updateVisibleLines(at time: Double) {
-        // Find the index of the line that *should* be active right now.
-        let activeLineIndex = allDisplayLines.firstIndex { line in
-            time >= line.startTime && time < line.endTime
-        }
-        
-        // Find the index of the line that is truly "current" for our display logic.
-        // This can be the active line, or the one about to start.
         var currentDisplayIndex: Int?
-        
-        if let activeIndex = activeLineIndex {
-            // We are currently singing a line.
+
+        // Find the line that is currently singing, if any.
+        if let activeIndex = allDisplayLines.firstIndex(where: { time >= $0.startTime && time < $0.endTime }) {
             currentDisplayIndex = activeIndex
         } else {
-            // We are in a gap between lines. Find the next line.
+            // We are in a gap. Find the next line to decide what to do.
             if let nextLineIndex = allDisplayLines.firstIndex(where: { $0.startTime > time }) {
                 let prevLineIndex = nextLineIndex - 1
-                
+
                 if prevLineIndex >= 0 {
                     // --- GAP BETWEEN TWO LINES ---
                     let prevLine = allDisplayLines[prevLineIndex]
                     let nextLine = allDisplayLines[nextLineIndex]
                     let gapDuration = nextLine.startTime - prevLine.endTime
-                    
+
                     if gapDuration > 10.0 {
-                        // LONG GAP (> 10s): Treat as a new paragraph. Show 5s before.
+                        // LONG GAP: Blank screen, then 5s pre-roll.
                         if time >= nextLine.startTime - 5.0 {
-                            currentDisplayIndex = nextLineIndex
+                            currentDisplayIndex = nextLineIndex // Pre-roll window
                         } else {
-                            currentDisplayIndex = prevLineIndex
+                            currentDisplayIndex = nil // Blank screen during gap
                         }
                     } else {
-                        // SHORT GAP (<= 10s): Update at the midpoint.
-                        let gapMidpoint = prevLine.endTime + gapDuration / 2.0
-                        if time >= gapMidpoint {
-                            currentDisplayIndex = nextLineIndex
-                        } else {
-                            currentDisplayIndex = prevLineIndex
-                        }
+                        // SHORT GAP: Switch immediately after the previous line ends.
+                        currentDisplayIndex = nextLineIndex
                     }
                 } else {
                     // --- GAP BEFORE THE VERY FIRST LINE ---
-                    // This is always treated as a "long gap".
+                    // Treat as a long gap: blank, then 5s pre-roll.
                     let firstLine = allDisplayLines[nextLineIndex]
                     if time >= firstLine.startTime - 5.0 {
                         currentDisplayIndex = nextLineIndex
                     } else {
-                        currentDisplayIndex = nil // Show nothing before the pre-roll window
+                        currentDisplayIndex = nil
                     }
                 }
             } else {
-                // --- AFTER THE LAST LINE ---
-                // Check if the last line was very recent, if so, keep it on screen.
-                if let lastLine = allDisplayLines.last, time < lastLine.endTime + 2.0 {
-                    currentDisplayIndex = allDisplayLines.count - 1
-                } else {
-                    currentDisplayIndex = nil
+                // --- AFTER THE LAST LINE HAS FINISHED ---
+                // The song is over, show a blank screen.
+                currentDisplayIndex = nil
+            }
+        }
+
+        // --- SET THE STATE BASED ON THE NEW LOGIC ---
+        let newCurrentLine = currentDisplayIndex.flatMap { allDisplayLines.indices.contains($0) ? allDisplayLines[$0] : nil }
+        var newNextLine: KaraokeDisplayLine? = nil // Default to nil
+
+        // Determine if a "next line" should be shown.
+        if let currentIndex = currentDisplayIndex {
+            let nextPotentialIndex = currentIndex + 1
+            if allDisplayLines.indices.contains(nextPotentialIndex) {
+                let currentLine = allDisplayLines[currentIndex]
+                let nextPotentialLine = allDisplayLines[nextPotentialIndex]
+                
+                let gapToNext = nextPotentialLine.startTime - currentLine.endTime
+
+                // Only show the next line if it's part of the same segment (short gap).
+                if gapToNext <= 10.0 {
+                    newNextLine = nextPotentialLine
                 }
             }
         }
-        
-        // Based on the determined index, update the current and next lines.
-        let newCurrentLine = currentDisplayIndex.flatMap { allDisplayLines.indices.contains($0) ? allDisplayLines[$0] : nil }
-        let newNextLine = currentDisplayIndex.flatMap { allDisplayLines.indices.contains($0 + 1) ? allDisplayLines[$0 + 1] : nil }
 
-        // Update state only if there's a change, to avoid unnecessary view re-renders.
-        if newCurrentLine?.id != self.currentLine?.id {
+        // Update state only if there's a change to avoid unnecessary view re-renders.
+        if newCurrentLine?.id != self.currentLine?.id || newNextLine?.id != self.nextLine?.id {
             self.currentLine = newCurrentLine
             self.nextLine = newNextLine
         }
