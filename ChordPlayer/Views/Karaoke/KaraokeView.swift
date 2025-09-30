@@ -107,17 +107,18 @@ struct KaraokeView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            // A parent HStack to absolutely center the entire content block.
-            HStack {
+            // This parent VStack with two Spacers handles the overall vertical centering.
+            VStack {
                 Spacer()
 
-                VStack(spacing: 20) {
-                    // This HStack implements the brilliant "Sandwich Layout".
-                    HStack(alignment: .top, spacing: 16) {
+                // This parent HStack with two Spacers handles the overall horizontal centering.
+                HStack {
+                    Spacer()
+
+                    // The "Sandwich" layout block.
+                    HStack(alignment: .firstTextBaseline, spacing: 16) { // FIX 2: Use .firstTextBaseline for precise text alignment.
                         
-                        // --- LEFT: THE COUNTDOWN --- 
-                        // Fixed width, right-aligned content. It is always in the layout,
-                        // but invisible when not needed, ensuring perfect stability.
+                        // --- LEFT: THE COUNTDOWN ---
                         Text(String(repeating: "•", count: countdown))
                             .font(.system(.title3, design: .monospaced).weight(.bold))
                             .foregroundStyle(highlightColor)
@@ -125,10 +126,8 @@ struct KaraokeView: View {
                             .lineLimit(1)
                             .opacity(countdown > 0 ? 1 : 0)
 
-                        // --- MIDDLE: THE LYRICS --- 
-                        // This is guaranteed to be centered because of the symmetrical views on either side.
+                        // --- MIDDLE: THE LYRICS ---
                         VStack(alignment: .leading, spacing: 20) {
-                            // Current Line, with left-alignment to prevent any internal jitter.
                             if let line = currentLine {
                                 KaraokeLineView(line: line, playbackTime: songPlayer.playbackPosition)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -136,7 +135,6 @@ struct KaraokeView: View {
                                 Rectangle().fill(Color.clear).frame(height: 60)
                             }
                             
-                            // Next Line, with right-alignment.
                             if let line = nextLine {
                                 Text(line.lineText)
                                     .font(.system(.title2, design: .monospaced).weight(.bold))
@@ -147,17 +145,15 @@ struct KaraokeView: View {
                             }
                         }
 
-                        // --- RIGHT: THE DUMMY BALANCER --- 
-                        // This invisible view has the exact same width as the countdown view,
-                        // acting as a counterweight to force the lyrics into the perfect center.
+                        // --- RIGHT: THE DUMMY BALANCER ---
                         Rectangle()
                             .fill(Color.clear)
                             .frame(width: 100)
                     }
+                    .offset(y: -100) // FIX 1: Shift the entire block up for better visual centering.
                     
-                    Spacer() // Pushes the content to the top.
+                    Spacer()
                 }
-                .padding(.top, 50)
                 
                 Spacer()
             }
