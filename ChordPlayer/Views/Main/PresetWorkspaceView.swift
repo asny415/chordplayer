@@ -53,6 +53,9 @@ struct PresetWorkspaceView: View {
                             .onReceive(chordPlayer.$playbackPosition) { newPosition in
                                 playheadPosition = newPosition
                             }
+                            .onChange(of: appData.preset?.arrangement) { _ in
+                                updateArrangementLength()
+                            }
                         }
                     }
                     .padding(.horizontal)
@@ -112,6 +115,43 @@ struct PresetWorkspaceView: View {
             } else {
                 Text("Error: Could not find segment to edit.")
             }
+        }
+    }
+    
+    private func updateArrangementLength() {
+        guard let preset = appData.preset else { return }
+        
+        var maxEndBeat: Double = 4.0 // Minimum length
+        
+        // Find the max end beat for drum segments
+        if let lastDrumSegment = preset.arrangement.drumTrack.segments.max(by: { $0.startBeat + $0.durationInBeats < $1.startBeat + $1.durationInBeats }) {
+            maxEndBeat = max(maxEndBeat, lastDrumSegment.startBeat + lastDrumSegment.durationInBeats)
+        }
+        
+        // Find the max end beat for guitar segments
+        for track in preset.arrangement.guitarTracks {
+            if let lastGuitarSegment = track.segments.max(by: { $0.startBeat + $0.durationInBeats < $1.startBeat + $1.durationInBeats }) {
+                maxEndBeat = max(maxEndBeat, lastGuitarSegment.startBeat + lastGuitarSegment.durationInBeats)
+            }
+        }
+        
+        // Find the max end beat for lyrics segments
+        for track in preset.arrangement.lyricsTracks {
+            if let lastLyricsSegment = track.lyrics.max(by: { $0.startBeat + $0.durationInBeats < $1.startBeat + $1.durationInBeats }) {
+                maxEndBeat = max(maxEndBeat, lastLyricsSegment.startBeat + lastLyricsSegment.durationInBeats)
+            }
+        }
+        
+        // Round up to the nearest measure
+        let beatsPerMeasure = Double(preset.timeSignature.beatsPerMeasure)
+        guard beatsPerMeasure > 0 else { return }
+        
+        let newLength = ceil(maxEndBeat / beatsPerMeasure) * beatsPerMeasure
+        let finalLength = max(4.0, newLength) // Ensure it's at least 4 beats
+
+        // Only update if the new length is greater, to avoid shrinking the timeline unintentionally
+        if finalLength > preset.arrangement.lengthInBeats {
+            appData.preset?.arrangement.lengthInBeats = finalLength
         }
     }
     
