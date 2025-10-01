@@ -3,6 +3,7 @@ import SwiftUI
 struct GlobalSettingsView: View {
     @EnvironmentObject var appData: AppData
     @Binding var isPlayingKaraoke: Bool
+    @Binding var playheadPosition: Double
     
     // Define constants for cycles locally
     private let KEY_CYCLE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -49,7 +50,7 @@ struct GlobalSettingsView: View {
                     .frame(maxWidth: .infinity)
 
                 // Song Arrangement Playback Card
-                ArrangementPlaybackCard(isPlayingKaraoke: $isPlayingKaraoke)
+                ArrangementPlaybackCard(playheadPosition: $playheadPosition, isPlayingKaraoke: $isPlayingKaraoke)
                     .frame(maxWidth: .infinity)
             }
             .padding(.vertical, 4)
@@ -172,8 +173,10 @@ struct PlayingModeBadgeView: View {
 }
 
 struct ArrangementPlaybackCard: View {
-    @EnvironmentObject var presetArrangerPlayer: PresetArrangerPlayer
+    @EnvironmentObject var chordPlayer: PresetArrangerPlayer
     @EnvironmentObject var appData: AppData
+    
+    @Binding var playheadPosition: Double
     @Binding var isPlayingKaraoke: Bool
 
     var body: some View {
@@ -183,33 +186,36 @@ struct ArrangementPlaybackCard: View {
                 .foregroundColor(.secondary)
 
             VStack(spacing: 2) {
-                Text(presetArrangerPlayer.isPlaying ? "Playing" : "Stopped")
+                Text(chordPlayer.isPlaying ? "Playing" : "Stopped")
                     .font(.system(.title2, design: .rounded).weight(.bold))
                 
                 if let currentPreset = appData.preset {
                     let totalBeats = currentPreset.arrangement.lengthInBeats
                     if totalBeats > 0 {
-                        Text(String(format: "%.1f / %.1f", presetArrangerPlayer.playbackPosition, totalBeats))
+                        // Display the position from the player, which is the source of truth
+                        Text(String(format: "%.1f / %.1f", chordPlayer.playbackPosition, totalBeats))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
             }
-            .foregroundColor(presetArrangerPlayer.isPlaying ? .green : .primary)
+            .foregroundColor(chordPlayer.isPlaying ? .green : .primary)
         }
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 60)
         .padding(8)
         .background(Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture {
-            if presetArrangerPlayer.isPlaying {
-                presetArrangerPlayer.stop()
-                isPlayingKaraoke = false // Explicitly set to false on stop
+            if chordPlayer.isPlaying {
+                chordPlayer.stop()
+                isPlayingKaraoke = false // Also stop karaoke view
             } else {
-                presetArrangerPlayer.play()
-                isPlayingKaraoke = true
+                // Seek to the UI's playhead position, then play from there.
+                chordPlayer.seekTo(beat: playheadPosition)
+                chordPlayer.playFromCurrentPosition()
+                isPlayingKaraoke = true // Also start karaoke view
             }
         }
-        .onChange(of: presetArrangerPlayer.isPlaying) { newIsPlaying in
+        .onChange(of: chordPlayer.isPlaying) { newIsPlaying in
             // If the sequencer stops playing for any reason (e.g., song ends),
             // ensure we exit the karaoke view.
             if !newIsPlaying {
@@ -218,7 +224,7 @@ struct ArrangementPlaybackCard: View {
         }
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(presetArrangerPlayer.isPlaying ? Color.green : Color.secondary.opacity(0.2), lineWidth: presetArrangerPlayer.isPlaying ? 2.5 : 1)
+                .stroke(chordPlayer.isPlaying ? Color.green : Color.secondary.opacity(0.2), lineWidth: chordPlayer.isPlaying ? 2.5 : 1)
         )
     }
 }

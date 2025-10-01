@@ -2,8 +2,8 @@
 import SwiftUI
 
 struct TimelineRulerView: View {
+    @EnvironmentObject var chordPlayer: PresetArrangerPlayer
     @Binding var playheadPosition: Double
-    let appData: AppData
     
     let lengthInBeats: Double
     let timeSignature: TimeSignature
@@ -55,8 +55,7 @@ struct TimelineRulerView: View {
                     let newBeat = max(0, value.location.x / pixelsPerBeat)
                     if newBeat <= lengthInBeats {
                         playheadPosition = newBeat
-                        // Assuming appData.player is the correct way to access the player instance
-                        // appData.player.seekTo(beat: newBeat)
+                        chordPlayer.seekTo(beat: newBeat)
                     }
                 }
         )

@@ -5,6 +5,7 @@ import AppKit
 struct PresetWorkspaceView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var keyboardHandler: KeyboardHandler
+    @EnvironmentObject var chordPlayer: PresetArrangerPlayer
     @State private var segmentToEdit: SoloSegment?
     @State private var lyricSegmentToEdit: MelodicLyricSegment?
     @State private var isPlayingKaraoke = false
@@ -13,7 +14,7 @@ struct PresetWorkspaceView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             GroupBox {
-                GlobalSettingsView(isPlayingKaraoke: $isPlayingKaraoke)
+                GlobalSettingsView(isPlayingKaraoke: $isPlayingKaraoke, playheadPosition: $playheadPosition)
             }
             .padding(.horizontal)
             .padding(.top)
@@ -48,6 +49,9 @@ struct PresetWorkspaceView: View {
                         if let presetBinding = Binding($appData.preset) {
                             GroupBox {
                                 ArrangementView(arrangement: presetBinding.arrangement, preset: presetBinding, playheadPosition: $playheadPosition)
+                            }
+                            .onReceive(chordPlayer.$playbackPosition) { newPosition in
+                                playheadPosition = newPosition
                             }
                         }
                     }
@@ -110,4 +114,6 @@ struct PresetWorkspaceView: View {
             }
         }
     }
+    
+
 }

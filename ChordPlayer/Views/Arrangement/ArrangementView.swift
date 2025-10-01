@@ -36,7 +36,6 @@ struct ArrangementView: View {
                             
                             TimelineRulerView(
                                 playheadPosition: $playheadPosition,
-                                appData: appData,
                                 lengthInBeats: arrangement.lengthInBeats,
                                 timeSignature: preset.timeSignature,
                                 pixelsPerBeat: pixelsPerBeat
