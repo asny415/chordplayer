@@ -43,6 +43,12 @@ struct PresetWorkspaceView: View {
                         GroupBox {
                             MelodicLyricSegmentsView(segmentToEdit: $lyricSegmentToEdit)
                         }
+                        // MARK: - Song Arrangement Section
+                        if let presetBinding = Binding($appData.preset) {
+                            GroupBox {
+                                ArrangementView(arrangement: presetBinding.arrangement, preset: presetBinding)
+                            }
+                        }
                     }
                     .padding(.horizontal)
                     .padding(.bottom)
