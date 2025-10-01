@@ -276,4 +276,39 @@ class PresetManager: ObservableObject {
         }
         return newName
     }
+    
+    func presetExists(withId id: UUID) -> Bool {
+        return presets.contains { $0.id == id }
+    }
+    
+    func addOrUpdatePreset(_ preset: Preset) {
+        var updatedPreset = preset
+        updatedPreset.updatedAt = Date()
+
+        if let index = presets.firstIndex(where: { $0.id == updatedPreset.id }) {
+            // Existing preset: update its info
+            presets[index].name = updatedPreset.name
+            presets[index].updatedAt = updatedPreset.updatedAt
+            print("[PresetManager] ✅ Updated info for existing preset: \(updatedPreset.name)")
+        } else {
+            // New preset: add its info to the list
+            let presetInfo = updatedPreset.toInfo()
+            presets.append(presetInfo)
+            print("[PresetManager] ✅ Added new preset to list: \(updatedPreset.name)")
+        }
+        
+        // Sort presets by date
+        presets.sort(by: { $0.updatedAt > $1.updatedAt })
+        
+        // Save the full preset data to its file
+        savePresetToFile(updatedPreset)
+        
+        // Save the updated list of preset infos
+        savePresetsList()
+        
+        // If the imported preset is the current one, reload it to reflect changes.
+        if currentPreset?.id == updatedPreset.id {
+            loadPreset(updatedPreset.toInfo())
+        }
+    }
 }

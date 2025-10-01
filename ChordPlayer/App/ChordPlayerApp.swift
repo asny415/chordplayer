@@ -39,6 +39,12 @@ struct ChordPlayerApp: App {
     }
 
     @Environment(\.openWindow) var openWindow
+    @State private var isImporting = false
+    @State private var showingImportConflictAlert = false
+    @State private var conflictingPreset: Preset?
+    @State private var presetsToImport: [Preset] = []
+    @State private var showingImportErrorAlert = false
+    @State private var importErrorMessage = ""
 
     var body: some Scene {
         WindowGroup {
@@ -53,13 +59,50 @@ struct ChordPlayerApp: App {
                 .environmentObject(keyboardHandler)
                 .environmentObject(melodicLyricPlayer)
                 .environmentObject(PresetManager.shared)
+                .fileImporter(isPresented: $isImporting, allowedContentTypes: [.json], allowsMultipleSelection: false) { result in
+                    switch result {
+                    case .success(let urls):
+                        guard let url = urls.first else { return }
+                        // This will be a security-scoped URL, so we need to handle it properly.
+                        let secured = url.startAccessingSecurityScopedResource()
+                        defer {
+                            if secured {
+                                url.stopAccessingSecurityScopedResource()
+                            }
+                        }
+                        handleImport(from: url)
+                    case .failure(let error):
+                        print("Error importing file: \(error.localizedDescription)")
+                    }
+                }
+                .alert("Preset Conflict", isPresented: $showingImportConflictAlert, presenting: conflictingPreset) { preset in
+                    Button("Overwrite", role: .destructive) {
+                        PresetManager.shared.addOrUpdatePreset(preset)
+                        processNextImport()
+                    }
+                    Button("Skip", role: .cancel) {
+                        processNextImport()
+                    }
+                } message: { preset in
+                    Text("A preset named '\(preset.name)' with the same ID already exists. Do you want to overwrite it?")
+                }
+                .alert("Import Failed", isPresented: $showingImportErrorAlert) {
+                    Button("OK", role: .cancel) { }
+                } message: { 
+                    Text(importErrorMessage)
+                }
         }
         .commands {
             CommandGroup(after: .saveItem) {
-                Button("Save As...") {
+                Button("Export...") {
                     showSavePanel()
                 }
                 .keyboardShortcut("S", modifiers: [.shift, .command])
+                
+                Button("Import...") {
+                    isImporting = true
+                }
+                .keyboardShortcut("I", modifiers: [.command, .shift])
             }
         }
 
@@ -106,6 +149,92 @@ struct ChordPlayerApp: App {
             if result == .OK, let url = savePanel.url {
                 presetManager.savePresetAs(to: url)
             }
+        }
+    }
+    
+    private func handleImport(from url: URL) {
+        guard let data = try? Data(contentsOf: url) else {
+            print("Failed to read data from URL.")
+            return
+        }
+
+        // First, try to decode as a single Preset
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let preset = try decoder.decode(Preset.self, from: data)
+            self.presetsToImport = [preset]
+            processNextImport()
+        } catch let firstError {
+            // If decoding a single preset fails, THEN try decoding an array
+            do {
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                let presets = try decoder.decode([Preset].self, from: data)
+                self.presetsToImport = presets
+                processNextImport()
+            } catch {
+                // If both attempts fail, the first error is the most likely root cause.
+                // Report the error from the initial attempt to decode a single Preset.
+                reportImportError(firstError)
+            }
+        }
+    }
+
+    private func reportImportError(_ error: Error) {
+        var detailedErrorMessage = "The file format is not correct. Please use a valid preset file created with the 'Export...' function."
+
+        if let decodingError = error as? DecodingError {
+            detailedErrorMessage += "\n\n[Debug Info]\n"
+            switch decodingError {
+            case .keyNotFound(let key, let context):
+                let path = context.codingPath.map { $0.stringValue }.joined(separator: " -> ")
+                detailedErrorMessage += "A required field is missing: '\(key.stringValue)'."
+                if !path.isEmpty { detailedErrorMessage += "\nPath: \(path)" }
+                
+            case .typeMismatch(_, let context):
+                let path = context.codingPath.map { $0.stringValue }.joined(separator: " -> ")
+                detailedErrorMessage += "A field has the wrong data type at path: '\(path)'."
+                detailedErrorMessage += "\nDetails: \(context.debugDescription)"
+
+            case .valueNotFound(let type, let context):
+                let path = context.codingPath.map { $0.stringValue }.joined(separator: " -> ")
+                detailedErrorMessage += "A required value was null or missing. Expected '\(type)'."
+                if !path.isEmpty { detailedErrorMessage += "\nPath: \(path)" }
+
+            case .dataCorrupted(let context):
+                let path = context.codingPath.map { $0.stringValue }.joined(separator: " -> ")
+                var finalPath = "root"
+                if !path.isEmpty { finalPath = path }
+                detailedErrorMessage += "The file data is corrupted near '\(finalPath)'."
+                detailedErrorMessage += "\nDetails: \(context.debugDescription)"
+                
+            @unknown default:
+                detailedErrorMessage += "An unknown decoding error occurred: \(error.localizedDescription)"
+            }
+        } else {
+            detailedErrorMessage += "\n\n[Debug Info]\n\(error.localizedDescription)"
+        }
+
+        self.importErrorMessage = detailedErrorMessage
+        self.showingImportErrorAlert = true
+        print("Detailed decoding error: \(error)")
+    }
+    
+    private func processNextImport() {
+        guard let presetToImport = presetsToImport.first else {
+            // No more presets to import, we are done.
+            return
+        }
+        
+        self.presetsToImport.removeFirst()
+        
+        if PresetManager.shared.presetExists(withId: presetToImport.id) {
+            self.conflictingPreset = presetToImport
+            self.showingImportConflictAlert = true
+        } else {
+            PresetManager.shared.addOrUpdatePreset(presetToImport)
+            processNextImport() // Process the next preset in the list immediately.
         }
     }
 }
