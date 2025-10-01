@@ -8,6 +8,7 @@ struct PresetWorkspaceView: View {
     @State private var segmentToEdit: SoloSegment?
     @State private var lyricSegmentToEdit: MelodicLyricSegment?
     @State private var isPlayingKaraoke = false
+    @State private var playheadPosition: Double = 0.0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,7 +47,7 @@ struct PresetWorkspaceView: View {
                         // MARK: - Song Arrangement Section
                         if let presetBinding = Binding($appData.preset) {
                             GroupBox {
-                                ArrangementView(arrangement: presetBinding.arrangement, preset: presetBinding)
+                                ArrangementView(arrangement: presetBinding.arrangement, preset: presetBinding, playheadPosition: $playheadPosition)
                             }
                         }
                     }

@@ -2,6 +2,9 @@
 import SwiftUI
 
 struct TimelineRulerView: View {
+    @Binding var playheadPosition: Double
+    let appData: AppData
+    
     let lengthInBeats: Double
     let timeSignature: TimeSignature
     let pixelsPerBeat: CGFloat
@@ -38,5 +41,24 @@ struct TimelineRulerView: View {
             }
         }
         .background(Color.gray.opacity(0.2))
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    // Live update the UI playhead position
+                    let newBeat = max(0, value.location.x / pixelsPerBeat)
+                    if newBeat <= lengthInBeats {
+                        playheadPosition = newBeat
+                    }
+                }
+                .onEnded { value in
+                    // Finalize the position and command the player to seek
+                    let newBeat = max(0, value.location.x / pixelsPerBeat)
+                    if newBeat <= lengthInBeats {
+                        playheadPosition = newBeat
+                        // Assuming appData.player is the correct way to access the player instance
+                        // appData.player.seekTo(beat: newBeat)
+                    }
+                }
+        )
     }
 }

@@ -251,7 +251,8 @@ struct AccompanimentToolbar: View {
 }
 
 // MARK: - Timeline UI
-struct PlayheadView: View {
+
+private struct EditorPlayheadView: View {
     let position: CGFloat
     let height: CGFloat
     
@@ -263,6 +264,8 @@ struct PlayheadView: View {
             .frame(height: height)
     }
 }
+
+
 
 struct TrackHeadersView: View {
     let trackHeight: CGFloat
@@ -336,7 +339,7 @@ struct TimelineContainerView: View {
                         .padding(.top, headerHeight)
                         
                         if let playheadInBeats = playheadInBeats {
-                            PlayheadView(
+                            EditorPlayheadView(
                                 position: CGFloat(playheadInBeats) * beatWidth * zoomLevel,
                                 height: trackHeight * 2 + headerHeight
                             )
