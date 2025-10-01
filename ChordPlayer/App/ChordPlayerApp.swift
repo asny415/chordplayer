@@ -74,7 +74,7 @@ struct ChordPlayerApp: App {
                 // We need to ensure a preset is loaded. A simple check and message is best.
                 if let preset = appData.preset {
                     SimplePresetArrangerView()
-                        .navigationTitle("Arrange: \\(preset.name)")
+                        .navigationTitle("Arrange: \(preset.name)")
                         .environmentObject(appData)
                         .environmentObject(presetArrangerPlayer)
                 } else {
