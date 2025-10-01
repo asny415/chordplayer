@@ -113,8 +113,11 @@ class PresetArrangerPlayer: ObservableObject {
         // 1. Drum Track
         if !preset.arrangement.drumTrack.isMuted {
             for segment in preset.arrangement.drumTrack.segments {
-                guard let pattern = appData.getDrumPattern(for: segment.patternId),
-                      let drumSong = drumPlayer.createSong(from: pattern, loopDurationInBeats: segment.durationInBeats) else {
+                guard let pattern = appData.getDrumPattern(for: segment.patternId) else {
+                    continue
+                }
+                let channel = UInt8((preset.arrangement.drumTrack.midiChannel ?? 10) - 1)
+                guard let drumSong = drumPlayer.createSong(from: pattern, loopDurationInBeats: segment.durationInBeats, onChannel: channel) else {
                     continue
                 }
                 masterSong.merge(with: drumSong, at: segment.startBeat)

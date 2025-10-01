@@ -8,12 +8,26 @@ struct GuitarTrackView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // TODO: Replace with a dedicated TrackHeaderView
-            Text(track.name)
-                .font(.headline)
-                .padding(.horizontal, 4)
-                .frame(width: 120, alignment: .leading)
-                .background(Color.gray.opacity(0.1))
+            // Track Header
+            VStack(alignment: .leading, spacing: 2) {
+                Text(track.name)
+                    .font(.headline)
+                
+                Text("Ch: \(track.midiChannel ?? 1)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .contextMenu {
+                        ForEach(1...16, id: \.self) { channel in
+                            Button("Channel \(channel)") {
+                                track.midiChannel = channel
+                            }
+                        }
+                    }
+                Spacer()
+            }
+            .padding(4)
+            .frame(width: 120, alignment: .leading)
+            .background(Color.gray.opacity(0.1))
 
             // Timeline area for the segments
             ZStack(alignment: .leading) {

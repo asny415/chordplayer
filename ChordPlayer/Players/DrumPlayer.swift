@@ -30,7 +30,8 @@ class DrumPlayer: ObservableObject {
         let singlePatternBeats = Double(pattern.length) / (pattern.resolution == .sixteenth ? 4.0 : 2.0)
         let previewDuration = singlePatternBeats * 2.0 // Preview for 2 loops
 
-        guard let song = createSong(from: pattern, loopDurationInBeats: previewDuration),
+        let channel = UInt8((appData.preset?.arrangement.drumTrack.midiChannel ?? 10) - 1)
+        guard let song = createSong(from: pattern, loopDurationInBeats: previewDuration, onChannel: channel),
               let endpoint = midiManager.selectedOutput else {
             print("[DrumPlayer] Failed to create preview song.")
             return
@@ -38,12 +39,11 @@ class DrumPlayer: ObservableObject {
         midiSequencer.play(song: song, on: endpoint)
     }
 
-    func createSong(from pattern: DrumPattern, loopDurationInBeats: Double) -> MusicSong? {
+    func createSong(from pattern: DrumPattern, loopDurationInBeats: Double, onChannel channel: UInt8) -> MusicSong? {
         guard let preset = appData.preset else { return nil }
 
         var musicNotes: [MusicNote] = []
-        let channel = UInt8(appData.drumMidiChannel - 1)
-
+        
         let stepsPerBeat = pattern.resolution == .sixteenth ? 4.0 : 2.0
         let singlePatternDurationBeats = Double(pattern.length) / stepsPerBeat
         
