@@ -884,11 +884,11 @@ struct MelodicLyricItem: Identifiable, Codable, Hashable {
     /// 歌词文字，可以为空字符串表示休止或间奏
     var word: String
     
-    /// 段内位置，以16分音符为单位的偏移量
-    var position: Int
+    /// 段内位置，以 ticks 为单位的偏移量 (1拍 = 12 ticks)
+    var positionInTicks: Int
     
-    /// 持续时间，以16分音符为单位
-    var duration: Int?
+    /// 持续时间，以 ticks 为单位
+    var durationInTicks: Int?
     
     /// 音高 (1-7 分别代表 Do, Re, Mi, Fa, Sol, La, Si)。0可以用来表示休止。
     var pitch: Int
@@ -899,14 +899,61 @@ struct MelodicLyricItem: Identifiable, Codable, Hashable {
     /// 可选的演奏技巧 (复用已有的 PlayingTechnique 枚举)
     var technique: PlayingTechnique?
     
-    init(id: UUID = UUID(), word: String, position: Int, duration: Int? = nil, pitch: Int, octave: Int, technique: PlayingTechnique? = nil) {
+    // MARK: - Legacy Properties (for migration)
+    private var position: Int?
+    private var duration: Int?
+    
+    init(id: UUID = UUID(), word: String, positionInTicks: Int, durationInTicks: Int? = nil, pitch: Int, octave: Int, technique: PlayingTechnique? = nil) {
         self.id = id
         self.word = word
-        self.position = position
-        self.duration = duration
+        self.positionInTicks = positionInTicks
+        self.durationInTicks = durationInTicks
         self.pitch = pitch
         self.octave = octave
         self.technique = technique
+    }
+    
+    // MARK: - Codable Implementation for Compatibility
+    
+    enum CodingKeys: String, CodingKey {
+        case id, word, positionInTicks, durationInTicks, pitch, octave, technique
+        case position, duration // Legacy keys
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.word = try container.decode(String.self, forKey: .word)
+        self.pitch = try container.decode(Int.self, forKey: .pitch)
+        self.octave = try container.decode(Int.self, forKey: .octave)
+        self.technique = try container.decodeIfPresent(PlayingTechnique.self, forKey: .technique)
+
+        // Check for new tick-based properties first
+        if let posTicks = try container.decodeIfPresent(Int.self, forKey: .positionInTicks) {
+            self.positionInTicks = posTicks
+            self.durationInTicks = try container.decodeIfPresent(Int.self, forKey: .durationInTicks)
+        } else {
+            // Fallback to legacy 16th-note based properties and convert them
+            let legacyPosition = try container.decode(Int.self, forKey: .position)
+            let legacyDuration = try container.decodeIfPresent(Int.self, forKey: .duration)
+            
+            // Conversion: 1 16th note step = 3 ticks (assuming 1 beat = 12 ticks)
+            self.positionInTicks = legacyPosition * 3
+            self.durationInTicks = legacyDuration.map { $0 * 3 }
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(word, forKey: .word)
+        try container.encode(pitch, forKey: .pitch)
+        try container.encode(octave, forKey: .octave)
+        try container.encodeIfPresent(technique, forKey: .technique)
+        
+        // Always encode the new tick-based properties
+        try container.encode(positionInTicks, forKey: .positionInTicks)
+        try container.encodeIfPresent(durationInTicks, forKey: .durationInTicks)
     }
 }
 
@@ -921,18 +968,65 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
     /// 片段的小节数，例如 2, 4, 8
     var lengthInBars: Int
     
-    /// 网格量化单位 (1=16分, 2=8分, 4=4分)
-    var gridUnit: Int?
+    /// 网格量化单位
+    var resolution: GridResolution?
     
     /// 组成该片段的歌词单元数组
     var items: [MelodicLyricItem]
 
-    init(id: UUID = UUID(), name: String, lengthInBars: Int, gridUnit: Int? = nil, items: [MelodicLyricItem] = []) {
+    // Legacy property for migration
+    private var gridUnit: Int?
+
+    var activeResolution: GridResolution {
+        get { resolution ?? .sixteenth } // Default to 16th if not set
+        set { resolution = newValue }
+    }
+
+    init(id: UUID = UUID(), name: String, lengthInBars: Int, resolution: GridResolution? = .sixteenth, items: [MelodicLyricItem] = []) {
         self.id = id
         self.name = name
         self.lengthInBars = lengthInBars
-        self.gridUnit = gridUnit
+        self.resolution = resolution
         self.items = items
+    }
+    
+    // MARK: - Codable Implementation for Compatibility
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, lengthInBars, resolution, items, gridUnit
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.name = try container.decode(String.self, forKey: .name)
+        self.lengthInBars = try container.decode(Int.self, forKey: .lengthInBars)
+        self.items = try container.decode([MelodicLyricItem].self, forKey: .items)
+
+        // Decode new resolution if available, otherwise fall back to legacy gridUnit
+        if let res = try container.decodeIfPresent(GridResolution.self, forKey: .resolution) {
+            self.resolution = res
+        } else if let legacyGridUnit = try container.decodeIfPresent(Int.self, forKey: .gridUnit) {
+            // The old `gridUnit` was the number of 16th-note steps in the grid snap.
+            // 1 = 16th grid, 2 = 8th grid.
+            switch legacyGridUnit {
+            case 1: self.resolution = .sixteenth
+            case 2: self.resolution = .eighth
+            default: self.resolution = .sixteenth // Safest fallback for other values
+            }
+        } else {
+            self.resolution = .sixteenth // Default for very old data without any grid info
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(lengthInBars, forKey: .lengthInBars)
+        try container.encode(items, forKey: .items)
+        // Always encode the new resolution property
+        try container.encode(resolution, forKey: .resolution)
     }
 }
 

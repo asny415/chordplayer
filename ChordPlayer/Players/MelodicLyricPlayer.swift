@@ -54,27 +54,27 @@ class MelodicLyricPlayer: ObservableObject {
         guard let preset = appData.preset else { return nil }
         
         var musicNotes: [MusicNote] = []
-        let itemsSorted = segment.items.sorted { $0.position < $1.position }
+        let itemsSorted = segment.items.sorted { $0.positionInTicks < $1.positionInTicks }
         var consumedItemIDs = Set<UUID>()
         let transposition = self.transposition(forKey: preset.key)
-        let sixteenthNote = 0.25
+        let ticksPerBeat = 12.0 // Use a double for division
         let segmentEndBeat = Double(segment.lengthInBars * preset.timeSignature.beatsPerMeasure)
 
         for i in 0..<itemsSorted.count {
             let currentItem = itemsSorted[i]
             if consumedItemIDs.contains(currentItem.id) || currentItem.pitch == 0 { continue }
 
-            let startTime = Double(currentItem.position) * sixteenthNote
+            let startTime = Double(currentItem.positionInTicks) / ticksPerBeat
             var duration: Double
             var technique: MusicPlayingTechnique? = nil
 
             // Default duration calculation
             let noteOffBeat: Double
-            if let duration16ths = currentItem.duration {
-                noteOffBeat = Double(currentItem.position + duration16ths) * sixteenthNote
+            if let durationTicks = currentItem.durationInTicks {
+                noteOffBeat = Double(currentItem.positionInTicks + durationTicks) / ticksPerBeat
             } else {
                 let nextNoteStartBeat = itemsSorted.dropFirst(i + 1).first(where: { $0.pitch > 0 })
-                    .map { Double($0.position) * sixteenthNote }
+                    .map { Double($0.positionInTicks) / ticksPerBeat }
                 noteOffBeat = nextNoteStartBeat ?? segmentEndBeat
             }
             duration = noteOffBeat - startTime
@@ -85,18 +85,18 @@ class MelodicLyricPlayer: ObservableObject {
                 
                 guard let targetPitch = midiNote(for: targetItem, transposition: transposition) else { continue }
                 
-                let slideTransitionDuration = (Double(targetItem.position) * sixteenthNote) - startTime
+                let slideTransitionDuration = (Double(targetItem.positionInTicks) / ticksPerBeat) - startTime
                 
                 // Calculate target item's duration in beats
                 let targetNoteOffBeat: Double
-                if let targetDuration16ths = targetItem.duration {
-                    targetNoteOffBeat = Double(targetItem.position + targetDuration16ths) * sixteenthNote
+                if let targetDurationTicks = targetItem.durationInTicks {
+                    targetNoteOffBeat = Double(targetItem.positionInTicks + targetDurationTicks) / ticksPerBeat
                 } else {
                     let nextTargetNoteStartBeat = itemsSorted.dropFirst(i + 2).first(where: { $0.pitch > 0 })
-                        .map { Double($0.position) * sixteenthNote }
+                        .map { Double($0.positionInTicks) / ticksPerBeat }
                     targetNoteOffBeat = nextTargetNoteStartBeat ?? segmentEndBeat
                 }
-                let durationAtTarget = targetNoteOffBeat - (Double(targetItem.position) * sixteenthNote)
+                let durationAtTarget = targetNoteOffBeat - (Double(targetItem.positionInTicks) / ticksPerBeat)
 
                 duration = slideTransitionDuration
                 technique = .slide(toPitch: Int(targetPitch), durationAtTarget: durationAtTarget)

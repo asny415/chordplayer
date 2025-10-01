@@ -277,7 +277,7 @@ struct KaraokeView: View {
     
     private func setupAndProcessLyrics() {
         guard let preset = appData.preset else { self.allDisplayLines = []; return }
-        let sixteenthNoteDurationInBeats = 0.25
+        let ticksPerBeat = 12.0
         var allWords: [KaraokeDisplayWord] = []
         let allLyricSegments = preset.arrangement.lyricsTracks.flatMap { $0.lyrics }.sorted { $0.startBeat < $1.startBeat }
         for arrangedSegment in allLyricSegments {
@@ -286,20 +286,20 @@ struct KaraokeView: View {
             else { melodicData = preset.melodicLyricSegments.first { $0.id == arrangedSegment.id } }
             guard let foundMelodicData = melodicData else { continue }
             let segmentStartBeat = arrangedSegment.startBeat
-            let sortedItems = foundMelodicData.items.sorted { $0.position < $1.position }
+            let sortedItems = foundMelodicData.items.sorted { $0.positionInTicks < $1.positionInTicks }
             for (index, item) in sortedItems.enumerated() {
                 if item.word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
-                let startTime = segmentStartBeat + (Double(item.position) * sixteenthNoteDurationInBeats)
-                var currentEndTime = startTime + (Double(item.duration ?? 1) * sixteenthNoteDurationInBeats)
+                let startTime = segmentStartBeat + (Double(item.positionInTicks) / ticksPerBeat)
+                var currentEndTime = startTime + (Double(item.durationInTicks ?? 3) / ticksPerBeat) // Default to 16th note duration
                 for j in (index + 1)..<sortedItems.count {
                     let nextItem = sortedItems[j]
-                    let nextItemStartTime = segmentStartBeat + (Double(nextItem.position) * sixteenthNoteDurationInBeats)
+                    let nextItemStartTime = segmentStartBeat + (Double(nextItem.positionInTicks) / ticksPerBeat)
                     if nextItemStartTime > currentEndTime { break }
                     if !nextItem.word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { break }
-                    currentEndTime = nextItemStartTime + (Double(nextItem.duration ?? 1) * sixteenthNoteDurationInBeats)
+                    currentEndTime = nextItemStartTime + (Double(nextItem.durationInTicks ?? 3) / ticksPerBeat)
                 }
                 let duration = currentEndTime - startTime
-                let finalDuration = max(duration, sixteenthNoteDurationInBeats)
+                let finalDuration = max(duration, 3.0 / ticksPerBeat) // Min duration of a 16th note
                 allWords.append(KaraokeDisplayWord(text: item.word, startTime: startTime, duration: finalDuration))
             }
         }

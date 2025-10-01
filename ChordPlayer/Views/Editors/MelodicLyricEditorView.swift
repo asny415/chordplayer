@@ -13,10 +13,9 @@ struct MelodicLyricEditorView: View {
 
     // Editor State
     @State private var currentTechnique: PlayingTechnique = .normal
-    @State private var gridSizeInSteps: Int = 1 // 16th notes by default
     @State private var zoomLevel: CGFloat = 1.0
-    @State private var selectedStep: Int = 0
-    @State private var editingWordStep: Int? = nil
+    @State private var selectedTick: Int = 0
+    @State private var editingWordAtTick: Int? = nil
     @State private var editingWord: String = ""
     @State private var isTechniqueUpdateInternal = false
     @State private var keyMonitor: Any?
@@ -32,14 +31,14 @@ struct MelodicLyricEditorView: View {
     // Layout constants
     private let beatWidth: CGFloat = 120
     private let beatsPerBar: Int = 4
-    private let stepsPerBeat: Int = 4
-    private var totalSteps: Int { segment.lengthInBars * beatsPerBar * stepsPerBeat }
-    private var stepWidth: CGFloat { (beatWidth / CGFloat(stepsPerBeat)) * zoomLevel }
+    private let ticksPerBeat: Int = 12 // The core of the new timing system
+    private var totalTicks: Int { segment.lengthInBars * beatsPerBar * ticksPerBeat }
+    private var tickWidth: CGFloat { (beatWidth / CGFloat(ticksPerBeat)) * zoomLevel }
     private let trackHeight: CGFloat = 120
 
     init(segment: Binding<MelodicLyricSegment>) {
         self._segment = segment
-        self._selectedStep = State(initialValue: 0)
+        self._selectedTick = State(initialValue: 0)
     }
 
     var body: some View {
@@ -66,7 +65,7 @@ struct MelodicLyricEditorView: View {
                 // 2. Toolbar
                 MelodicLyricToolbar(
                     currentTechnique: $currentTechnique,
-                    gridSizeInSteps: $gridSizeInSteps,
+                    resolution: $segment.activeResolution,
                     zoomLevel: $zoomLevel,
                     segmentLengthInBars: $segment.lengthInBars,
                     midiChannel: $editorMidiChannel,
@@ -82,8 +81,8 @@ struct MelodicLyricEditorView: View {
                         // Layer 1: Background Grid
                         MelodicLyricGridBackground(
                             lengthInBars: segment.lengthInBars, beatsPerBar: beatsPerBar, beatWidth: beatWidth,
-                            trackHeight: trackHeight, zoomLevel: zoomLevel, stepsPerBeat: stepsPerBeat,
-                            gridSizeInSteps: gridSizeInSteps
+                            trackHeight: trackHeight, zoomLevel: zoomLevel, ticksPerBeat: ticksPerBeat,
+                            resolution: segment.activeResolution
                         )
 
                         if melodicLyricPlayer.isPlaying {
@@ -98,13 +97,13 @@ struct MelodicLyricEditorView: View {
                                 .offset(x: indicatorX)
                         }
 
-                        if totalSteps > 0 {
+                        if totalTicks > 0 {
                             // Add a static grid of invisible anchor views for the ScrollViewReader to target.
                             HStack(spacing: 0) {
-                                ForEach(0..<totalSteps, id: \.self) { step in
+                                ForEach(0..<totalTicks, id: \.self) { tick in
                                     Color.clear
-                                        .frame(width: stepWidth, height: 1)
-                                        .id(step)
+                                        .frame(width: tickWidth, height: 1)
+                                        .id(tick)
                                 }
                             }
                             .frame(height: 1)
@@ -113,31 +112,31 @@ struct MelodicLyricEditorView: View {
                                 .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
                                 .frame(width: selectionHighlightWidth, height: trackHeight - 8)
                                 .offset(x: highlightOffsetX(), y: 4)
-                                .animation(.easeInOut(duration: 0.12), value: selectedStep)
+                                .animation(.easeInOut(duration: 0.12), value: selectedTick)
                         }
 
-                                            ForEach(segment.items) { item in
-                                                let cellWidth = stepWidth * CGFloat(item.duration ?? stepStride)
-                                                MelodicLyricCellView(
-                                                    item: item,
-                                                    isSelected: item.position == selectedStep,
-                                                    cellWidth: cellWidth,
-                                                    unitWidth: stepWidth
-                                                )
-                                                .contentShape(Rectangle())
-                                                .onTapGesture(count: 2) { 
-                                                    selectStep(item.position)
-                                                    startWordEditing()
-                                                }
-                                                .onTapGesture(count: 1) { location in
-                                                    let tappedSubStep = Int(location.x / stepWidth)
-                                                    let newSelectedStep = item.position + tappedSubStep
-                                                    selectStep(newSelectedStep)
-                                                }
-                                                .offset(x: CGFloat(item.position) * stepWidth)
-                                            }
-                        if let editingStep = editingWordStep {
-                            let editorWidth = max(stepWidth * CGFloat(max(gridSizeInSteps, 1)) - 8, 100)
+                        ForEach(segment.items) { item in
+                            let cellWidth = tickWidth * CGFloat(item.durationInTicks ?? tickStride)
+                            MelodicLyricCellView(
+                                item: item,
+                                isSelected: item.positionInTicks == selectedTick,
+                                cellWidth: cellWidth,
+                                unitWidth: tickWidth
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { 
+                                selectTick(item.positionInTicks)
+                                startWordEditing()
+                            }
+                            .onTapGesture(count: 1) { location in
+                                let tappedSubTick = Int(location.x / tickWidth)
+                                let newSelectedTick = item.positionInTicks + tappedSubTick
+                                selectTick(newSelectedTick)
+                            }
+                            .offset(x: CGFloat(item.positionInTicks) * tickWidth)
+                        }
+                        if let editingTick = editingWordAtTick {
+                            let editorWidth = max(tickWidth * CGFloat(max(tickStride, 1)) - 8, 100)
                             let editorHeight: CGFloat = 28
                             TextField("Lyric", text: $editingWord)
                                 .textFieldStyle(.roundedBorder)
@@ -145,7 +144,7 @@ struct MelodicLyricEditorView: View {
                                 .focused($isInlineEditorFocused)
                                 .onSubmit { commitWordEditing() }
                                 .offset(
-                                    x: inlineEditorOffsetX(for: editingStep, width: editorWidth),
+                                    x: inlineEditorOffsetX(for: editingTick, width: editorWidth),
                                     y: inlineEditorOffsetY(height: editorHeight)
                                 )
                         }
@@ -170,26 +169,24 @@ struct MelodicLyricEditorView: View {
                 .padding(.vertical, 6)
                 .background(Color(NSColor.controlBackgroundColor))
             }
-            .onChange(of: selectedStep) { newStep in
+            .onChange(of: selectedTick) { newTick in
                 DispatchQueue.main.async {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        proxy.scrollTo(newStep, anchor: .center)
+                        proxy.scrollTo(newTick, anchor: .center)
                     }
                 }
             }
             .onChange(of: currentTechnique, perform: techniqueSelectionChanged)
             .onChange(of: segment.lengthInBars) { _ in
-                clampSelectedStep()
+                clampSelectedTick()
                 melodicLyricPlayer.stop()
                 persistSegment()
             }
-            .onChange(of: gridSizeInSteps) { newValue in
+            .onChange(of: segment.activeResolution) { newValue in
                 alignSelectionToGrid()
-                segment.gridUnit = newValue
                 persistSegment()
             }
             .onAppear {
-                gridSizeInSteps = segment.gridUnit ?? 1 // Use saved or default
                 registerKeyMonitor()
             }
             .onDisappear {
@@ -206,17 +203,17 @@ struct MelodicLyricEditorView: View {
     // MARK: - Private Methods
 
     private func handleBackgroundTap(at location: CGPoint) {
-        guard totalSteps > 0 else { return }
-        let rawStep = Int(location.x / stepWidth)
-        let clamped = min(max(rawStep, 0), totalSteps - 1)
-        let snapped = snapStep(clamped)
-        selectStep(snapped)
+        guard totalTicks > 0 else { return }
+        let rawTick = Int(location.x / tickWidth)
+        let clamped = min(max(rawTick, 0), totalTicks - 1)
+        let snapped = snapTick(clamped)
+        selectTick(snapped)
     }
 
-    private func selectStep(_ step: Int) {
-        let snapped = snapStep(step)
-        selectedStep = snapped
-        editingWordStep = nil
+    private func selectTick(_ tick: Int) {
+        let snapped = snapTick(tick)
+        selectedTick = snapped
+        editingWordAtTick = nil
         isInlineEditorFocused = false
 
         let selectedItem = itemIndex(at: snapped).map { segment.items[$0] }
@@ -227,36 +224,40 @@ struct MelodicLyricEditorView: View {
         }
     }
 
-    private func snapStep(_ step: Int) -> Int {
-        guard totalSteps > 0 else { return 0 }
-        let stride = stepStride
-        guard stride > 0 else { return min(max(step, 0), totalSteps - 1) }
-        let clamped = min(max(step, 0), totalSteps - 1)
+    private func snapTick(_ tick: Int) -> Int {
+        guard totalTicks > 0 else { return 0 }
+        let stride = tickStride
+        guard stride > 0 else { return min(max(tick, 0), totalTicks - 1) }
+        let clamped = min(max(tick, 0), totalTicks - 1)
         return (clamped / stride) * stride
     }
 
-    private var stepStride: Int { max(gridSizeInSteps, 1) }
-
-    private func itemIndex(at step: Int) -> Int? {
-        segment.items.firstIndex { $0.position == step }
+    private var tickStride: Int { 
+        let stepsPerBeat = segment.activeResolution.stepsPerBeat
+        guard stepsPerBeat > 0 else { return 1 }
+        return ticksPerBeat / stepsPerBeat
     }
 
-    private func ensureItem(at step: Int, defaultPitch: Int? = nil, defaultOctave: Int = 0) -> (index: Int, isNew: Bool) {
-        if let existing = itemIndex(at: step) {
+    private func itemIndex(at tick: Int) -> Int? {
+        segment.items.firstIndex { $0.positionInTicks == tick }
+    }
+
+    private func ensureItem(at tick: Int, defaultPitch: Int? = nil, defaultOctave: Int = 0) -> (index: Int, isNew: Bool) {
+        if let existing = itemIndex(at: tick) {
             return (existing, false)
         }
         let pitchValue = defaultPitch ?? 0
         let techniqueValue = currentTechnique == .normal ? nil : currentTechnique
         let newItem = MelodicLyricItem(
             word: "",
-            position: step,
-            duration: stepStride, // Set default duration
+            positionInTicks: tick,
+            durationInTicks: tickStride, // Set default duration in ticks
             pitch: pitchValue,
             octave: defaultOctave,
             technique: techniqueValue
         )
         segment.items.append(newItem)
-        segment.items.sort { $0.position < $1.position }
+        segment.items.sort { $0.positionInTicks < $1.positionInTicks }
         let index = segment.items.firstIndex { $0.id == newItem.id } ?? segment.items.count - 1
         return (index, true)
     }
@@ -278,29 +279,29 @@ struct MelodicLyricEditorView: View {
     }
 
     private func handlePitchInput(_ pitch: Int) {
-        guard totalSteps > 0 else { return }
+        guard totalTicks > 0 else { return }
 
         // Special handling for rests (pitch 0)
         if pitch == 0 {
-            let (index, _) = ensureItem(at: selectedStep)
+            let (index, _) = ensureItem(at: selectedTick)
             segment.items[index].pitch = 0
             segment.items[index].octave = 0
             segment.items[index].technique = nil
             stopPreview()
             persistSegment()
-            moveSelection(by: stepStride)
+            moveSelection(by: tickStride)
             return
         }
 
         let octave: Int
-        if let existingIndex = itemIndex(at: selectedStep) {
+        if let existingIndex = itemIndex(at: selectedTick) {
             // Item already exists, keep its octave when just changing the pitch.
             octave = segment.items[existingIndex].octave
         } else {
             // This is a new item, find the best octave based on the previous note.
             let previousItem = segment.items
-                .filter { $0.position < selectedStep && $0.pitch != 0 }
-                .max(by: { $0.position < $1.position })
+                .filter { $0.positionInTicks < selectedTick && $0.pitch != 0 }
+                .max(by: { $0.positionInTicks < $1.positionInTicks })
 
             if let prev = previousItem, let prevMidi = midiNoteNumber(pitch: prev.pitch, octave: prev.octave) {
                 var minDistance = Int.max
@@ -324,7 +325,7 @@ struct MelodicLyricEditorView: View {
 
         // Get or create the item.
         // We pass the calculated octave to ensureItem, which will only use it for creation.
-        let (index, _) = ensureItem(at: selectedStep, defaultPitch: pitch, defaultOctave: octave)
+        let (index, _) = ensureItem(at: selectedTick, defaultPitch: pitch, defaultOctave: octave)
         
         // Update the item's properties.
         segment.items[index].pitch = pitch
@@ -333,11 +334,11 @@ struct MelodicLyricEditorView: View {
         previewPitch(pitch: pitch, octave: octave)
         
         persistSegment()
-        moveSelection(by: stepStride)
+        moveSelection(by: tickStride)
     }
 
     private func toggleTechnique(_ technique: PlayingTechnique) {
-        guard let index = itemIndex(at: selectedStep) else { return }
+        guard let index = itemIndex(at: selectedTick) else { return }
         let currentValue = segment.items[index].technique
         let newValue: PlayingTechnique? = currentValue == technique ? nil : technique
         segment.items[index].technique = newValue
@@ -347,9 +348,9 @@ struct MelodicLyricEditorView: View {
     }
 
     private func startWordEditing() {
-        guard totalSteps > 0 else { return }
-        editingWordStep = selectedStep
-        if let index = itemIndex(at: selectedStep) {
+        guard totalTicks > 0 else { return }
+        editingWordAtTick = selectedTick
+        if let index = itemIndex(at: selectedTick) {
             editingWord = segment.items[index].word
         } else {
             editingWord = ""
@@ -358,32 +359,32 @@ struct MelodicLyricEditorView: View {
     }
 
     private func commitWordEditing() {
-        guard let step = editingWordStep else { return }
-        let (index, _) = ensureItem(at: step)
+        guard let tick = editingWordAtTick else { return }
+        let (index, _) = ensureItem(at: tick)
         segment.items[index].word = editingWord
-        editingWordStep = nil
+        editingWordAtTick = nil
         isInlineEditorFocused = false
-        moveSelection(by: stepStride)
+        moveSelection(by: tickStride)
         persistSegment()
     }
 
     private func cancelWordEditing() {
-        editingWordStep = nil
+        editingWordAtTick = nil
         isInlineEditorFocused = false
     }
 
     private func moveSelection(by delta: Int) {
-        guard totalSteps > 0 else {
-            selectStep(0)
+        guard totalTicks > 0 else {
+            selectTick(0)
             return
         }
-        let newValue = selectedStep + delta
-        selectStep(newValue)
+        let newValue = selectedTick + delta
+        selectTick(newValue)
     }
 
     private func adjustPitch(direction: Int) {
         guard direction != 0 else { return }
-        let (targetIndex, _) = ensureItem(at: selectedStep, defaultPitch: 1)
+        let (targetIndex, _) = ensureItem(at: selectedTick, defaultPitch: 1)
         if segment.items[targetIndex].pitch == 0 {
             // Promote rest to a default pitch before changing octave.
             segment.items[targetIndex].pitch = 1
@@ -395,8 +396,8 @@ struct MelodicLyricEditorView: View {
         persistSegment()
     }
 
-    private func removeItem(at step: Int) {
-        segment.items.removeAll { $0.position == step }
+    private func removeItem(at tick: Int) {
+        segment.items.removeAll { $0.positionInTicks == tick }
         stopPreview()
         persistSegment()
     }
@@ -406,36 +407,36 @@ struct MelodicLyricEditorView: View {
             isTechniqueUpdateInternal = false
             return
         }
-        if let index = itemIndex(at: selectedStep) {
+        if let index = itemIndex(at: selectedTick) {
             segment.items[index].technique = technique == .normal ? nil : technique
             persistSegment()
         }
     }
 
-    private func clampSelectedStep() {
-        selectedStep = snapStep(selectedStep)
+    private func clampSelectedTick() {
+        selectedTick = snapTick(selectedTick)
     }
 
     private func alignSelectionToGrid() {
-        selectedStep = snapStep(selectedStep)
+        selectedTick = snapTick(selectedTick)
     }
 
     private var selectionHighlightWidth: CGFloat {
-        max(stepWidth * CGFloat(stepStride) - 4, stepWidth * 0.6)
+        max(tickWidth * CGFloat(tickStride) - 4, tickWidth * 0.6)
     }
 
     private func highlightOffsetX() -> CGFloat {
-        let snapped = snapStep(selectedStep)
-        let cellWidth = stepWidth * CGFloat(stepStride)
-        let base = CGFloat(snapped) * stepWidth
+        let snapped = snapTick(selectedTick)
+        let cellWidth = tickWidth * CGFloat(tickStride)
+        let base = CGFloat(snapped) * tickWidth
         let inset = max((cellWidth - selectionHighlightWidth) / 2, 0)
         return base + inset
     }
 
-    private func inlineEditorOffsetX(for step: Int, width: CGFloat) -> CGFloat {
-        let snapped = snapStep(step)
-        let cellWidth = stepWidth * CGFloat(stepStride)
-        let base = CGFloat(snapped) * stepWidth
+    private func inlineEditorOffsetX(for tick: Int, width: CGFloat) -> CGFloat {
+        let snapped = snapTick(tick)
+        let cellWidth = tickWidth * CGFloat(tickStride)
+        let base = CGFloat(snapped) * tickWidth
         let inset = max((cellWidth - width) / 2, 0)
         return base + inset
     }
@@ -445,18 +446,18 @@ struct MelodicLyricEditorView: View {
     }
 
     private var selectedItem: MelodicLyricItem? {
-        itemIndex(at: selectedStep).map { segment.items[$0] }
+        itemIndex(at: selectedTick).map { segment.items[$0] }
     }
 
 
     private var cellStatusDescription: String {
-        guard totalSteps > 0 else { return "No cells" }
-        let stepsPerMeasure = beatsPerBar * stepsPerBeat
-        let bar = selectedStep / stepsPerMeasure + 1
-        let beat = (selectedStep % stepsPerMeasure) / stepsPerBeat + 1
-        let subdivision = (selectedStep % stepsPerBeat) + 1
+        guard totalTicks > 0 else { return "No cells" }
+        let ticksPerMeasure = beatsPerBar * ticksPerBeat
+        let bar = selectedTick / ticksPerMeasure + 1
+        let beat = (selectedTick % ticksPerMeasure) / ticksPerBeat + 1
+        let tickInBeat = (selectedTick % ticksPerBeat)
 
-        return "Cell: Bar \(bar) Beat \(beat) Step \(subdivision)"
+        return "Bar \(bar) Beat \(beat) Tick \(tickInBeat)"
     }
 
     private var itemStatusDescription: String {
@@ -464,35 +465,34 @@ struct MelodicLyricEditorView: View {
         let wordDisplay = item.word.isEmpty ? "Word: -" : "Word: \(item.word)"
         let pitchDisplay = item.pitch == 0 ? "Rest" : "Pitch \(item.pitch) Oct \(item.octave)"
         let techniqueDisplay = item.technique?.chineseName ?? "普通"
-        let durationDisplay = "Len: \(item.duration ?? stepStride)"
+        let durationDisplay = "Len: \(item.durationInTicks ?? tickStride) ticks"
         return "\(wordDisplay) | \(pitchDisplay) | \(techniqueDisplay) | \(durationDisplay)"
     }
 
     private func applySustain() {
-        guard selectedStep >= 0 else { return }
+        guard selectedTick >= 0 else { return }
 
-        // Find the note to modify: the last note starting at or before the selected step.
-        // This handles both extending a previous note and shortening the current note.
-        guard let itemToModify = segment.items.filter({ $0.position <= selectedStep }).max(by: { $0.position < $1.position }) else { return }
+        // Find the note to modify: the last note starting at or before the selected tick.
+        guard let itemToModify = segment.items.filter({ $0.positionInTicks <= selectedTick }).max(by: { $0.positionInTicks < $1.positionInTicks }) else { return }
 
-        // New duration extends to the end of the selected grid cell, ensuring it's a multiple of the grid size.
-        let newDuration = selectedStep + stepStride - itemToModify.position
-        guard newDuration >= 1 else { return }
+        // New duration extends to the end of the selected grid cell.
+        let newDurationInTicks = selectedTick + tickStride - itemToModify.positionInTicks
+        guard newDurationInTicks >= 1 else { return }
 
         // Remove any items that are now covered by the sustained note.
-        let coveredStartPosition = itemToModify.position + 1
-        let coveredEndPosition = selectedStep + stepStride // End of range is exclusive
-        segment.items.removeAll { $0.position >= coveredStartPosition && $0.position < coveredEndPosition }
+        let coveredStartTick = itemToModify.positionInTicks + 1
+        let coveredEndTick = selectedTick + tickStride // End of range is exclusive
+        segment.items.removeAll { $0.positionInTicks >= coveredStartTick && $0.positionInTicks < coveredEndTick }
 
         // Find the index again after removal, as it might have changed.
         guard let finalItemIndex = segment.items.firstIndex(where: { $0.id == itemToModify.id }) else { return }
 
         // Update the duration and persist.
-        segment.items[finalItemIndex].duration = newDuration
+        segment.items[finalItemIndex].durationInTicks = newDurationInTicks
         persistSegment()
         
         // UX Improvement: Move to the next cell after applying sustain.
-        moveSelection(by: stepStride)
+        moveSelection(by: tickStride)
     }
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {
@@ -504,7 +504,7 @@ struct MelodicLyricEditorView: View {
             return false
         }
         
-        if editingWordStep != nil {
+        if editingWordAtTick != nil {
             switch event.keyCode {
             case 53: // Escape
                 cancelWordEditing()
@@ -549,10 +549,10 @@ struct MelodicLyricEditorView: View {
             startWordEditing()
             return true
         case 123: // Left arrow
-            moveSelection(by: -stepStride)
+            moveSelection(by: -tickStride)
             return true
         case 124: // Right arrow
-            moveSelection(by: stepStride)
+            moveSelection(by: tickStride)
             return true
         case 125: // Down arrow
             adjustPitch(direction: -1)
@@ -561,7 +561,7 @@ struct MelodicLyricEditorView: View {
             adjustPitch(direction: 1)
             return true
         case 51: // Delete
-            removeItem(at: selectedStep)
+            removeItem(at: selectedTick)
             return true
         default:
             break
@@ -628,15 +628,13 @@ struct MelodicLyricEditorView: View {
 
 struct MelodicLyricToolbar: View {
     @Binding var currentTechnique: PlayingTechnique
-    @Binding var gridSizeInSteps: Int
+    @Binding var resolution: GridResolution
     @Binding var zoomLevel: CGFloat
     @Binding var segmentLengthInBars: Int
     @Binding var midiChannel: Int
     @State private var showingSettings = false
     @Binding var isPlayingSegment: Bool
     let onTogglePlayback: () -> Void
-    // Corrected grid options: Label -> Number of 16th-note steps
-    private let gridOptions: [(String, Int)] = [("1/4", 4), ("1/8", 2), ("1/16", 1)]
 
     var body: some View {
         HStack(spacing: 20) {
@@ -652,9 +650,9 @@ struct MelodicLyricToolbar: View {
                 ForEach(PlayingTechnique.allCases) { Text($0.chineseName).tag($0) }
             }.frame(minWidth: 80).help("Playing Technique")
             Spacer()
-            Picker("Grid", selection: $gridSizeInSteps) {
-                ForEach(gridOptions, id: \.1) { Text($0.0).tag($0.1) }
-            }.frame(minWidth: 80).help("Grid Snap")
+            Picker("Grid", selection: $resolution) {
+                ForEach(GridResolution.allCases) { Text($0.rawValue).tag($0) }
+            }.frame(minWidth: 120).help("Grid Snap")
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass")
                 Slider(value: $zoomLevel, in: 0.5...4.0).frame(width: 100)
@@ -695,24 +693,27 @@ struct LyricSegmentSettingsView: View {
 }
 
 struct MelodicLyricGridBackground: View {
-    let lengthInBars: Int, beatsPerBar: Int, beatWidth: CGFloat, trackHeight: CGFloat, zoomLevel: CGFloat, stepsPerBeat: Int, gridSizeInSteps: Int
-    private var stepWidth: CGFloat { (beatWidth / CGFloat(stepsPerBeat)) * zoomLevel }
+    let lengthInBars: Int, beatsPerBar: Int, beatWidth: CGFloat, trackHeight: CGFloat, zoomLevel: CGFloat, ticksPerBeat: Int, resolution: GridResolution
+    private var tickWidth: CGFloat { (beatWidth / CGFloat(ticksPerBeat)) * zoomLevel }
 
     var body: some View {
         Canvas { context, size in
-            let totalSteps = lengthInBars * beatsPerBar * stepsPerBeat
-            guard totalSteps > 0 else { return }
+            let totalTicks = lengthInBars * beatsPerBar * ticksPerBeat
+            guard totalTicks > 0 else { return }
 
-            let stepsPerBar = beatsPerBar * stepsPerBeat
+            let ticksPerBar = beatsPerBar * ticksPerBeat
+            
+            // The number of ticks for each grid line, based on the current resolution.
+            let tickStride = ticksPerBeat / resolution.stepsPerBeat
 
-            // Draw sub-beat lines (faint, dashed)
+            // Draw sub-beat lines (faint, dashed) for the selected grid resolution
             let subBeatLineStyle = StrokeStyle(lineWidth: 0.5, dash: [2, 3])
             var subBeatPath = Path()
-            let lineStride = gridSizeInSteps
-            if lineStride < stepsPerBeat {
-                for step in stride(from: lineStride, through: totalSteps, by: lineStride) {
-                    if step % stepsPerBeat != 0 {
-                        let x = CGFloat(step) * stepWidth
+            if tickStride > 0 {
+                for tick in stride(from: 0, through: totalTicks, by: tickStride) {
+                    // Don't draw over the stronger beat lines
+                    if tick % ticksPerBeat != 0 {
+                        let x = CGFloat(tick) * tickWidth
                         subBeatPath.move(to: CGPoint(x: x, y: 0))
                         subBeatPath.addLine(to: CGPoint(x: x, y: size.height))
                     }
@@ -722,9 +723,10 @@ struct MelodicLyricGridBackground: View {
 
             // Draw beat lines (less prominent)
             var beatPath = Path()
-            for step in stride(from: stepsPerBeat, through: totalSteps, by: stepsPerBeat) {
-                if step % stepsPerBar != 0 {
-                    let x = CGFloat(step) * stepWidth
+            for tick in stride(from: 0, through: totalTicks, by: ticksPerBeat) {
+                // Don't draw over the stronger bar lines
+                if tick % ticksPerBar != 0 {
+                    let x = CGFloat(tick) * tickWidth
                     beatPath.move(to: CGPoint(x: x, y: 0))
                     beatPath.addLine(to: CGPoint(x: x, y: size.height))
                 }
@@ -733,8 +735,8 @@ struct MelodicLyricGridBackground: View {
 
             // Draw bar lines (most prominent)
             var barPath = Path()
-            for step in stride(from: 0, through: totalSteps, by: stepsPerBar) {
-                let x = CGFloat(step) * stepWidth
+            for tick in stride(from: 0, through: totalTicks, by: ticksPerBar) {
+                let x = CGFloat(tick) * tickWidth
                 barPath.move(to: CGPoint(x: x, y: 0))
                 barPath.addLine(to: CGPoint(x: x, y: size.height))
             }
@@ -822,12 +824,12 @@ struct OctaveDotsRow: View {
 
 struct MelodicLyricEditorView_Previews: PreviewProvider {
     @State static var mockSegment: MelodicLyricSegment = {
-        var segment = MelodicLyricSegment(name: "Test Verse", lengthInBars: 2)
+        var segment = MelodicLyricSegment(name: "Test Verse", lengthInBars: 2, resolution: .sixteenth)
         segment.items = [
-            MelodicLyricItem(word: "你", position: 0, pitch: 5, octave: 0),
-            MelodicLyricItem(word: "好", position: 2, pitch: 6, octave: 0),
-            MelodicLyricItem(word: "世", position: 4, pitch: 1, octave: 1, technique: .vibrato),
-            MelodicLyricItem(word: "界", position: 6, pitch: 7, octave: 0)
+            MelodicLyricItem(word: "你", positionInTicks: 0, durationInTicks: 6, pitch: 5, octave: 0),
+            MelodicLyricItem(word: "好", positionInTicks: 6, durationInTicks: 6, pitch: 6, octave: 0),
+            MelodicLyricItem(word: "世", positionInTicks: 12, durationInTicks: 6, pitch: 1, octave: 1, technique: .vibrato),
+            MelodicLyricItem(word: "界", positionInTicks: 18, durationInTicks: 6, pitch: 7, octave: 0)
         ]
         return segment
     }()
