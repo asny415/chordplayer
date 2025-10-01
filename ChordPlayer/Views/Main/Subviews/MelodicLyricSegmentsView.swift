@@ -33,7 +33,10 @@ struct MelodicLyricSegmentsView: View {
                             isActive: false, // Placeholder for now
                             onEdit: { self.segmentToEdit = segment },
                             onDelete: { deleteSegment(at: IndexSet(integer: index)) },
-                            onDuplicate: { duplicateSegment(segment: segment) }
+                            onDuplicate: { duplicateSegment(segment: segment) },
+                            onAddToTrack: { trackId in
+                                self.addToLyricsTrack(segment: segment, trackId: trackId)
+                            }
                         )
                     }
                 }
@@ -85,6 +88,34 @@ struct MelodicLyricSegmentsView: View {
         newSegment.name = "\(segment.name) 2"
         
         appData.preset!.melodicLyricSegments.insert(newSegment, at: index + 1)
+        appData.saveChanges()
+    }
+    
+    private func addToLyricsTrack(segment: MelodicLyricSegment, trackId: UUID) {
+        guard let preset = appData.preset, 
+              let trackIndex = preset.arrangement.lyricsTracks.firstIndex(where: { $0.id == trackId }) else { return }
+        
+        let track = preset.arrangement.lyricsTracks[trackIndex]
+        
+        // Calculate the end beat of the last segment on this track
+        let lastBeat = track.lyrics.map { $0.startBeat + $0.durationInBeats }.max() ?? 0.0
+        
+        // Convert segment length from bars to beats
+        let beatsPerMeasure = Double(preset.timeSignature.beatsPerMeasure)
+        let durationInBeats = Double(segment.lengthInBars) * beatsPerMeasure
+        
+        // Create a summary text for the new segment
+        let summaryText = segment.items.map { $0.word }.joined()
+        
+        let newSegment = LyricsSegment(
+            melodicLyricSegmentId: segment.id,
+            startBeat: lastBeat,
+            durationInBeats: durationInBeats,
+            text: summaryText.isEmpty ? segment.name : summaryText
+        )
+        
+        appData.preset?.arrangement.lyricsTracks[trackIndex].lyrics.append(newSegment)
+        // The .onChange handler in PresetWorkspaceView will automatically update the total length
         appData.saveChanges()
     }
 }

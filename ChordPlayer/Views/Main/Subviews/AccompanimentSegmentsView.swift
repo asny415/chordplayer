@@ -46,24 +46,12 @@ struct AccompanimentSegmentsView: View {
                                     appData.preset?.accompanimentSegments[index].name = newName
                                     appData.saveChanges()
                                 }
+                            },
+                            onAddToTrack: { trackId in
+                                self.addToGuitarTrack(accompanimentSegment: segment, trackId: trackId)
                             }
                         )
-                        .contextMenu {
-                            Button("Edit") {
-                                self.segmentToEdit = segment
-                            }
-                            Button("Duplicate") {
-                                var duplicatedSegment = segment
-                                duplicatedSegment.id = UUID()
-                                duplicatedSegment.name = "\(segment.name) Copy"
-                                appData.addAccompanimentSegment(duplicatedSegment)
-                            }
-                            Button("Delete", role: .destructive) {
-                                if let index = appData.preset?.accompanimentSegments.firstIndex(where: { $0.id == segment.id }) {
-                                    appData.removeAccompanimentSegment(at: IndexSet(integer: index))
-                                }
-                            }
-                        }
+
                     }
                 }
             } else {
@@ -93,6 +81,29 @@ struct AccompanimentSegmentsView: View {
             )
             .environmentObject(appData)
         }
+    }
+    
+    private func addToGuitarTrack(accompanimentSegment: AccompanimentSegment, trackId: UUID) {
+        guard let preset = appData.preset, 
+              let trackIndex = preset.arrangement.guitarTracks.firstIndex(where: { $0.id == trackId }) else { return }
+        
+        let track = preset.arrangement.guitarTracks[trackIndex]
+        
+        // Calculate the end beat of the last segment on this track
+        let lastBeat = track.segments.map { $0.startBeat + $0.durationInBeats }.max() ?? 0.0
+        
+        // Convert segment length from measures to beats
+        let beatsPerMeasure = Double(preset.timeSignature.beatsPerMeasure)
+        let durationInBeats = Double(accompanimentSegment.lengthInMeasures) * beatsPerMeasure
+        
+        let newSegment = GuitarSegment(
+            startBeat: lastBeat,
+            durationInBeats: durationInBeats,
+            type: .accompaniment(segmentId: accompanimentSegment.id)
+        )
+        
+        appData.preset?.arrangement.guitarTracks[trackIndex].segments.append(newSegment)
+        appData.saveChanges()
     }
 }
 
@@ -128,6 +139,7 @@ struct AccompanimentSegmentCardView: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
     let onNameChange: (String) -> Void
+    let onAddToTrack: (UUID) -> Void
     
     @EnvironmentObject var appData: AppData
     @State private var isEditingName = false
@@ -182,6 +194,39 @@ struct AccompanimentSegmentCardView: View {
         .onTapGesture {
             if !isActive {
                 onSelect()
+            }
+        }
+        .contextMenu {
+            if let preset = appData.preset {
+                let guitarTracks = preset.arrangement.guitarTracks
+                if !guitarTracks.isEmpty {
+                    if guitarTracks.count == 1,
+                       let firstTrack = guitarTracks.first {
+                        Button("Add to \(firstTrack.name)") {
+                            onAddToTrack(firstTrack.id)
+                        }
+                    } else {
+                        Menu("Add to Arrangement") {
+                            ForEach(guitarTracks) { track in
+                                Button("\(track.name)") {
+                                    onAddToTrack(track.id)
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                }
+            }
+            
+            Button("Edit", action: onEdit)
+            Button("Duplicate") {
+                var duplicatedSegment = segment
+                duplicatedSegment.id = UUID()
+                duplicatedSegment.name = "\(segment.name) Copy"
+                appData.addAccompanimentSegment(duplicatedSegment)
+            }
+            Button("Delete", role: .destructive) {
+                onDelete()
             }
         }
     }

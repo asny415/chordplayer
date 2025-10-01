@@ -47,6 +47,9 @@ struct SoloSegmentsView: View {
                                 var updatedSegment = segment
                                 updatedSegment.name = newName
                                 appData.updateSoloSegment(updatedSegment)
+                            },
+                            onAddToTrack: { trackId in
+                                self.addToGuitarTrack(soloSegment: segment, trackId: trackId)
                             }
                         )
                     }
@@ -76,6 +79,25 @@ struct SoloSegmentsView: View {
             }
         }
     }
+    
+    private func addToGuitarTrack(soloSegment: SoloSegment, trackId: UUID) {
+        guard let preset = appData.preset, 
+              let trackIndex = preset.arrangement.guitarTracks.firstIndex(where: { $0.id == trackId }) else { return }
+        
+        let track = preset.arrangement.guitarTracks[trackIndex]
+        
+        // Calculate the end beat of the last segment on this track
+        let lastBeat = track.segments.map { $0.startBeat + $0.durationInBeats }.max() ?? 0.0
+        
+        let newSegment = GuitarSegment(
+            startBeat: lastBeat,
+            durationInBeats: soloSegment.lengthInBeats,
+            type: .solo(segmentId: soloSegment.id)
+        )
+        
+        appData.preset?.arrangement.guitarTracks[trackIndex].segments.append(newSegment)
+        appData.saveChanges()
+    }
 }
 
 struct SoloSegmentCard: View {
@@ -87,6 +109,7 @@ struct SoloSegmentCard: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
     let onNameChange: (String) -> Void
+    let onAddToTrack: (UUID) -> Void
 
     @State private var isEditingName = false
     @State private var editedName = ""
@@ -181,6 +204,27 @@ struct SoloSegmentCard: View {
             soloPlayer.play(segment: segment)
         }
         .contextMenu {
+            if let preset = appData.preset {
+                let guitarTracks = preset.arrangement.guitarTracks
+                if !guitarTracks.isEmpty {
+                    if guitarTracks.count == 1,
+                       let firstTrack = guitarTracks.first {
+                        Button("Add to \(firstTrack.name)") {
+                            onAddToTrack(firstTrack.id)
+                        }
+                    } else {
+                        Menu("Add to Arrangement") {
+                            ForEach(guitarTracks) { track in
+                                Button("\(track.name)") {
+                                    onAddToTrack(track.id)
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                }
+            }
+
             Button("Edit", action: onEdit)
             Divider()
             Button("Delete", role: .destructive) {
@@ -193,6 +237,25 @@ struct SoloSegmentCard: View {
         } message: {
             Text("Are you sure you want to delete this solo segment? This action cannot be undone.")
         }
+    }
+    
+    private func addToGuitarTrack(soloSegment: SoloSegment, trackId: UUID) {
+        guard let preset = appData.preset, 
+              let trackIndex = preset.arrangement.guitarTracks.firstIndex(where: { $0.id == trackId }) else { return }
+        
+        let track = preset.arrangement.guitarTracks[trackIndex]
+        
+        // Calculate the end beat of the last segment on this track
+        let lastBeat = track.segments.map { $0.startBeat + $0.durationInBeats }.max() ?? 0.0
+        
+        let newSegment = GuitarSegment(
+            startBeat: lastBeat,
+            durationInBeats: soloSegment.lengthInBeats,
+            type: .solo(segmentId: soloSegment.id)
+        )
+        
+        appData.preset?.arrangement.guitarTracks[trackIndex].segments.append(newSegment)
+        appData.saveChanges()
     }
 }
 

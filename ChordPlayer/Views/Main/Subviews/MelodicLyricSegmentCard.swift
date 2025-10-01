@@ -8,6 +8,7 @@ struct MelodicLyricSegmentCard: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
     let onDuplicate: () -> Void
+    let onAddToTrack: (UUID) -> Void
 
     @State private var showingDeleteConfirmation = false
 
@@ -70,6 +71,27 @@ struct MelodicLyricSegmentCard: View {
             // onSelect()
         }
         .contextMenu {
+            if let preset = appData.preset {
+                let lyricsTracks = preset.arrangement.lyricsTracks
+                if !lyricsTracks.isEmpty {
+                    if lyricsTracks.count == 1,
+                       let firstTrack = lyricsTracks.first {
+                        Button("Add to \(firstTrack.name)") {
+                            onAddToTrack(firstTrack.id)
+                        }
+                    } else {
+                        Menu("Add to Arrangement") {
+                            ForEach(lyricsTracks) { track in
+                                Button("\(track.name)") {
+                                    onAddToTrack(track.id)
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                }
+            }
+
             Button("Edit", action: onEdit)
             Button("Duplicate", action: onDuplicate)
             Divider()
