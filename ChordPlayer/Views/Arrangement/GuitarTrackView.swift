@@ -21,23 +21,20 @@ struct GuitarTrackView: View {
                 Rectangle()
                     .fill(Color.gray.opacity(0.15))
 
-                // Iterate over segments and place them on the timeline
+                // Iterate over segments and place them on the timeline using the new SegmentView
                 ForEach(track.segments) { segment in
-                    let segmentWidth = pixelsPerBeat * segment.durationInBeats
-                    let xPosition = pixelsPerBeat * segment.startBeat
-
-                    // Group the segment view and its text in a ZStack, then offset the whole group
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(colorFor(segmentType: segment.type).opacity(0.7))
-                        
-                        Text(segmentName(for: segment.type))
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 4)
-                    }
-                    .frame(width: segmentWidth)
-                    .offset(x: xPosition)
+                    SegmentView(
+                        text: segmentName(for: segment.type),
+                        color: colorFor(segmentType: segment.type),
+                        startBeat: segment.startBeat,
+                        durationInBeats: segment.durationInBeats,
+                        pixelsPerBeat: pixelsPerBeat,
+                        onMove: { newBeat in
+                            if let index = track.segments.firstIndex(where: { $0.id == segment.id }) {
+                                track.segments[index].startBeat = newBeat
+                            }
+                        }
+                    )
                 }
             }
             .frame(height: 50)

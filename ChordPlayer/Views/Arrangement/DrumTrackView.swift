@@ -21,23 +21,22 @@ struct DrumTrackView: View {
                 Rectangle()
                     .fill(Color.gray.opacity(0.15))
 
-                // Iterate over segments and place them on the timeline
+                // Iterate over segments and place them on the timeline using the new SegmentView
                 ForEach(track.segments) { segment in
-                    let segmentWidth = pixelsPerBeat * segment.durationInBeats
-                    let xPosition = pixelsPerBeat * segment.startBeat
-
-                    // Group the segment view and its text in a ZStack, then offset the whole group
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.blue.opacity(0.7))
-                        
-                        Text(preset.drumPatterns.first { $0.id == segment.patternId }?.name ?? "Unknown")
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 4)
-                    }
-                    .frame(width: segmentWidth)
-                    .offset(x: xPosition)
+                    SegmentView(
+                        text: preset.drumPatterns.first { $0.id == segment.patternId }?.name ?? "Unknown",
+                        color: .blue,
+                        startBeat: segment.startBeat,
+                        durationInBeats: segment.durationInBeats,
+                        pixelsPerBeat: pixelsPerBeat,
+                        onMove: { newBeat in
+                            // Find the index of the segment that was moved
+                            if let index = track.segments.firstIndex(where: { $0.id == segment.id }) {
+                                // Update the startBeat in the data model. The @Binding will handle the rest.
+                                track.segments[index].startBeat = newBeat
+                            }
+                        }
+                    )
                 }
             }
             .frame(height: 50)

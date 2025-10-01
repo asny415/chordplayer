@@ -21,24 +21,20 @@ struct LyricsTrackView: View {
                 Rectangle()
                     .fill(Color.gray.opacity(0.15))
 
-                // Iterate over segments and place them on the timeline
+                // Iterate over segments and place them on the timeline using the new SegmentView
                 ForEach(track.lyrics) { segment in
-                    let segmentWidth = pixelsPerBeat * segment.durationInBeats
-                    let xPosition = pixelsPerBeat * segment.startBeat
-
-                    // Group the segment view and its text in a ZStack, then offset the whole group
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.orange.opacity(0.7))
-
-                        Text(segment.text)
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 4)
-                            .clipped()
-                    }
-                    .frame(width: segmentWidth)
-                    .offset(x: xPosition)
+                    SegmentView(
+                        text: segment.text,
+                        color: .orange,
+                        startBeat: segment.startBeat,
+                        durationInBeats: segment.durationInBeats,
+                        pixelsPerBeat: pixelsPerBeat,
+                        onMove: { newBeat in
+                            if let index = track.lyrics.firstIndex(where: { $0.id == segment.id }) {
+                                track.lyrics[index].startBeat = newBeat
+                            }
+                        }
+                    )
                 }
             }
             .frame(height: 50)
