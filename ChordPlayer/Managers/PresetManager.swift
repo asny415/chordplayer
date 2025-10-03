@@ -14,6 +14,7 @@ class PresetManager: ObservableObject {
     
     private var autoSaveTimer: Timer?
     private let autoSaveDelay: TimeInterval = 1.0
+    private var cancellables = Set<AnyCancellable>()
     
     private init() {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -31,11 +32,22 @@ class PresetManager: ObservableObject {
             savePresetsList()
         }
         
-        if let firstPresetInfo = presets.first {
-            loadPreset(firstPresetInfo)
+        let lastUsedPresetID = UserDefaults.standard.string(forKey: "lastUsedPresetID")
+        let presetInfoToLoad = presets.first { $0.id.uuidString == lastUsedPresetID } ?? presets.first
+
+        if let presetToLoad = presetInfoToLoad {
+            loadPreset(presetToLoad)
         } else {
             print("[PresetManager] CRITICAL: Failed to load or create an initial preset.")
         }
+        
+        // Save the current preset's ID whenever it changes.
+        $currentPreset
+            .compactMap { $0?.id.uuidString }
+            .sink { presetId in
+                UserDefaults.standard.set(presetId, forKey: "lastUsedPresetID")
+            }
+            .store(in: &cancellables)
     }
     
     func loadPreset(_ presetInfo: PresetInfo) {
