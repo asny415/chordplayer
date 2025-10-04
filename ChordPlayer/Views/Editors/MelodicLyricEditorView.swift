@@ -43,7 +43,7 @@ struct MelodicLyricEditorView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) { // Add spacing
                 // 1. In-place Editable Title
                 HStack {
                     Spacer()
@@ -71,9 +71,12 @@ struct MelodicLyricEditorView: View {
                     midiChannel: $editorMidiChannel,
                     isPlayingSegment: $melodicLyricPlayer.isPlaying,
                     onTogglePlayback: toggleSegmentPlayback
-                ).padding().background(Color(NSColor.controlBackgroundColor))
+                )
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(.regularMaterial) // Use material background
                 
-                Divider()
+                // Divider removed
 
                 // 3. Main Content Editor
                 ScrollView([.horizontal]) {
@@ -154,20 +157,29 @@ struct MelodicLyricEditorView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { location in handleBackgroundTap(at: location) }
                 }
-                .background(Color(NSColor.textBackgroundColor))
+                .background(.ultraThickMaterial) // Use thick material
+                .clipShape(RoundedRectangle(cornerRadius: 8)) // Add rounded corners
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1) // Add a subtle border
+                )
+                .padding(.horizontal) // Add horizontal padding to the editor
                 
-                Divider()
+                // Divider removed
                 
                 // 4. Status Bar
-                HStack(spacing: 0) {
-                    Text(cellStatusDescription).padding(.horizontal)
+                HStack(spacing: 12) { // Add spacing
+                    Text(cellStatusDescription)
                     Spacer()
-                    Text(itemStatusDescription).padding(.horizontal)
+                    Text(itemStatusDescription)
                     Spacer()
-                    Text("Items: \(segment.items.count)").padding(.horizontal)
+                    Text("Items: \(segment.items.count)")
                 }
+                .font(.caption) // Use smaller font for status
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
                 .padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor))
+                .background(.regularMaterial) // Use material background
             }
             .onChange(of: selectedTick) { newTick in
                 DispatchQueue.main.async {
@@ -674,33 +686,52 @@ struct MelodicLyricToolbar: View {
     let onTogglePlayback: () -> Void
 
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 16) {
+            // Group 1: Playback
             Button(action: onTogglePlayback) {
                 Label(isPlayingSegment ? "Stop" : "Play", systemImage: isPlayingSegment ? "stop.circle.fill" : "play.circle.fill")
-                    .labelStyle(.iconOnly)
+                    .font(.title2)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.borderless)
+            .tint(isPlayingSegment ? .red : .accentColor)
             .help(isPlayingSegment ? "Stop segment preview" : "Play segment preview")
 
-            Spacer()
+            // Group 2: Editing Tools
             Picker("Technique", selection: $currentTechnique) {
                 ForEach(PlayingTechnique.allCases) { Text($0.chineseName).tag($0) }
-            }.frame(minWidth: 80).help("Playing Technique")
-            Spacer()
+            }
+            .pickerStyle(.menu)
+            .frame(minWidth: 80)
+            .help("Playing Technique")
+
             Picker("Grid", selection: $resolution) {
                 ForEach(GridResolution.allCases) { Text($0.rawValue).tag($0) }
-            }.frame(minWidth: 120).help("Grid Snap")
+            }
+            .pickerStyle(.menu)
+            .frame(minWidth: 120)
+            .help("Grid Snap")
+
+            Spacer()
+
+            // Group 3: View Controls
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass")
-                Slider(value: $zoomLevel, in: 0.5...4.0).frame(width: 100)
-            }.help("Zoom Level")
-            Spacer()
+                Slider(value: $zoomLevel, in: 0.5...4.0)
+                    .frame(width: 100)
+            }
+            .foregroundColor(.secondary)
+            .help("Zoom Level")
+
+            // Group 4: Settings
             Button(action: { showingSettings = true }) {
                 Image(systemName: "gearshape.fill")
-            }.buttonStyle(.bordered).popover(isPresented: $showingSettings, arrowEdge: .bottom) {
+            }
+            .buttonStyle(.borderless)
+            .popover(isPresented: $showingSettings, arrowEdge: .bottom) {
                 LyricSegmentSettingsView(lengthInBars: $segmentLengthInBars, midiChannel: $midiChannel)
             }
-        }.pickerStyle(.menu)
+        }
+        .labelStyle(.iconOnly)
     }
 }
 
@@ -709,23 +740,34 @@ struct LyricSegmentSettingsView: View {
     @Binding var midiChannel: Int
     private let midiChannels = Array(1...16)
     var body: some View {
-        VStack(spacing: 12) {
-            Text("Segment Properties").font(.headline)
-            HStack {
-                Text("Length (bars):")
-                TextField("Length", value: $lengthInBars, format: .number).frame(width: 60)
-            }
-            HStack {
-                Text("MIDI Channel:")
-                Picker("MIDI Channel", selection: $midiChannel) {
-                    ForEach(midiChannels, id: \.self) { channel in
-                        Text("Channel \(channel)").tag(channel)
-                    }
+        VStack(spacing: 16) {
+            Text("Segment Properties").font(.title3).fontWeight(.bold)
+            
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Length (bars):")
+                    Spacer()
+                    TextField("Length", value: $lengthInBars, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 80)
                 }
-                .labelsHidden()
-                .frame(width: 140)
+                
+                HStack {
+                    Text("MIDI Channel:")
+                    Spacer()
+                    Picker("MIDI Channel", selection: $midiChannel) {
+                        ForEach(midiChannels, id: \.self) { channel in
+                            Text("Channel \(channel)").tag(channel)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
+                }
             }
-        }.padding()
+        }
+        .padding(20)
+        .frame(minWidth: 280)
     }
 }
 
