@@ -111,7 +111,6 @@ struct PresetWorkspaceView: View {
                             }
                         }
                 }
-                .frame(minWidth: 800, minHeight: 600)
             } else {
                 Text("Error: Could not find segment to edit.")
             }
