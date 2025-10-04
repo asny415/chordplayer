@@ -5,6 +5,7 @@ struct DrumTrackView: View {
     @Binding var track: DrumTrack
     @Binding var preset: Preset
     let pixelsPerBeat: CGFloat
+    @EnvironmentObject var appData: AppData
 
     var body: some View {
         HStack(spacing: 0) {
@@ -20,6 +21,7 @@ struct DrumTrackView: View {
                         ForEach(1...16, id: \.self) { channel in
                             Button("Channel \(channel)") {
                                 track.midiChannel = channel
+                                appData.saveChanges()
                             }
                         }
                     }
