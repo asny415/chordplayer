@@ -142,7 +142,7 @@ struct MelodicLyricEditorView: View {
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: editorWidth, height: editorHeight)
                                 .focused($isInlineEditorFocused)
-                                .onSubmit { commitWordEditing() }
+                                .onSubmit { commitAndAdvance() }
                                 .offset(
                                     x: inlineEditorOffsetX(for: editingTick, width: editorWidth),
                                     y: inlineEditorOffsetY(height: editorHeight)
@@ -358,13 +358,40 @@ struct MelodicLyricEditorView: View {
         isInlineEditorFocused = true
     }
 
-    private func commitWordEditing() {
+    private func commitAndAdvance() {
         guard let tick = editingWordAtTick else { return }
+
+        // 1. Commit the current word
         let (index, _) = ensureItem(at: tick)
         segment.items[index].word = editingWord
+        
+        // We are about to move, so clear current editing state
         editingWordAtTick = nil
         isInlineEditorFocused = false
-        moveSelection(by: tickStride)
+
+        // 2. Find the next item to jump to
+        let nextItem = segment.items
+            .filter { $0.positionInTicks > tick }
+            .min(by: { $0.positionInTicks < $1.positionInTicks })
+
+        if let nextItem = nextItem {
+            // 3. If found, jump to it and select it
+            selectTick(nextItem.positionInTicks)
+
+            // 4. Adjust grid resolution based on the next item's duration
+            if let duration = nextItem.durationInTicks, duration > 0 {
+                let stepsPerBeat = ticksPerBeat / duration
+                if let newResolution = GridResolution.allCases.first(where: { $0.stepsPerBeat == stepsPerBeat }) {
+                    if segment.activeResolution != newResolution {
+                        segment.activeResolution = newResolution
+                    }
+                }
+            }
+        } else {
+            // 5. If no next item, just move by one grid step
+            moveSelection(by: tickStride)
+        }
+        
         persistSegment()
     }
 
@@ -510,7 +537,7 @@ struct MelodicLyricEditorView: View {
                 cancelWordEditing()
                 return true
             case 36, 76: // Return or Enter
-                commitWordEditing()
+                commitAndAdvance()
                 return true
             default:
                 return false
