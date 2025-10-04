@@ -347,14 +347,18 @@ struct MelodicLyricEditorView: View {
         persistSegment()
     }
 
-    private func startWordEditing() {
+    private func startWordEditing(withInitialCharacter initialChar: String? = nil) {
         guard totalTicks > 0 else { return }
         editingWordAtTick = selectedTick
-        if let index = itemIndex(at: selectedTick) {
+        
+        if let initialChar = initialChar {
+            editingWord = initialChar
+        } else if let index = itemIndex(at: selectedTick) {
             editingWord = segment.items[index].word
         } else {
             editingWord = ""
         }
+        
         isInlineEditorFocused = true
     }
 
@@ -549,25 +553,31 @@ struct MelodicLyricEditorView: View {
 
         if characters.count == 1 && modifiers.isDisjoint(with: [.command, .option, .control]) {
             let char = characters.first!
+            
+            // Rule 1: Handle specific commands first.
             if let digit = char.wholeNumberValue, (0...7).contains(digit) {
                 handlePitchInput(digit)
                 return true
             }
             switch char {
-            case "/":
-                toggleTechnique(.slide)
-                return true
-            case "^":
-                toggleTechnique(.bend)
-                return true
-            case "~":
-                toggleTechnique(.vibrato)
-                return true
-            case "-":
-                applySustain()
+            case "/", "^", "~", "-":
+                // This is a command, handle it and stop.
+                switch char {
+                    case "/": toggleTechnique(.slide)
+                    case "^": toggleTechnique(.bend)
+                    case "~": toggleTechnique(.vibrato)
+                    case "-": applySustain()
+                    default: break
+                }
                 return true
             default:
-                break
+                // Rule 2: Check if it's a character suitable for starting a lyric.
+                // This prevents control characters from arrow keys from being captured.
+                if char.isLetter || char.isNumber || char.isPunctuation || char.isSymbol {
+                    // Rule 3: To support IME, start editing with an EMPTY text field.
+                    startWordEditing() // Call without initial character.
+                    return false // Return false to forward the event to the new text field.
+                }
             }
         }
 
