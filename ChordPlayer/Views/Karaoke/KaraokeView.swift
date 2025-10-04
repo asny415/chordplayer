@@ -307,7 +307,7 @@ struct KaraokeView: View {
         var currentLineWords: [KaraokeDisplayWord] = []
         for word in allWords {
             currentLineWords.append(word)
-            if word.text.contains(",") {
+            if word.text.contains(",") || word.text.contains("，") {
                 if !currentLineWords.isEmpty {
                     let lineStartTime = currentLineWords.first!.startTime
                     let lineEndTime = currentLineWords.last!.startTime + currentLineWords.last!.duration
