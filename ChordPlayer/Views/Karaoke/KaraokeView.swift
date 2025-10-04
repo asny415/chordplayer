@@ -27,7 +27,7 @@ struct KaraokeDisplayLine: Identifiable, Hashable {
     
     var lineText: String {
         let joined = words.map { $0.text }.joined()
-        if joined.hasSuffix(",") { return String(joined.dropLast()) }
+        if joined.hasSuffix(",") || joined.hasSuffix("，") { return String(joined.dropLast()) }
         return joined
     }
 }
