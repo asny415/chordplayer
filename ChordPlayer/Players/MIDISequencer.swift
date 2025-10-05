@@ -223,10 +223,9 @@ class MIDISequencer: ObservableObject {
     }
 
     private func addNote(_ note: MusicNote, to track: MusicTrack, channel: UInt8) {
-        // The logic is now decided entirely by the technique.
         switch note.technique {
-            
         case .slide(let toPitch, let durationAtTarget):
+            // Existing slide logic remains unchanged
             let pitchBendRangeSemitones = Double(MidiManager.pitchBendRange)
             let semitoneDifference = toPitch - note.pitch
             let clampedSemitoneDifference = max(-pitchBendRangeSemitones, min(pitchBendRangeSemitones, Double(semitoneDifference)))
@@ -235,16 +234,13 @@ class MIDISequencer: ObservableObject {
             let playTargetNoteSeparately = Double(semitoneDifference) != clampedSemitoneDifference
 
             if !playTargetNoteSeparately {
-                // If slide is within range, the single MIDI note event should last for the whole duration.
                 finalDuration += durationAtTarget
             }
 
-            // --- Create the initial Note On event ---
             var startNoteMessage = MIDINoteMessage(channel: channel, note: UInt8(note.pitch), velocity: UInt8(note.velocity), releaseVelocity: 0, duration: Float32(finalDuration))
             MusicTrackNewMIDINoteEvent(track, note.startTime, &startNoteMessage)
 
-            // --- Pitch Bend Handling ---
-            addPitchBendEvent(to: track, at: note.startTime, value: 8192, channel: channel) // Reset at start
+            addPitchBendEvent(to: track, at: note.startTime, value: 8192, channel: channel)
 
             let slideTransitionDuration = note.duration
             if slideTransitionDuration > 0 {
@@ -272,24 +268,75 @@ class MIDISequencer: ObservableObject {
             addPitchBendEvent(to: track, at: note.startTime + finalDuration, value: 8192, channel: channel)
 
             if playTargetNoteSeparately {
-                print("[MIDISequencer] Slide exceeds pitch bend range. Playing target note separately.")
                 let targetNoteStartTime = note.startTime + note.duration
                 var targetNoteMessage = MIDINoteMessage(channel: channel, note: UInt8(toPitch), velocity: UInt8(note.velocity), releaseVelocity: 0, duration: Float32(durationAtTarget))
                 MusicTrackNewMIDINoteEvent(track, targetNoteStartTime, &targetNoteMessage)
             }
 
-        default:
-            var finalDuration = note.duration
-            // Check for the new bend case and adjust duration, but don't apply pitch bend for now.
-            if case .bend(_, let releaseDuration, let sustainDuration) = note.technique {
-                // Temporary fix: sum durations to avoid note cutting off. Not musically correct.
-                finalDuration += releaseDuration + sustainDuration
+        case .bend(let targetPitch, let releaseDuration, let sustainDuration):
+            // --- 1. Calculate Durations for Each Phase ---
+            let initialHoldDuration = note.duration * 0.5
+            let bendUpDuration = note.duration * 0.4
+            let peakHoldDuration = note.duration * 0.1 + releaseDuration * 0.1
+            let releaseDownDuration = releaseDuration * 0.4
+            // The final sustain is implicitly handled by the total note duration
+
+            let totalDuration = note.duration + releaseDuration + sustainDuration
+            guard totalDuration > 0 else { break }
+
+            // --- 2. Send a single Note On for the total duration ---
+            var noteMessage = MIDINoteMessage(channel: channel, note: UInt8(note.pitch), velocity: UInt8(note.velocity), releaseVelocity: 0, duration: Float32(totalDuration))
+            MusicTrackNewMIDINoteEvent(track, note.startTime, &noteMessage)
+
+            // --- 3. Create the Pitch Bend Curve ---
+            let pitchBendRange = Double(MidiManager.pitchBendRange)
+            let semitoneDifference = targetPitch - note.pitch
+            let targetBendValue = 8192 + Int((Double(semitoneDifference) / pitchBendRange) * 8191.0)
+            let clampedTargetBendValue = UInt16(max(0, min(16383, targetBendValue)))
+
+            // T0: Start time, reset pitch bend
+            let t0 = note.startTime
+            addPitchBendEvent(to: track, at: t0, value: 8192, channel: channel)
+
+            // T1: End of initial hold, start of bend up
+            let t1 = t0 + initialHoldDuration
+            if bendUpDuration > 0.01 {
+                let steps = max(2, Int(bendUpDuration * 50))
+                for i in 0...steps {
+                    let progress = Double(i) / Double(steps)
+                    let currentTime = t1 + progress * bendUpDuration
+                    let intermediateValue = 8192 + Int(Double(clampedTargetBendValue - 8192) * progress)
+                    addPitchBendEvent(to: track, at: currentTime, value: UInt16(intermediateValue), channel: channel)
+                }
+            }
+            
+            // T2: End of bend up, ensure it reaches the peak
+            let t2 = t1 + bendUpDuration
+            addPitchBendEvent(to: track, at: t2, value: clampedTargetBendValue, channel: channel)
+
+            // T3: End of peak hold, start of release down
+            let t3 = t2 + peakHoldDuration
+            if releaseDownDuration > 0.01 {
+                let steps = max(2, Int(releaseDownDuration * 50))
+                for i in 0...steps {
+                    let progress = Double(i) / Double(steps)
+                    let currentTime = t3 + progress * releaseDownDuration
+                    let intermediateValue = Int(clampedTargetBendValue) - Int(Double(clampedTargetBendValue - 8192) * progress)
+                    addPitchBendEvent(to: track, at: currentTime, value: UInt16(intermediateValue), channel: channel)
+                }
             }
 
-            var noteMessage = MIDINoteMessage(channel: channel, note: UInt8(note.pitch), velocity: UInt8(note.velocity), releaseVelocity: 0, duration: Float32(finalDuration))
-            MusicTrackNewMIDINoteEvent(track, note.startTime, &noteMessage)
+            // T4: End of release, ensure it's back to normal
+            let t4 = t3 + releaseDownDuration
+            addPitchBendEvent(to: track, at: t4, value: 8192, channel: channel)
             
-            // NOTE: No pitch bend logic is applied for the .bend case for now.
+            // Also reset at the very end of the note
+            addPitchBendEvent(to: track, at: note.startTime + totalDuration, value: 8192, channel: channel)
+
+        default:
+            // Handles .vibrato, .pullOff, .normal, and nil
+            var noteMessage = MIDINoteMessage(channel: channel, note: UInt8(note.pitch), velocity: UInt8(note.velocity), releaseVelocity: 0, duration: Float32(note.duration))
+            MusicTrackNewMIDINoteEvent(track, note.startTime, &noteMessage)
         }
     }
     
