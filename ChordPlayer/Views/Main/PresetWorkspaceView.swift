@@ -53,7 +53,7 @@ struct PresetWorkspaceView: View {
                             .onReceive(chordPlayer.$playbackPosition) { newPosition in
                                 playheadPosition = newPosition
                             }
-                            .onChange(of: appData.preset?.arrangement) { _ in
+                            .onChange(of: appData.preset?.arrangement) {
                                 updateArrangementLength()
                             }
                         }

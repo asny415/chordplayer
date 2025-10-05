@@ -502,8 +502,6 @@ struct EnhancedDrumTrackDropDelegate: DropDelegate {
             return false
         }
 
-        let beatsPerMeasure = Double(self.appData.preset?.timeSignature.beatsPerMeasure ?? 4)
-
         // 优先尝试作为“重新定位”操作处理
         if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
             provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, error in
@@ -547,7 +545,7 @@ struct EnhancedDrumTrackDropDelegate: DropDelegate {
     }
 
     private func repositionDrumSegment(segmentId: UUID, newStartBeat: Double, appData: AppData) {
-        guard var preset = appData.preset else { return }
+        guard let preset = appData.preset else { return }
         var arrangement = preset.arrangement
 
         if let index = arrangement.drumTrack.segments.firstIndex(where: { $0.id == segmentId }) {
@@ -579,8 +577,6 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
         guard let provider = info.itemProviders(for: [UTType.text, UTType.data]).first else {
             return false
         }
-
-        let beatsPerMeasure = Double(self.appData.preset?.timeSignature.beatsPerMeasure ?? 4)
 
         // 优先尝试作为“重新定位”操作处理
         if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
@@ -627,7 +623,7 @@ struct EnhancedGuitarTrackDropDelegate: DropDelegate {
     }
 
     private func repositionGuitarSegment(segmentId: UUID, newStartBeat: Double, appData: AppData) {
-        guard var preset = appData.preset else {
+        guard let preset = appData.preset else {
             return
         }
         var arrangement = preset.arrangement
@@ -737,7 +733,7 @@ struct EnhancedLyricsTrackDropDelegate: DropDelegate {
     }
 
     private func repositionLyricsSegment(segmentId: UUID, newStartBeat: Double, appData: AppData) {
-        guard var preset = appData.preset else { return }
+        guard let preset = appData.preset else { return }
         var arrangement = preset.arrangement
         var segmentToMove: LyricsSegment?
 

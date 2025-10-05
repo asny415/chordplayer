@@ -215,7 +215,7 @@ struct ArrangementPlaybackCard: View {
                 isPlayingKaraoke = true // Also start karaoke view
             }
         }
-        .onChange(of: chordPlayer.isPlaying) { newIsPlaying in
+        .onChange(of: chordPlayer.isPlaying) { _,newIsPlaying in
             // If the sequencer stops playing for any reason (e.g., song ends),
             // ensure we exit the karaoke view.
             if !newIsPlaying {

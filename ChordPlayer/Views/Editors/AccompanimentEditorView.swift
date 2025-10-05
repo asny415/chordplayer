@@ -691,7 +691,6 @@ struct ResourceLibraryView: View {
     }
     
     private func getChordIdAtPosition(measureIndex: Int, startBeat: Int) -> UUID? {
-        let beatsPerMeasure = appData.preset?.timeSignature.beatsPerMeasure ?? 4
         
         // Go through all measures up to and including the target measure
         var lastChordSoFar: UUID? = nil

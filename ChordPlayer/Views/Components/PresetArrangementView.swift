@@ -340,7 +340,7 @@ struct SimplePresetArrangerView: View {
     }
 
     private func deleteSegment(_ segmentId: UUID) {
-        guard var preset = appData.preset else { return }
+        guard let preset = appData.preset else { return }
         var arrangement = preset.arrangement
 
         // 从鼓机轨道删除
@@ -366,7 +366,7 @@ struct SimplePresetArrangerView: View {
     }
 
     private func updateDrumSegmentDuration(_ segment: DrumSegment, newDuration: Double) {
-        guard var preset = appData.preset else { return }
+        guard let preset = appData.preset else { return }
         var arrangement = preset.arrangement
 
         if let index = arrangement.drumTrack.segments.firstIndex(where: { $0.id == segment.id }) {
@@ -376,7 +376,7 @@ struct SimplePresetArrangerView: View {
     }
 
     private func updateGuitarSegmentDuration(_ segment: GuitarSegment, newDuration: Double) {
-        guard var preset = appData.preset else { return }
+        guard let preset = appData.preset else { return }
         var arrangement = preset.arrangement
 
         for trackIndex in 0..<arrangement.guitarTracks.count {
@@ -389,7 +389,7 @@ struct SimplePresetArrangerView: View {
     }
 
     private func updateLyricsSegment(_ updatedSegment: LyricsSegment) {
-        guard var preset = appData.preset else { return }
+        guard let preset = appData.preset else { return }
         var arrangement = preset.arrangement
 
         for trackIndex in 0..<arrangement.lyricsTracks.count {

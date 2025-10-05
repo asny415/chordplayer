@@ -88,7 +88,7 @@ struct SoloEditorView: View {
                             let start = soloSegment.notes[idx].startTime
                             // clamp to not overlap next note on same string
                             var maxDuration: Double = soloSegment.lengthInBeats - start
-                            if let nextIdx = findPrecedingNoteIndex(before: Double.greatestFiniteMagnitude, on: soloSegment.notes[idx].string) {
+                            if let _ = findPrecedingNoteIndex(before: Double.greatestFiniteMagnitude, on: soloSegment.notes[idx].string) {
                                 // find next note after this one on same string
                                 let candidates = soloSegment.notes.indices.filter { soloSegment.notes[$0].string == soloSegment.notes[idx].string && soloSegment.notes[$0].startTime > start }
                                 if let next = candidates.min(by: { soloSegment.notes[$0].startTime < soloSegment.notes[$1].startTime }) {

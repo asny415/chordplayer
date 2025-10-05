@@ -73,7 +73,7 @@ struct FretboardView: View {
                     Rectangle().fill(Color.black.opacity(0.1))
 
                     HStack(spacing: 0) {
-                        ForEach(0..<displayFretCount) { fret in
+                        ForEach(0..<7) { fret in
                             ZStack {
                                 Rectangle().frame(width: fretWidth(for: fret))
                                 if singleMarkers.contains(fret + fretPosition) {
@@ -106,7 +106,7 @@ struct FretboardView: View {
                     }
 
                     HStack(spacing: 0) {
-                        ForEach(0..<displayFretCount) { fret in
+                        ForEach(0..<7) { fret in
                             VStack(spacing: 0) {
                                 ForEach((0..<stringCount).reversed(), id: \.self) { string in
                                     ZStack {

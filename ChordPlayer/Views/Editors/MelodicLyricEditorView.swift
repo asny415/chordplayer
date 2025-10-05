@@ -43,156 +43,28 @@ struct MelodicLyricEditorView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            VStack(alignment: .leading, spacing: 4) { // Add spacing
-                // 1. In-place Editable Title
-                HStack {
-                    Spacer()
-                    if isEditingName {
-                        TextField("Segment Name", text: $segment.name)
-                            .font(.largeTitle).textFieldStyle(.plain).multilineTextAlignment(.center)
-                            .focused($isNameFieldFocused)
-                            .onSubmit { isEditingName = false }.onDisappear { isEditingName = false }
-                    } else {
-                        Text(segment.name).font(.largeTitle).fontWeight(.bold)
-                            .onTapGesture(count: 2) { isEditingName = true; isNameFieldFocused = true }
-                    }
-                    Spacer()
-                }
-                .padding(.top, 12)
-                .padding(.horizontal)
-                .padding(.bottom, 4)
-
-                // 2. Toolbar
-                MelodicLyricToolbar(
-                    currentTechnique: $currentTechnique,
-                    resolution: $segment.activeResolution,
-                    zoomLevel: $zoomLevel,
-                    segmentLengthInBars: $segment.lengthInBars,
-                    midiChannel: $editorMidiChannel,
-                    isPlayingSegment: $melodicLyricPlayer.isPlaying,
-                    onTogglePlayback: toggleSegmentPlayback
-                )
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(.regularMaterial) // Use material background
-                
-                // Divider removed
-
-                // 3. Main Content Editor
-                ScrollView([.horizontal]) {
-                    ZStack(alignment: .topLeading) {
-                        // Layer 1: Background Grid
-                        MelodicLyricGridBackground(
-                            lengthInBars: segment.lengthInBars, beatsPerBar: beatsPerBar, beatWidth: beatWidth,
-                            trackHeight: trackHeight, zoomLevel: zoomLevel, ticksPerBeat: ticksPerBeat,
-                            resolution: segment.activeResolution
-                        )
-
-                        if melodicLyricPlayer.isPlaying {
-                            let totalBeats = Double(segment.lengthInBars * beatsPerBar)
-                            // Ensure we don't divide by zero and stay within bounds
-                            let progress = totalBeats > 0 ? min(max(midiSequencer.currentTimeInBeats / totalBeats, 0.0), 1.0) : 0.0
-                            let indicatorX = CGFloat(progress) * CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel
-
-                            Rectangle()
-                                .fill(Color.red.opacity(0.8))
-                                .frame(width: 2, height: trackHeight)
-                                .offset(x: indicatorX)
-                        }
-
-                        if totalTicks > 0 {
-                            // Add a static grid of invisible anchor views for the ScrollViewReader to target.
-                            HStack(spacing: 0) {
-                                ForEach(0..<totalTicks, id: \.self) { tick in
-                                    Color.clear
-                                        .frame(width: tickWidth, height: 1)
-                                        .id(tick)
-                                }
-                            }
-                            .frame(height: 1)
-
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
-                                .frame(width: selectionHighlightWidth, height: trackHeight - 8)
-                                .offset(x: highlightOffsetX(), y: 4)
-                                .animation(.easeInOut(duration: 0.12), value: selectedTick)
-                        }
-
-                        ForEach(segment.items) { item in
-                            let cellWidth = tickWidth * CGFloat(item.durationInTicks ?? tickStride)
-                            MelodicLyricCellView(
-                                item: item,
-                                isSelected: item.positionInTicks == selectedTick,
-                                cellWidth: cellWidth,
-                                unitWidth: tickWidth * 3 // Restore font size to be based on 16th note width
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture(count: 2) { 
-                                selectTick(item.positionInTicks)
-                                startWordEditing()
-                            }
-                            .onTapGesture(count: 1) {
-                                selectTickAndOptimizeGrid(at: item.positionInTicks)
-                            }
-                            .offset(x: CGFloat(item.positionInTicks) * tickWidth)
-                        }
-                        if let editingTick = editingWordAtTick {
-                            let editorWidth = max(tickWidth * CGFloat(max(tickStride, 1)) - 8, 100)
-                            let editorHeight: CGFloat = 28
-                            TextField("Lyric", text: $editingWord)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: editorWidth, height: editorHeight)
-                                .focused($isInlineEditorFocused)
-                                .onSubmit { commitAndAdvance() }
-                                .offset(
-                                    x: inlineEditorOffsetX(for: editingTick, width: editorWidth),
-                                    y: inlineEditorOffsetY(height: editorHeight)
-                                )
-                        }
-                    }
-                    .frame(width: CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel, height: trackHeight)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in handleBackgroundTap(at: location) }
-                }
-                .background(.ultraThickMaterial) // Use thick material
-                .clipShape(RoundedRectangle(cornerRadius: 8)) // Add rounded corners
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 1) // Add a subtle border
-                )
-                .padding(.horizontal) // Add horizontal padding to the editor
-                
-                // Divider removed
-                
-                // 4. Status Bar
-                HStack(spacing: 12) { // Add spacing
-                    Text(cellStatusDescription)
-                    Spacer()
-                    Text(itemStatusDescription)
-                    Spacer()
-                    Text("Items: \(segment.items.count)")
-                }
-                .font(.caption) // Use smaller font for status
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
-                .padding(.vertical, 6)
-                .background(.regularMaterial) // Use material background
+            VStack(alignment: .leading, spacing: 4) {
+                titleView
+                toolbar
+                editorContent
+                statusBar
             }
-            .onChange(of: selectedTick) { newTick in
+            .onChange(of: selectedTick) { _,newTick in
                 DispatchQueue.main.async {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         proxy.scrollTo(newTick, anchor: .center)
                     }
                 }
             }
-            .onChange(of: currentTechnique, perform: techniqueSelectionChanged)
-            .onChange(of: segment.lengthInBars) { _ in
+            .onChange(of: currentTechnique) { _, newTechnique in
+                techniqueSelectionChanged(newTechnique)
+            }
+            .onChange(of: segment.lengthInBars) {
                 clampSelectedTick()
                 melodicLyricPlayer.stop()
                 persistSegment()
             }
-            .onChange(of: segment.activeResolution) { newValue in
+            .onChange(of: segment.activeResolution) { _,newValue in
                 alignSelectionToGrid()
                 persistSegment()
             }
@@ -204,10 +76,151 @@ struct MelodicLyricEditorView: View {
                 stopPreview()
                 unregisterKeyMonitor()
             }
-            .onChange(of: isEditingName) { editing in
+            .onChange(of: isEditingName) { _, editing in
                 if !editing { persistSegment() }
             }
         }
+    }
+
+    // MARK: - Sub-views
+
+    @ViewBuilder
+    private var titleView: some View {
+        HStack {
+            Spacer()
+            if isEditingName {
+                TextField("Segment Name", text: $segment.name)
+                    .font(.largeTitle).textFieldStyle(.plain).multilineTextAlignment(.center)
+                    .focused($isNameFieldFocused)
+                    .onSubmit { isEditingName = false }.onDisappear { isEditingName = false }
+            } else {
+                Text(segment.name).font(.largeTitle).fontWeight(.bold)
+                    .onTapGesture(count: 2) { isEditingName = true; isNameFieldFocused = true }
+            }
+            Spacer()
+        }
+        .padding(.top, 12)
+        .padding(.horizontal)
+        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private var toolbar: some View {
+        MelodicLyricToolbar(
+            currentTechnique: $currentTechnique,
+            resolution: $segment.activeResolution,
+            zoomLevel: $zoomLevel,
+            segmentLengthInBars: $segment.lengthInBars,
+            midiChannel: $editorMidiChannel,
+            isPlayingSegment: $melodicLyricPlayer.isPlaying,
+            onTogglePlayback: toggleSegmentPlayback
+        )
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(.regularMaterial) // Use material background
+    }
+
+    @ViewBuilder
+    private var editorContent: some View {
+        ScrollView([.horizontal]) {
+            ZStack(alignment: .topLeading) {
+                // Layer 1: Background Grid
+                MelodicLyricGridBackground(
+                    lengthInBars: segment.lengthInBars, beatsPerBar: beatsPerBar, beatWidth: beatWidth,
+                    trackHeight: trackHeight, zoomLevel: zoomLevel, ticksPerBeat: ticksPerBeat,
+                    resolution: segment.activeResolution
+                )
+
+                if melodicLyricPlayer.isPlaying {
+                    let totalBeats = Double(segment.lengthInBars * beatsPerBar)
+                    // Ensure we don't divide by zero and stay within bounds
+                    let progress = totalBeats > 0 ? min(max(midiSequencer.currentTimeInBeats / totalBeats, 0.0), 1.0) : 0.0
+                    let indicatorX = CGFloat(progress) * CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel
+
+                    Rectangle()
+                        .fill(Color.red.opacity(0.8))
+                        .frame(width: 2, height: trackHeight)
+                        .offset(x: indicatorX)
+                }
+
+                if totalTicks > 0 {
+                    // Add a static grid of invisible anchor views for the ScrollViewReader to target.
+                    HStack(spacing: 0) {
+                        ForEach(0..<totalTicks, id: \.self) { tick in
+                            Color.clear
+                                .frame(width: tickWidth, height: 1)
+                                .id(tick)
+                        }
+                    }
+                    .frame(height: 1)
+
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
+                        .frame(width: selectionHighlightWidth, height: trackHeight - 8)
+                        .offset(x: highlightOffsetX(), y: 4)
+                        .animation(.easeInOut(duration: 0.12), value: selectedTick)
+                }
+
+                ForEach(segment.items) { item in
+                    let cellWidth = tickWidth * CGFloat(item.durationInTicks ?? tickStride)
+                    MelodicLyricCellView(
+                        item: item,
+                        isSelected: item.positionInTicks == selectedTick,
+                        cellWidth: cellWidth,
+                        unitWidth: tickWidth * 3 // Restore font size to be based on 16th note width
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) {
+                        selectTick(item.positionInTicks)
+                        startWordEditing()
+                    }
+                    .onTapGesture(count: 1) {
+                        selectTickAndOptimizeGrid(at: item.positionInTicks)
+                    }
+                    .offset(x: CGFloat(item.positionInTicks) * tickWidth)
+                }
+                if let editingTick = editingWordAtTick {
+                    let editorWidth = max(tickWidth * CGFloat(max(tickStride, 1)) - 8, 100)
+                    let editorHeight: CGFloat = 28
+                    TextField("Lyric", text: $editingWord)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: editorWidth, height: editorHeight)
+                        .focused($isInlineEditorFocused)
+                        .onSubmit { commitAndAdvance() }
+                        .offset(
+                            x: inlineEditorOffsetX(for: editingTick, width: editorWidth),
+                            y: inlineEditorOffsetY(height: editorHeight)
+                        )
+                }
+            }
+            .frame(width: CGFloat(segment.lengthInBars * beatsPerBar) * beatWidth * zoomLevel, height: trackHeight)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+            .onTapGesture { location in handleBackgroundTap(at: location) }
+        }
+        .background(.ultraThickMaterial) // Use thick material
+        .clipShape(RoundedRectangle(cornerRadius: 8)) // Add rounded corners
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.primary.opacity(0.1), lineWidth: 1) // Add a subtle border
+        )
+        .padding(.horizontal) // Add horizontal padding to the editor
+    }
+
+    @ViewBuilder
+    private var statusBar: some View {
+        HStack(spacing: 12) { // Add spacing
+            Text(cellStatusDescription)
+            Spacer()
+            Text(itemStatusDescription)
+            Spacer()
+            Text("Items: \(segment.items.count)")
+        }
+        .font(.caption) // Use smaller font for status
+        .foregroundColor(.secondary)
+        .padding(.horizontal)
+        .padding(.vertical, 6)
+        .background(.regularMaterial) // Use material background
     }
 
     // MARK: - Private Methods
