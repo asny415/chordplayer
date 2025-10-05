@@ -80,70 +80,58 @@ class SoloPlayer: ObservableObject {
 
         let notesSortedByTime = segment.notes.sorted { $0.startTime < $1.startTime }
         let transposition = self.transposition(forKey: preset.key)
+        var consumedNoteIDs = Set<UUID>()
         var musicNotes: [MusicNote] = []
-        
-        var i = 0
-        while i < notesSortedByTime.count {
-            let note1 = notesSortedByTime[i]
-            
-            // Skip invalid or already processed notes
-            guard note1.fret >= 0 else {
-                i += 1
-                continue
-            }
 
-            let pitch1 = midiNote(from: note1.string, fret: note1.fret, transposition: transposition)
+        for i in 0..<notesSortedByTime.count {
+            let currentNote = notesSortedByTime[i]
+            if consumedNoteIDs.contains(currentNote.id) || currentNote.fret < 0 { continue }
+
+            var duration = currentNote.duration ?? 1.0
+            let pitch = midiNote(from: currentNote.string, fret: currentNote.fret, transposition: transposition)
             var technique: MusicPlayingTechnique? = nil
-            var shouldIncrementByOne = true
 
-            switch note1.technique {
-            case .bend:
-                // Check for the 3-note bend sequence
-                if i + 2 < notesSortedByTime.count {
-                    let note2 = notesSortedByTime[i+1]
-                    let note3 = notesSortedByTime[i+2]
-                    
-                    let pitch2 = midiNote(from: note2.string, fret: note2.fret, transposition: transposition)
-                    let pitch3 = midiNote(from: note3.string, fret: note3.fret, transposition: transposition)
-
-                    // Validation for the bend sequence
-                    if note1.string == note2.string && note2.string == note3.string &&
-                       pitch2 > pitch1 && pitch3 == pitch1 {
-                        
-                        let releaseDuration = note2.duration ?? 0.25 // Default duration if nil
-                        let sustainDuration = note3.duration ?? 0.25 // Default duration if nil
-                        
-                        technique = .bend(targetPitch: Int(pitch2), releaseDuration: releaseDuration, sustainDuration: sustainDuration)
-                        
-                        let musicNote = MusicNote(startTime: note1.startTime,
-                                                  duration: note1.duration ?? 0.25,
-                                                  pitch: Int(pitch1),
-                                                  velocity: 100,
-                                                  technique: technique)
-                        musicNotes.append(musicNote)
-                        
-                        i += 3 // Consume all 3 notes
-                        shouldIncrementByOne = false
-                        
-                    } else {
-                        // Validation failed, treat as a normal note
-                        technique = nil
-                    }
-                } else {
-                    // Not enough notes for a bend, treat as normal
-                    technique = nil
-                }
-
+            switch currentNote.technique {
             case .slide:
-                if let note2 = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == note1.string }) {
-                    let pitch2 = midiNote(from: note2.string, fret: note2.fret, transposition: transposition)
-                    technique = .slide(toPitch: Int(pitch2), durationAtTarget: note2.duration ?? 1.0)
-                    // This is tricky with a while loop. For now, we don't consume the slide target.
-                    // The sequencer should handle this by looking at the technique.
+                if let targetNote = notesSortedByTime.dropFirst(i + 1).first(where: { $0.string == currentNote.string && !consumedNoteIDs.contains($0.id) }) {
+                    consumedNoteIDs.insert(targetNote.id)
+                    
+                    // Correctly calculate slide transition duration
+                    let slideTransitionDuration = targetNote.startTime - currentNote.startTime
+                    if slideTransitionDuration > 0 {
+                        duration = slideTransitionDuration
+                    }
+
+                    let targetPitch = midiNote(from: targetNote.string, fret: targetNote.fret, transposition: transposition)
+                    let durationAtTarget = targetNote.duration ?? 1.0
+                    technique = .slide(toPitch: Int(targetPitch), durationAtTarget: durationAtTarget)
                 } else {
                     technique = nil // Slide to nowhere, treat as normal
                 }
-            
+            case .bend:
+                if i + 2 < notesSortedByTime.count {
+                    let note2 = notesSortedByTime[i+1]
+                    let note3 = notesSortedByTime[i+2]
+                    let pitch2 = midiNote(from: note2.string, fret: note2.fret, transposition: transposition)
+                    let pitch3 = midiNote(from: note3.string, fret: note3.fret, transposition: transposition)
+
+                    if !consumedNoteIDs.contains(note2.id) && !consumedNoteIDs.contains(note3.id) &&
+                       currentNote.string == note2.string && note2.string == note3.string &&
+                       pitch2 > pitch && pitch3 == pitch {
+                        
+                        consumedNoteIDs.insert(note2.id)
+                        consumedNoteIDs.insert(note3.id)
+                        
+                        let releaseDuration = note2.duration ?? 0.25
+                        let sustainDuration = note3.duration ?? 0.25
+                        technique = .bend(targetPitch: Int(pitch2), releaseDuration: releaseDuration, sustainDuration: sustainDuration)
+                        
+                    } else {
+                        technique = nil // Validation failed
+                    }
+                } else {
+                    technique = nil // Not enough notes
+                }
             case .vibrato:
                 technique = .vibrato
             case .pullOff:
@@ -152,16 +140,15 @@ class SoloPlayer: ObservableObject {
                 technique = nil
             }
             
-            if shouldIncrementByOne {
-                let velocity = (note1.technique == .pullOff) ? 50 : 100
-                let musicNote = MusicNote(startTime: note1.startTime,
-                                          duration: note1.duration ?? 1.0,
-                                          pitch: Int(pitch1),
-                                          velocity: velocity,
-                                          technique: technique)
-                musicNotes.append(musicNote)
-                i += 1
-            }
+            guard duration > 0 else { continue }
+            let velocity = (currentNote.technique == .pullOff) ? 50 : 100
+
+            let musicNote = MusicNote(startTime: currentNote.startTime,
+                                      duration: duration,
+                                      pitch: Int(pitch),
+                                      velocity: velocity,
+                                      technique: technique)
+            musicNotes.append(musicNote)
         }
 
         let soloTrack = SongTrack(instrumentName: "Solo Guitar",
