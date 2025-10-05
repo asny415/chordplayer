@@ -83,7 +83,18 @@ class MelodicLyricPlayer: ObservableObject {
                 }
 
             } else {
-                // Handle all other techniques and their standard duration calculation.
+                // For all other notes, calculate duration first, then process techniques.
+                
+                // 1. Calculate duration based on the *next immediate* note.
+                if let durationTicks = currentItem.durationInTicks {
+                    duration = Double(durationTicks) / ticksPerBeat
+                } else {
+                    let nextItemStartTime = itemsSorted.dropFirst(i + 1).first?.positionInTicks
+                    let nextNoteStartBeat = nextItemStartTime.map { Double($0) / ticksPerBeat }
+                    duration = (nextNoteStartBeat ?? segmentEndBeat) - startTime
+                }
+
+                // 2. Process techniques and consume notes.
                 switch currentItem.technique {
                 case .bend:
                     if i + 2 < itemsSorted.count {
@@ -109,15 +120,6 @@ class MelodicLyricPlayer: ObservableObject {
                 default:
                     technique = nil
                 }
-                
-                // Standard duration calculation for non-slide notes.
-                if let durationTicks = currentItem.durationInTicks {
-                    duration = Double(durationTicks) / ticksPerBeat
-                } else {
-                    let nextNoteStartBeat = itemsSorted.dropFirst(i + 1).first { !consumedItemIDs.contains($0.id) && $0.pitch > 0 }
-                        .map { Double($0.positionInTicks) / ticksPerBeat }
-                    duration = (nextNoteStartBeat ?? segmentEndBeat) - startTime
-                }
             }
             
             if duration > 0 {
@@ -130,12 +132,6 @@ class MelodicLyricPlayer: ObservableObject {
         let track = SongTrack(instrumentName: "Melody", midiChannel: Int(midiChannel), notes: musicNotes)
         let song = MusicSong(tempo: preset.bpm, key: preset.key, timeSignature: .init(numerator: preset.timeSignature.beatsPerMeasure, denominator: preset.timeSignature.beatUnit), tracks: [track])
         
-        if let json = song.dumpJSON() {
-            print("--- Generated MusicSong for MelodicLyricPlayer ---")
-            print(json)
-            print("----------------------------------------------------")
-        }
-
         return song
     }
 
