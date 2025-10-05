@@ -53,71 +53,98 @@ class MelodicLyricPlayer: ObservableObject {
     func createSong(from segment: MelodicLyricSegment, onChannel midiChannel: UInt8) -> MusicSong? {
         guard let preset = appData.preset else { return nil }
         
-        var musicNotes: [MusicNote] = []
         let itemsSorted = segment.items.sorted { $0.positionInTicks < $1.positionInTicks }
-        var consumedItemIDs = Set<UUID>()
+        var musicNotes: [MusicNote] = []
         let transposition = self.transposition(forKey: preset.key)
         let ticksPerBeat = 12.0 // Use a double for division
         let segmentEndBeat = Double(segment.lengthInBars * preset.timeSignature.beatsPerMeasure)
 
-        for i in 0..<itemsSorted.count {
-            let currentItem = itemsSorted[i]
-            if consumedItemIDs.contains(currentItem.id) || currentItem.pitch == 0 { continue }
-
-            let startTime = Double(currentItem.positionInTicks) / ticksPerBeat
-            var duration: Double
-            var technique: MusicPlayingTechnique? = nil
-
-            // Default duration calculation
-            let noteOffBeat: Double
-            if let durationTicks = currentItem.durationInTicks {
-                noteOffBeat = Double(currentItem.positionInTicks + durationTicks) / ticksPerBeat
-            } else {
-                let nextNoteStartBeat = itemsSorted.dropFirst(i + 1).first(where: { $0.pitch > 0 })
-                    .map { Double($0.positionInTicks) / ticksPerBeat }
-                noteOffBeat = nextNoteStartBeat ?? segmentEndBeat
-            }
-            duration = noteOffBeat - startTime
-
-            // Technique handling
-            if currentItem.technique == .slide, let targetItem = itemsSorted.dropFirst(i + 1).first(where: { $0.pitch > 0 && !consumedItemIDs.contains($0.id) }) {
-                consumedItemIDs.insert(targetItem.id)
-                
-                guard let targetPitch = midiNote(for: targetItem, transposition: transposition) else { continue }
-                
-                let slideTransitionDuration = (Double(targetItem.positionInTicks) / ticksPerBeat) - startTime
-                
-                // Calculate target item's duration in beats
-                let targetNoteOffBeat: Double
-                if let targetDurationTicks = targetItem.durationInTicks {
-                    targetNoteOffBeat = Double(targetItem.positionInTicks + targetDurationTicks) / ticksPerBeat
-                } else {
-                    let nextTargetNoteStartBeat = itemsSorted.dropFirst(i + 2).first(where: { $0.pitch > 0 })
-                        .map { Double($0.positionInTicks) / ticksPerBeat }
-                    targetNoteOffBeat = nextTargetNoteStartBeat ?? segmentEndBeat
-                }
-                let durationAtTarget = targetNoteOffBeat - (Double(targetItem.positionInTicks) / ticksPerBeat)
-
-                duration = slideTransitionDuration
-                technique = .slide(toPitch: Int(targetPitch), durationAtTarget: durationAtTarget)
-
-            } else if currentItem.technique == .bend {
-                technique = .bend(amount: 2.0)
-            } else if currentItem.technique == .vibrato {
-                technique = .vibrato
-            } else if currentItem.technique == .pullOff {
-                technique = .pullOff
-            }
-
-            guard duration > 0, let pitch = midiNote(for: currentItem, transposition: transposition) else { continue }
+        var i = 0
+        while i < itemsSorted.count {
+            let item1 = itemsSorted[i]
             
-            let velocity = (currentItem.technique == .pullOff) ? 50 : 100
-            let musicNote = MusicNote(startTime: startTime, duration: duration, pitch: Int(pitch), velocity: velocity, technique: technique)
-            musicNotes.append(musicNote)
+            guard item1.pitch > 0, let pitch1 = midiNote(for: item1, transposition: transposition) else {
+                i += 1
+                continue
+            }
+
+            var technique: MusicPlayingTechnique? = nil
+            var shouldIncrementByOne = true
+            let startTime = Double(item1.positionInTicks) / ticksPerBeat
+
+            switch item1.technique {
+            case .bend:
+                if i + 2 < itemsSorted.count {
+                    let item2 = itemsSorted[i+1]
+                    let item3 = itemsSorted[i+2]
+
+                    if let pitch2 = midiNote(for: item2, transposition: transposition),
+                       let pitch3 = midiNote(for: item3, transposition: transposition),
+                       pitch2 > pitch1 && pitch3 == pitch1 {
+
+                        let releaseDuration = Double(item2.durationInTicks ?? 3) / ticksPerBeat
+                        let sustainDuration = Double(item3.durationInTicks ?? 3) / ticksPerBeat
+                        let initialDuration = Double(item1.durationInTicks ?? 3) / ticksPerBeat
+
+                        technique = .bend(targetPitch: Int(pitch2), releaseDuration: releaseDuration, sustainDuration: sustainDuration)
+                        
+                        let musicNote = MusicNote(startTime: startTime, duration: initialDuration, pitch: Int(pitch1), velocity: 100, technique: technique)
+                        musicNotes.append(musicNote)
+                        
+                        i += 3
+                        shouldIncrementByOne = false
+                        
+                    } else {
+                        technique = nil // Validation failed
+                    }
+                } else {
+                    technique = nil // Not enough notes
+                }
+
+            case .slide:
+                 if let item2 = itemsSorted.dropFirst(i + 1).first(where: { $0.pitch > 0 }) {
+                    if let pitch2 = midiNote(for: item2, transposition: transposition) {
+                        let durationAtTarget = Double(item2.durationInTicks ?? 3) / ticksPerBeat
+                        technique = .slide(toPitch: Int(pitch2), durationAtTarget: durationAtTarget)
+                    }
+                }
+
+            case .vibrato:
+                technique = .vibrato
+            case .pullOff:
+                technique = .pullOff
+            case .normal, .none:
+                technique = nil
+            }
+
+            if shouldIncrementByOne {
+                let duration: Double
+                if let durationTicks = item1.durationInTicks {
+                    duration = Double(durationTicks) / ticksPerBeat
+                } else {
+                    let nextNoteStartBeat = itemsSorted.dropFirst(i + 1).first(where: { $0.pitch > 0 })
+                        .map { Double($0.positionInTicks) / ticksPerBeat }
+                    duration = (nextNoteStartBeat ?? segmentEndBeat) - startTime
+                }
+                
+                if duration > 0 {
+                    let velocity = (item1.technique == .pullOff) ? 50 : 100
+                    let musicNote = MusicNote(startTime: startTime, duration: duration, pitch: Int(pitch1), velocity: velocity, technique: technique)
+                    musicNotes.append(musicNote)
+                }
+                i += 1
+            }
         }
 
         let track = SongTrack(instrumentName: "Melody", midiChannel: Int(midiChannel), notes: musicNotes)
         let song = MusicSong(tempo: preset.bpm, key: preset.key, timeSignature: .init(numerator: preset.timeSignature.beatsPerMeasure, denominator: preset.timeSignature.beatUnit), tracks: [track])
+        
+        if let json = song.dumpJSON() {
+            print("--- Generated MusicSong for MelodicLyricPlayer ---")
+            print(json)
+            print("----------------------------------------------------")
+        }
+
         return song
     }
 

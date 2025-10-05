@@ -279,18 +279,17 @@ class MIDISequencer: ObservableObject {
             }
 
         default:
-            var noteMessage = MIDINoteMessage(channel: channel, note: UInt8(note.pitch), velocity: UInt8(note.velocity), releaseVelocity: 0, duration: Float32(note.duration))
+            var finalDuration = note.duration
+            // Check for the new bend case and adjust duration, but don't apply pitch bend for now.
+            if case .bend(_, let releaseDuration, let sustainDuration) = note.technique {
+                // Temporary fix: sum durations to avoid note cutting off. Not musically correct.
+                finalDuration += releaseDuration + sustainDuration
+            }
+
+            var noteMessage = MIDINoteMessage(channel: channel, note: UInt8(note.pitch), velocity: UInt8(note.velocity), releaseVelocity: 0, duration: Float32(finalDuration))
             MusicTrackNewMIDINoteEvent(track, note.startTime, &noteMessage)
             
-            if case .bend(let amount) = note.technique {
-                // Use the correct, generalized formula for pitch bend value.
-                let pitchBendRange = Double(MidiManager.pitchBendRange)
-                let bendValue = UInt16(8192 + (amount / pitchBendRange) * 8191.0)
-
-                addPitchBendEvent(to: track, at: note.startTime, value: 8192, channel: channel) // Reset bend
-                addPitchBendEvent(to: track, at: note.startTime + 0.01, value: bendValue, channel: channel) // Apply bend
-                addPitchBendEvent(to: track, at: note.startTime + note.duration, value: 8192, channel: channel) // Reset at end
-            }
+            // NOTE: No pitch bend logic is applied for the .bend case for now.
         }
     }
     

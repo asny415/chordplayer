@@ -66,7 +66,7 @@ public enum MusicPlayingTechnique: Codable {
     case hammerOn
     case pullOff
     case vibrato
-    case bend(amount: Double)
+    case bend(targetPitch: Int, releaseDuration: Double, sustainDuration: Double)
     case slide(toPitch: Int, durationAtTarget: Double)
 }
 
