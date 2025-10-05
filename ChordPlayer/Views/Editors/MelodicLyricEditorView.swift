@@ -131,10 +131,8 @@ struct MelodicLyricEditorView: View {
                                 selectTick(item.positionInTicks)
                                 startWordEditing()
                             }
-                            .onTapGesture(count: 1) { location in
-                                let tappedSubTick = Int(location.x / tickWidth)
-                                let newSelectedTick = item.positionInTicks + tappedSubTick
-                                selectTick(newSelectedTick)
+                            .onTapGesture(count: 1) {
+                                selectTickAndOptimizeGrid(at: item.positionInTicks)
                             }
                             .offset(x: CGFloat(item.positionInTicks) * tickWidth)
                         }
@@ -214,12 +212,43 @@ struct MelodicLyricEditorView: View {
 
     // MARK: - Private Methods
 
+    private func selectTickAndOptimizeGrid(at tick: Int) {
+        // 1. Find if the click landed within an existing item.
+        let itemAtTick = segment.items.first { item in
+            tick >= item.positionInTicks && tick < (item.positionInTicks + (item.durationInTicks ?? tickStride))
+        }
+
+        // 2. Determine the base position and duration for our calculation.
+        // If we found an item, use its properties. Otherwise, snap the clicked tick and use the current stride.
+        let positionForGridCalc = itemAtTick?.positionInTicks ?? snapTick(tick)
+        let durationForGridCalc = itemAtTick?.durationInTicks ?? tickStride
+
+        // 3. Find the optimal grid using the position-first, optimized logic.
+        let sortedResolutions = GridResolution.allCases.sorted { $0.stepsPerBeat < $1.stepsPerBeat }
+        for resolution in sortedResolutions {
+            let newTickStride = ticksPerBeat / resolution.stepsPerBeat
+            guard newTickStride > 0 else { continue }
+
+            let positionIsCompatible = (positionForGridCalc % newTickStride == 0)
+            let durationIsCompatible = (durationForGridCalc % newTickStride == 0)
+
+            if positionIsCompatible && durationIsCompatible {
+                // This is the best-fit grid. Apply it and stop searching.
+                segment.activeResolution = resolution
+                break
+            }
+        }
+
+        // 4. Finally, select the definitive tick. This will be snapped to the new grid.
+        selectTick(positionForGridCalc)
+    }
+
     private func handleBackgroundTap(at location: CGPoint) {
         guard totalTicks > 0 else { return }
         let rawTick = Int(location.x / tickWidth)
         let clamped = min(max(rawTick, 0), totalTicks - 1)
-        let snapped = snapTick(clamped)
-        selectTick(snapped)
+        // Call the new centralized logic.
+        selectTickAndOptimizeGrid(at: clamped)
     }
 
     private func selectTick(_ tick: Int) {
@@ -391,20 +420,34 @@ struct MelodicLyricEditorView: View {
             .min(by: { $0.positionInTicks < $1.positionInTicks })
 
         if let nextItem = nextItem {
-            // 3. If found, jump to it and select it
-            selectTick(nextItem.positionInTicks)
+            // 3. Position-first grid optimization
+            // Sort resolutions from coarsest (fewest steps) to finest (most steps)
+            let sortedResolutions = GridResolution.allCases.sorted { $0.stepsPerBeat < $1.stepsPerBeat }
 
-            // 4. Adjust grid resolution based on the next item's duration
-            if let duration = nextItem.durationInTicks, duration > 0 {
-                let stepsPerBeat = ticksPerBeat / duration
-                if let newResolution = GridResolution.allCases.first(where: { $0.stepsPerBeat == stepsPerBeat }) {
-                    if segment.activeResolution != newResolution {
-                        segment.activeResolution = newResolution
-                    }
+            // Find the best grid that fits both position and duration
+            for resolution in sortedResolutions {
+                let tickStride = ticksPerBeat / resolution.stepsPerBeat
+                
+                // Ensure stride is valid and duration exists
+                guard tickStride > 0, let duration = nextItem.durationInTicks else { continue }
+
+                // Condition A: Position is compatible
+                let positionIsCompatible = (nextItem.positionInTicks % tickStride == 0)
+                // Condition B: Duration is compatible
+                let durationIsCompatible = (duration % tickStride == 0)
+
+                if positionIsCompatible && durationIsCompatible {
+                    // This is the best-fit grid. Apply it and stop searching.
+                    segment.activeResolution = resolution
+                    break 
                 }
             }
+
+            // 4. Finally, select the tick.
+            selectTick(nextItem.positionInTicks)
+
         } else {
-            // 5. If no next item, just move by one grid step
+            // If no next item, just move by one grid step
             moveSelection(by: tickStride)
         }
         
