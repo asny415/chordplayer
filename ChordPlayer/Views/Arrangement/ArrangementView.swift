@@ -93,7 +93,7 @@ struct ArrangementView: View {
                 }
                 .padding(.top, 4)
                 // Apply the calculated total width to the VStack containing all timeline content
-                .frame(minWidth: totalWidth)
+                .frame(minWidth: totalWidth + 120)
                 .overlay(
                     // GeometryReader to get the full height of the content for the playhead line
                     GeometryReader { geometry in
