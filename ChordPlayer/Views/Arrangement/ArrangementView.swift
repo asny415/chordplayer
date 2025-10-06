@@ -34,14 +34,12 @@ struct ArrangementView: View {
                             Label("添加歌词轨道", systemImage: "text.quote")
                         }
                     } label: {
-                        Button(action: {}) {
-                            Image(systemName: "plus")
-                                .frame(width: 24, height: 24)
-                        }
-                        .buttonStyle(.borderless)
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.accentColor)
                     }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
+                    .buttonStyle(.plain)
+                    .help("添加吉他轨道或歌词轨道")
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 5)
