@@ -209,10 +209,16 @@ struct ArrangementPlaybackCard: View {
                 chordPlayer.stop()
                 isPlayingKaraoke = false // Also stop karaoke view
             } else {
-                // Seek to the UI's playhead position, then play from there.
-                chordPlayer.seekTo(beat: playheadPosition)
-                chordPlayer.playFromCurrentPosition()
-                isPlayingKaraoke = true // Also start karaoke view
+                // 如果当前位置小于1拍，从头开始播放，否则，从当前位置开始播放
+                if playheadPosition < 1.0 {
+                    chordPlayer.play()
+                    isPlayingKaraoke = true // Also start karaoke view
+                } else {
+                    // Seek to the UI's playhead position, then play from there.
+                    chordPlayer.seekTo(beat: playheadPosition)
+                    chordPlayer.playFromCurrentPosition()
+                    isPlayingKaraoke = true // Also start karaoke view
+                }
             }
         }
         .onChange(of: chordPlayer.isPlaying) { _,newIsPlaying in
