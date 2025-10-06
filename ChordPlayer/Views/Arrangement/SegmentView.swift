@@ -13,6 +13,7 @@ struct SegmentView: View {
     
     // Interaction
     let onMove: (Double) -> Void // Closure to call when the segment is moved
+    var onRemove: (() -> Void)? = nil // Optional closure for removing the segment
     
     // State for tracking the drag gesture
     @State private var dragOffset: CGFloat = 0
@@ -52,5 +53,14 @@ struct SegmentView: View {
                     self.dragOffset = 0
                 }
         )
+        .contextMenu {
+            if let onRemove = onRemove {
+                Button(role: .destructive) {
+                    onRemove()
+                } label: {
+                    Label("Remove", systemImage: "trash")
+                }
+            }
+        }
     }
 }

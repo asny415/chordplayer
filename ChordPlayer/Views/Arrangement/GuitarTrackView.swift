@@ -5,6 +5,7 @@ struct GuitarTrackView: View {
     @Binding var track: GuitarTrack
     @Binding var preset: Preset
     let pixelsPerBeat: CGFloat
+    var onRemove: ((UUID) -> Void)? = nil
     @EnvironmentObject var appData: AppData
 
     var body: some View {
@@ -49,6 +50,9 @@ struct GuitarTrackView: View {
                             if let index = track.segments.firstIndex(where: { $0.id == segment.id }) {
                                 track.segments[index].startBeat = newBeat
                             }
+                        },
+                        onRemove: {
+                            onRemove?(segment.id)
                         }
                     )
                 }

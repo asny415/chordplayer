@@ -62,14 +62,33 @@ struct ArrangementView: View {
                     .frame(height: 24)
 
                     // 2. The Tracks
-                    DrumTrackView(track: $arrangement.drumTrack, preset: $preset, pixelsPerBeat: pixelsPerBeat)
+                    DrumTrackView(
+                        track: $arrangement.drumTrack,
+                        preset: $preset,
+                        pixelsPerBeat: pixelsPerBeat,
+                        onRemove: removeDrumSegment
+                    )
 
                     ForEach($arrangement.guitarTracks) { $track in
-                        GuitarTrackView(track: $track, preset: $preset, pixelsPerBeat: pixelsPerBeat)
+                        GuitarTrackView(
+                            track: $track,
+                            preset: $preset,
+                            pixelsPerBeat: pixelsPerBeat,
+                            onRemove: { segmentId in
+                                removeGuitarSegment(segmentId: segmentId, from: track.id)
+                            }
+                        )
                     }
 
                     ForEach($arrangement.lyricsTracks) { $track in
-                        LyricsTrackView(track: $track, preset: $preset, pixelsPerBeat: pixelsPerBeat)
+                        LyricsTrackView(
+                            track: $track,
+                            preset: $preset,
+                            pixelsPerBeat: pixelsPerBeat,
+                            onRemove: { segmentId in
+                                removeLyricsSegment(segmentId: segmentId, from: track.id)
+                            }
+                        )
                     }
                 }
                 .padding(.top, 4)
@@ -84,6 +103,27 @@ struct ArrangementView: View {
                     }
                 )
             }
+        }
+    }
+    
+    // MARK: - Segment Removal Methods
+    
+    private func removeDrumSegment(segmentId: UUID) {
+        arrangement.drumTrack.segments.removeAll { $0.id == segmentId }
+        appData.saveChanges()
+    }
+    
+    private func removeGuitarSegment(segmentId: UUID, from trackId: UUID) {
+        if let trackIndex = arrangement.guitarTracks.firstIndex(where: { $0.id == trackId }) {
+            arrangement.guitarTracks[trackIndex].removeSegment(withId: segmentId)
+            appData.saveChanges()
+        }
+    }
+    
+    private func removeLyricsSegment(segmentId: UUID, from trackId: UUID) {
+        if let trackIndex = arrangement.lyricsTracks.firstIndex(where: { $0.id == trackId }) {
+            arrangement.lyricsTracks[trackIndex].removeLyrics(withId: segmentId)
+            appData.saveChanges()
         }
     }
 }

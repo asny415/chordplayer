@@ -148,8 +148,8 @@ struct PresetWorkspaceView: View {
         let newLength = ceil(maxEndBeat / beatsPerMeasure) * beatsPerMeasure
         let finalLength = max(4.0, newLength) // Ensure it's at least 4 beats
 
-        // Only update if the new length is greater, to avoid shrinking the timeline unintentionally
-        if finalLength > preset.arrangement.lengthInBeats {
+        // Only update if the length has actually changed, to avoid unnecessary redraws and saves.
+        if finalLength != preset.arrangement.lengthInBeats {
             appData.preset?.arrangement.lengthInBeats = finalLength
         }
     }

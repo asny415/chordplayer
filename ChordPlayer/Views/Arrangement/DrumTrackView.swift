@@ -5,6 +5,7 @@ struct DrumTrackView: View {
     @Binding var track: DrumTrack
     @Binding var preset: Preset
     let pixelsPerBeat: CGFloat
+    var onRemove: ((UUID) -> Void)? = nil
     @EnvironmentObject var appData: AppData
 
     var body: some View {
@@ -51,6 +52,9 @@ struct DrumTrackView: View {
                                 // Update the startBeat in the data model. The @Binding will handle the rest.
                                 track.segments[index].startBeat = newBeat
                             }
+                        },
+                        onRemove: {
+                            onRemove?(segment.id)
                         }
                     )
                 }
