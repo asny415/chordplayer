@@ -19,6 +19,29 @@ struct ArrangementView: View {
                     Text("歌曲编排 (Arrangement)")
                         .font(.headline)
                     Spacer()
+                    
+                    // Add guitar track or lyrics track dropdown
+                    Menu {
+                        Button(action: {
+                            arrangement.addGuitarTrack()
+                        }) {
+                            Label("添加吉他轨道", systemImage: "guitars.fill")
+                        }
+                        
+                        Button(action: {
+                            arrangement.addLyricsTrack()
+                        }) {
+                            Label("添加歌词轨道", systemImage: "text.quote")
+                        }
+                    } label: {
+                        Button(action: {}) {
+                            Image(systemName: "plus")
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 5)
