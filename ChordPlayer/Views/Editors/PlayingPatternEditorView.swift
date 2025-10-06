@@ -65,12 +65,39 @@ struct PlayingPatternEditorView: View {
         }
     }
 
+    private var lengthInBeats: Binding<Int> {
+        Binding<Int>(
+            get: {
+                let timeSignature = appData.preset?.timeSignature ?? TimeSignature()
+                let beatUnit = timeSignature.beatUnit > 0 ? timeSignature.beatUnit : 4
+                // This is actually stepsPerQuarterNote
+                let stepsPerQuarterNote = pattern.activeResolution.stepsPerBeat
+                let actualStepsPerBeat = Double(stepsPerQuarterNote) * (4.0 / Double(beatUnit))
+                
+                guard actualStepsPerBeat > 0 else { return 0 }
+                
+                return Int(round(Double(pattern.length) / actualStepsPerBeat))
+            },
+            set: { newLengthInBeats in
+                let timeSignature = appData.preset?.timeSignature ?? TimeSignature()
+                let beatUnit = timeSignature.beatUnit > 0 ? timeSignature.beatUnit : 4
+                let stepsPerQuarterNote = pattern.activeResolution.stepsPerBeat
+                let actualStepsPerBeat = Double(stepsPerQuarterNote) * (4.0 / Double(beatUnit))
+                
+                let newLength = Int(round(Double(newLengthInBeats) * actualStepsPerBeat))
+                pattern.length = max(1, newLength)
+            }
+        )
+    }
+
     private var toolbarView: some View {
         HStack(spacing: 20) {
             Picker("Resolution", selection: $pattern.activeResolution) {
                 ForEach(GridResolution.allCases) { res in Text(res.rawValue).tag(res) }
-            }.pickerStyle(SegmentedPickerStyle()).frame(width: 320)
-            Stepper("Length: \(pattern.length) steps", value: $pattern.length, in: 1...64)
+            }.pickerStyle(.menu)
+            
+            Stepper("Length: \(lengthInBeats.wrappedValue) beats", value: lengthInBeats, in: 1...64)
+            
             Spacer()
             
             Picker("MIDI Ch:", selection: $previewMidiChannel) {
