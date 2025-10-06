@@ -16,7 +16,7 @@ struct TimelineRulerView: View {
             let totalMeasures = Int(ceil(lengthInBeats / beatsPerMeasure))
 
             // Draw measure lines and numbers
-            for measure in 0...totalMeasures {
+            for measure in 0..<totalMeasures {
                 let x = CGFloat(Double(measure) * beatsPerMeasure) * pixelsPerBeat
                 if x <= size.width {
                     var path = Path()
