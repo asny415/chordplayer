@@ -111,28 +111,7 @@ struct ChordPlayerApp: App {
             PreferencesView()
                 .environmentObject(appData)
                 .environmentObject(midiManager)
-        }        
-        Window("Song Arranger", id: "song-arranger") {
-            NavigationStack {
-                // We need to ensure a preset is loaded. A simple check and message is best.
-                if let preset = appData.preset {
-                    SimplePresetArrangerView()
-                        .navigationTitle("Arrange: \(preset.name)")
-                        .environmentObject(appData)
-                        .environmentObject(presetArrangerPlayer)
-                } else {
-                    VStack {
-                        Text("No Preset Loaded")
-                            .font(.title)
-                        Text("Please load a preset from the main window before opening the arranger.")
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
         }
-        .defaultSize(width: 1200, height: 700)
-        .windowResizability(.contentSize)
-        .keyboardShortcut("r", modifiers: .command)
     }
     
     private func showSavePanel() {
