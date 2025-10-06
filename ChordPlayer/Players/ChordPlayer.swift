@@ -164,24 +164,34 @@ class ChordPlayer: ObservableObject {
     }
 
     private func createNotesForPattern(chord: Chord, pattern: GuitarPattern, preset: Preset, patternStartBeat: MusicTimeStamp, patternDurationBeats: MusicTimeStamp, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100) -> [MusicNote] {
-        var musicNotes: [MusicNote] = []
         
+        struct TemporalNote: Comparable {
+            let stringIndex: Int
+            let startTime: Double
+            var duration: Double
+            let pitch: Int
+            let velocity: Int
+            let technique: PlayingTechnique?
+
+            static func < (lhs: TemporalNote, rhs: TemporalNote) -> Bool {
+                if lhs.startTime != rhs.startTime {
+                    return lhs.startTime < rhs.startTime
+                }
+                return lhs.stringIndex < rhs.stringIndex
+            }
+        }
+
+        var temporalNotes: [TemporalNote] = []
         let transpositionOffset = MusicTheory.KEY_CYCLE.firstIndex(of: preset.key) ?? 0
         let fretsForPlayback = Array(chord.frets.reversed())
+        let singleStepDurationBeats = pattern.steps.isEmpty ? 0 : (patternDurationBeats / Double(pattern.steps.count))
 
-        let singleStepDurationBeats = pattern.steps.isEmpty ? patternDurationBeats : (patternDurationBeats / Double(pattern.steps.count))
-
+        // 1. Flatten pattern into a temporal list of notes
         for (stepIndex, step) in pattern.steps.enumerated() {
-            if step.activeNotes.isEmpty { continue }
+            if step.type == .rest || step.activeNotes.isEmpty { continue }
 
             let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
-                var finalFret: Int
-                if let overrideFret = step.fretOverrides[stringIndex] {
-                    finalFret = overrideFret
-                } else {
-                    guard stringIndex < fretsForPlayback.count else { return nil }
-                    finalFret = fretsForPlayback[stringIndex]
-                }
+                let finalFret = step.fretOverrides[stringIndex] ?? (stringIndex < fretsForPlayback.count ? fretsForPlayback[stringIndex] : -1)
                 guard finalFret >= 0 else { return nil }
                 let noteValue = MusicTheory.standardGuitarTuning[stringIndex] + finalFret + transpositionOffset
                 return (note: UInt8(noteValue), stringIndex: stringIndex)
@@ -191,38 +201,88 @@ class ChordPlayer: ObservableObject {
 
             let velocityWithDynamics = UInt8(max(1, min(127, Double(baseVelocity) * dynamics.velocityMultiplier)))
             let adaptiveVelocity = calculateAdaptiveVelocity(baseVelocity: velocityWithDynamics, noteCount: activeNotesInStep.count)
+            
+            let sortedNotes = activeNotesInStep.sorted { $0.stringIndex > $1.stringIndex }
+            let isStrum = step.type == .strum
+            let strumDelayBeats = isStrum ? strumDelayInBeats(for: step.strumSpeed, bpm: preset.bpm) : (singleStepDurationBeats / Double(activeNotesInStep.count))
+            let strumDirectionSortedNotes = isStrum ? (step.strumDirection == .down ? sortedNotes : sortedNotes.reversed()) : sortedNotes
 
-            switch step.type {
-            case .arpeggio, .strum:
-                let sortedNotes = activeNotesInStep.sorted { $0.stringIndex > $1.stringIndex }
-                let isStrum = step.type == .strum
-                let strumDelayBeats = isStrum ? strumDelayInBeats(for: step.strumSpeed, bpm: preset.bpm) : (singleStepDurationBeats / Double(activeNotesInStep.count))
-                let strumDirectionSortedNotes = isStrum ? (step.strumDirection == .down ? sortedNotes : sortedNotes.reversed()) : sortedNotes
+            for (noteIndex, noteItem) in strumDirectionSortedNotes.enumerated() {
+                let noteStartTimeBeat = patternStartBeat + (Double(stepIndex) * singleStepDurationBeats) + (Double(noteIndex) * strumDelayBeats)
+                let finalVelocity = isStrum ? adaptiveVelocity : velocityWithDynamics
+                let technique = step.techniques[noteItem.stringIndex]
 
-                for (noteIndex, noteItem) in strumDirectionSortedNotes.enumerated() {
-                    var calculatedDurationBeats = patternDurationBeats // Default duration
-                    
-                    // Look ahead for the precise duration
-                    for futureIndex in (stepIndex + 1)..<pattern.steps.count {
-                        let futureStep = pattern.steps[futureIndex]
-                        if futureStep.type == .rest || futureStep.activeNotes.contains(noteItem.stringIndex) {
-                            calculatedDurationBeats = (Double(futureIndex - stepIndex) * singleStepDurationBeats)
-                            break
-                        }
-                    }
-                    
-                    let noteStartTimeBeat = patternStartBeat + (Double(stepIndex) * singleStepDurationBeats) + (Double(noteIndex) * strumDelayBeats)
-                    let finalVelocity = isStrum ? adaptiveVelocity : velocityWithDynamics
-                    
-                    if calculatedDurationBeats > 0 {
-                        let musicNote = MusicNote(startTime: noteStartTimeBeat, duration: calculatedDurationBeats, pitch: Int(noteItem.note), velocity: Int(finalVelocity), technique: nil)
-                        musicNotes.append(musicNote)
-                    }
-                }
-            case .rest:
-                break
+                let temporalNote = TemporalNote(stringIndex: noteItem.stringIndex, startTime: noteStartTimeBeat, duration: 0, pitch: Int(noteItem.note), velocity: Int(finalVelocity), technique: technique)
+                temporalNotes.append(temporalNote)
             }
         }
+        
+        guard !temporalNotes.isEmpty else { return [] }
+        
+        temporalNotes.sort()
+
+        // Calculate precise durations
+        for i in 0..<temporalNotes.count {
+            let currentNote = temporalNotes[i]
+            var calculatedDuration: Double
+            
+            // Find the next note on the same string
+            let nextNoteOnSameString = temporalNotes.dropFirst(i + 1).first { $0.stringIndex == currentNote.stringIndex }
+            
+            if let nextNote = nextNoteOnSameString {
+                calculatedDuration = nextNote.startTime - currentNote.startTime
+            } else {
+                // If no next note, it plays until the end of the pattern
+                calculatedDuration = (patternStartBeat + patternDurationBeats) - currentNote.startTime
+            }
+            temporalNotes[i].duration = calculatedDuration
+        }
+
+        // 2. Process techniques with look-ahead
+        var musicNotes: [MusicNote] = []
+        var consumedIndexes = Set<Int>()
+
+        for i in 0..<temporalNotes.count {
+            if consumedIndexes.contains(i) { continue }
+            
+            let currentNote = temporalNotes[i]
+            var musicTechnique: MusicPlayingTechnique? = nil
+
+            switch currentNote.technique {
+            case .slide:
+                if let nextNoteIndex = temporalNotes.dropFirst(i + 1).firstIndex(where: { $0.stringIndex == currentNote.stringIndex }) {
+                    let nextNote = temporalNotes[nextNoteIndex]
+                    consumedIndexes.insert(nextNoteIndex)
+                    musicTechnique = .slide(toPitch: nextNote.pitch, durationAtTarget: nextNote.duration)
+                }
+
+            case .bend:
+                let subsequentNotes = temporalNotes.dropFirst(i + 1).filter { $0.stringIndex == currentNote.stringIndex }
+                if subsequentNotes.count >= 2 {
+                    let noteB = subsequentNotes[subsequentNotes.startIndex]
+                    let noteC = subsequentNotes[subsequentNotes.startIndex + 1]
+                    
+                    if let noteBIndex = temporalNotes.firstIndex(where: { $0.startTime == noteB.startTime && $0.pitch == noteB.pitch }),
+                       let noteCIndex = temporalNotes.firstIndex(where: { $0.startTime == noteC.startTime && $0.pitch == noteC.pitch }) {
+                        
+                        if noteB.pitch > currentNote.pitch && noteC.pitch == currentNote.pitch {
+                            consumedIndexes.insert(noteBIndex)
+                            consumedIndexes.insert(noteCIndex)
+                            musicTechnique = .bend(targetPitch: noteB.pitch, releaseDuration: noteB.duration, sustainDuration: noteC.duration)
+                        }
+                    }
+                }
+                
+            default:
+                musicTechnique = nil
+            }
+            
+            if currentNote.duration > 0 {
+                let finalNote = MusicNote(startTime: currentNote.startTime, duration: currentNote.duration, pitch: currentNote.pitch, velocity: currentNote.velocity, technique: musicTechnique)
+                musicNotes.append(finalNote)
+            }
+        }
+        
         return musicNotes
     }
 

@@ -49,11 +49,44 @@ struct PatternStep: Codable, Identifiable, Hashable, Equatable {
     var activeNotes: Set<Int> = []
     // Override fret for a specific string, mapping stringIndex to fret.
     var fretOverrides: [Int: Int] = [:]
+    // Store playing technique for a specific string.
+    var techniques: [Int: PlayingTechnique] = [:]
     // The performance type for this step
     var type: StepType = .arpeggio
     // Strum parameters (only used when type is .strum)
     var strumDirection: StrumDirection = .down
     var strumSpeed: StrumSpeed = .medium
+    
+    // Default initializer to allow creating empty steps (e.g., PatternStep())
+    init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case id, activeNotes, fretOverrides, techniques, type, strumDirection, strumSpeed
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.activeNotes = try container.decodeIfPresent(Set<Int>.self, forKey: .activeNotes) ?? []
+        self.fretOverrides = try container.decodeIfPresent([Int: Int].self, forKey: .fretOverrides) ?? [:]
+        self.type = try container.decodeIfPresent(StepType.self, forKey: .type) ?? .arpeggio
+        self.strumDirection = try container.decodeIfPresent(StrumDirection.self, forKey: .strumDirection) ?? .down
+        self.strumSpeed = try container.decodeIfPresent(StrumSpeed.self, forKey: .strumSpeed) ?? .medium
+        
+        // Safely decode the new 'techniques' property, falling back to an empty dictionary if missing.
+        self.techniques = try container.decodeIfPresent([Int: PlayingTechnique].self, forKey: .techniques) ?? [:]
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(activeNotes, forKey: .activeNotes)
+        try container.encode(fretOverrides, forKey: .fretOverrides)
+        try container.encode(techniques, forKey: .techniques)
+        try container.encode(type, forKey: .type)
+        try container.encode(strumDirection, forKey: .strumDirection)
+        try container.encode(strumSpeed, forKey: .strumSpeed)
+    }
 }
 
 enum GridResolution: String, Codable, CaseIterable, Identifiable {

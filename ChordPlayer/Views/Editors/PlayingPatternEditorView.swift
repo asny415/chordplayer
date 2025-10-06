@@ -269,7 +269,8 @@ private struct PatternGridCell: View {
     
     private var isActive: Bool { step.activeNotes.contains(stringIndex) }
     private var fretOverride: Int? { step.fretOverrides[stringIndex] }
-    
+    private var technique: PlayingTechnique? { step.techniques[stringIndex] }
+
     var body: some View {
         ZStack {
             Rectangle()
@@ -278,14 +279,23 @@ private struct PatternGridCell: View {
                 .cornerRadius(4)
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(isSelected ? Color.yellow : Color.clear, lineWidth: 2))
 
-            if let fret = fretOverride {
-                Text(String(fret))
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-            } else if isActive {
-                Circle()
-                    .fill(Color.white.opacity(0.5))
-                    .frame(width: 8, height: 8)
+            VStack(spacing: 1) {
+                if let fret = fretOverride {
+                    Text(String(fret))
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                } else if isActive {
+                    Circle()
+                        .fill(Color.white.opacity(0.5))
+                        .frame(width: 8, height: 8)
+                }
+                
+                if let tech = technique {
+                    Text(tech.symbol)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.9))
+                        .padding(.top, fretOverride == nil && isActive ? 4 : 0)
+                }
             }
         }
         .onTapGesture(perform: onTap)
@@ -295,12 +305,28 @@ private struct PatternGridCell: View {
                 if fretOverride != nil {
                     Button("Clear Fret Override", action: onClearFretOverride)
                 }
+                Divider()
+                Menu("Set Technique...") {
+                    ForEach(PlayingTechnique.allCases) { tech in
+                        Button(tech.chineseName) {
+                            step.techniques[stringIndex] = tech
+                        }
+                    }
+                }
+                if technique != nil {
+                    Button("Clear Technique") {
+                        step.techniques.removeValue(forKey: stringIndex)
+                    }
+                }
             }
         }
     }
     
     private var cellColor: Color {
         if isActive {
+            if technique != nil {
+                return .orange
+            }
             return fretOverride != nil ? .purple : .accentColor
         } else {
             return .primary.opacity(0.2)
