@@ -79,6 +79,14 @@ class MIDISequencer: ObservableObject {
         MusicSequenceSetMIDIEndpoint(sequence, endpoint)
         MusicPlayerSetSequence(player, sequence)
         
+        // Prime the audio engine to prevent startup latency/fade-in on macOS.
+        // We add a silent note-on event at the very beginning of the sequence.
+        var tempoTrack: MusicTrack?
+        if MusicSequenceGetTempoTrack(sequence, &tempoTrack) == noErr, let tempoTrack = tempoTrack {
+            var silentNote = MIDINoteMessage(channel: 0, note: 0, velocity: 0, releaseVelocity: 0, duration: 0.01)
+            MusicTrackNewMIDINoteEvent(tempoTrack, 0.0, &silentNote)
+        }
+
         self.pauseTime = nil
         MusicPlayerStart(player)
         self.isPlaying = true
