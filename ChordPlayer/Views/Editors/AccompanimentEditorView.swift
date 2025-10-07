@@ -547,7 +547,7 @@ struct ResourceLibraryView: View {
                             ForEach(chords) { chord in
                                 ResourceChordButton(chord: chord, isSelected: isSelectedChord(chord.id))
                                     .onDrag {
-                                        let dragData = DragData(source: .newResource, type: .chord, resourceId: chord.id, eventId: nil, durationInBeats: 4)
+                                        let dragData = DragData(source: .newResource, type: .chord, resourceId: chord.id, eventId: nil, durationInBeats: 1)
                                         let provider = NSItemProvider()
                                         provider.registerCodable(dragData)
                                         return provider
