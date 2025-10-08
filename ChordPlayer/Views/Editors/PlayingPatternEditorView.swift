@@ -379,7 +379,7 @@ private struct StepHeaderView: View {
     @ViewBuilder private var stepTypeIcon: some View {
         switch step.type {
         case .rest: Image(systemName: "minus").foregroundColor(.secondary)
-        case .arpeggio: Image(systemName: "wavy.lines.up.and.down").foregroundColor(.blue)
+        case .arpeggio: Image(systemName: "music.note.list").foregroundColor(.blue)
         case .strum: Image(systemName: step.strumDirection == .down ? "arrow.down" : "arrow.up").foregroundColor(.green)
         }
     }
