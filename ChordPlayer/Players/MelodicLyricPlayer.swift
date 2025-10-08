@@ -161,6 +161,7 @@ class MelodicLyricPlayer: ObservableObject {
         
         let baseMidiNote = 60 + transposition // C4 + key transposition
         let octaveOffset = item.octave * 12
-        return UInt8(baseMidiNote + scaleOffset + octaveOffset)
+        let finalMidiNote = baseMidiNote + scaleOffset + octaveOffset + (item.pitchOffset ?? 0)
+        return UInt8(finalMidiNote)
     }
 }

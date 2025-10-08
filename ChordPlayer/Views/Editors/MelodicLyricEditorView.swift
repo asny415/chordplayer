@@ -316,7 +316,7 @@ struct MelodicLyricEditorView: View {
         return (index, true)
     }
 
-    private func midiNoteNumber(pitch: Int, octave: Int) -> Int? {
+    private func midiNoteNumber(pitch: Int, octave: Int, offset: Int? = nil) -> Int? {
         guard pitch >= 1 && pitch <= 7 else { return nil }
         let scaleOffsets = [0, 2, 4, 5, 7, 9, 11] // Major scale intervals
         let baseC = 60 // Middle C
@@ -327,7 +327,7 @@ struct MelodicLyricEditorView: View {
             "A#": 10, "Bb": 10, "B": 11
         ]
         let transpose = keyMap[key] ?? 0
-        let midiValue = baseC + transpose + scaleOffsets[pitch - 1] + octave * 12
+        let midiValue = baseC + transpose + scaleOffsets[pitch - 1] + octave * 12 + (offset ?? 0)
         guard midiValue >= 0 && midiValue <= 127 else { return nil }
         return midiValue
     }
@@ -495,6 +495,24 @@ struct MelodicLyricEditorView: View {
         persistSegment()
     }
 
+    private func togglePitchOffset(_ offset: Int) {
+        guard let index = itemIndex(at: selectedTick) else { return }
+        
+        // 如果当前偏移量与目标一致，则取消偏移 (设为 nil)
+        // 否则，设置新的偏移量
+        if segment.items[index].pitchOffset == offset {
+            segment.items[index].pitchOffset = nil
+        } else {
+            segment.items[index].pitchOffset = offset
+        }
+        
+        // 预览并保存
+        previewPitch(pitch: segment.items[index].pitch,
+                     octave: segment.items[index].octave,
+                     offset: segment.items[index].pitchOffset)
+        persistSegment()
+    }
+
     private func removeItem(at tick: Int) {
         segment.items.removeAll { $0.positionInTicks == tick }
         stopPreview()
@@ -638,6 +656,12 @@ struct MelodicLyricEditorView: View {
                     default: break
                 }
                 return true
+            case "#":
+                togglePitchOffset(1) // 升半音
+                return true
+            case "b":
+                togglePitchOffset(-1) // 降半音
+                return true
             default:
                 // Rule 2: Check if it's a character suitable for starting a lyric.
                 // This prevents control characters from arrow keys from being captured.
@@ -697,10 +721,10 @@ struct MelodicLyricEditorView: View {
         melodicLyricPlayer.play(segment: segment)
     }
 
-    private func previewPitch(pitch: Int, octave: Int) {
+    private func previewPitch(pitch: Int, octave: Int, offset: Int? = nil) {
         stopPreview()
 
-        guard let midiValue = midiNoteNumber(pitch: pitch, octave: octave) else { return }
+        guard let midiValue = midiNoteNumber(pitch: pitch, octave: octave, offset: offset) else { return }
         let midiNote = UInt8(midiValue)
 
         let channel = UInt8(max(0, min(15, sanitizedEditorMidiChannel - 1)))
@@ -915,6 +939,19 @@ struct MelodicLyricCellView: View {
                 HStack(spacing: 1) {
                     Text("\(item.pitch)")
                         .font(.system(size: pitchFontSize, weight: .bold, design: .monospaced))
+                    
+                    if let offset = item.pitchOffset {
+                        if offset > 0 {
+                            Text("#")
+                                .font(.system(size: pitchFontSize * 0.8, weight: .bold))
+                                .baselineOffset(pitchFontSize * 0.2)
+                        } else if offset < 0 {
+                            // 使用小写 "b" 作为降号
+                            Text("b")
+                                .font(.system(size: pitchFontSize, weight: .bold))
+                        }
+                    }
+
                     if let technique = item.technique {
                         Text(technique.symbol)
                             .font(.system(size: techniqueFontSize))

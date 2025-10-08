@@ -929,6 +929,9 @@ struct MelodicLyricItem: Identifiable, Codable, Hashable {
     /// 八度偏移量 (-2, -1, 0, 1, 2)
     var octave: Int
     
+    /// 音高偏移，单位为半音。nil 表示无偏移。1 为升半音(#)，-1 为降半音(b)。
+    var pitchOffset: Int?
+    
     /// 可选的演奏技巧 (复用已有的 PlayingTechnique 枚举)
     var technique: PlayingTechnique?
     
