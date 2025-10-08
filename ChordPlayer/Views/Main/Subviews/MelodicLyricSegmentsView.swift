@@ -41,26 +41,11 @@ struct MelodicLyricSegmentsView: View {
                     }
                 }
             } else {
-                // More engaging empty state
-                VStack(spacing: 12) {
-                    Image(systemName: "text.quote")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary)
-                    
-                    Text("No Melodic Lyric Segments")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    
-                    Text("Create lyric segments to add vocal melodies to your preset.")
-                        .foregroundColor(Color.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 300)
-                    
-                    Button("Create First Lyric Segment", action: addSegment)
-                        .buttonStyle(.borderedProminent)
-                        .padding(.top)
-                }
-                .frame(maxWidth: .infinity, minHeight: 150)
+                EmptyStateView(
+                    imageName: "music.mic",
+                    text: "创建旋律歌词",
+                    action: addSegment
+                )
             }
         }
     }

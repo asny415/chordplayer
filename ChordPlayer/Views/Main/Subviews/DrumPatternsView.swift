@@ -15,22 +15,22 @@ struct DrumPatternsView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            HStack {
-                Text("Drum Patterns").font(.headline)
-                Spacer()
-                Button(action: {
-                    let newPattern = DrumPattern(name: "New Beat", resolution: .sixteenth, length: 16, instruments: ["Kick", "Snare", "Hi-Hat", "Cymbal", "Tom"], midiNotes: [36, 38, 42, 49, 45])
-                    sheetContext = SheetContext(pattern: newPattern, isNew: true)
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
-                .help("Create a new drum pattern")
-            }
+            Text("Drum Patterns").font(.headline)
 
             if let preset = appData.preset, !preset.drumPatterns.isEmpty {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        let newPattern = DrumPattern(name: "New Beat", resolution: .sixteenth, length: 16, instruments: ["Kick", "Snare", "Hi-Hat", "Cymbal", "Tom"], midiNotes: [36, 38, 42, 49, 45])
+                        sheetContext = SheetContext(pattern: newPattern, isNew: true)
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Create a new drum pattern")
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                     ForEach(preset.drumPatterns) { pattern in
                         let isActive = appData.preset?.activeDrumPatternId == pattern.id
@@ -55,9 +55,14 @@ struct DrumPatternsView: View {
                     }
                 }
             } else {
-                Text("No drum patterns. Click + to create one.")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: 80, alignment: .center)
+                EmptyStateView(
+                    imageName: "music.quarternote.3",
+                    text: "创建鼓模式",
+                    action: {
+                        let newPattern = DrumPattern(name: "New Beat", resolution: .sixteenth, length: 16, instruments: ["Kick", "Snare", "Hi-Hat", "Cymbal", "Tom"], midiNotes: [36, 38, 42, 49, 45])
+                        sheetContext = SheetContext(pattern: newPattern, isNew: true)
+                    }
+                )
             }
         }
         .sheet(item: $sheetContext) { context in

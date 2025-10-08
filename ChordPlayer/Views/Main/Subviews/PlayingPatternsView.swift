@@ -7,23 +7,22 @@ struct PlayingPatternsView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            HStack {
-                Text("Playing Patterns").font(.headline)
-                Spacer()
-                Button(action: {
-                    // Create a new pattern and set it as the item to be edited.
-                    // Default to 8 steps of 8th notes as requested.
-                    self.patternToEdit = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .eighth)
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
-                .help("Create a new playing pattern")
-            }
-
             if let preset = appData.preset, !preset.playingPatterns.isEmpty {
+                HStack {
+                    Text("Playing Patterns").font(.headline)
+                    Spacer()
+                    Button(action: {
+                        // Create a new pattern and set it as the item to be edited.
+                        // Default to 8 steps of 8th notes as requested.
+                        self.patternToEdit = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .eighth)
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Create a new playing pattern")
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                     ForEach(preset.playingPatterns) { pattern in
                         let isActive = appData.preset?.activePlayingPatternId == pattern.id
@@ -47,9 +46,16 @@ struct PlayingPatternsView: View {
                     }
                 }
             } else {
-                Text("No playing patterns. Click + to create one.")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: 80, alignment: .center)
+                VStack(alignment: .leading) {
+                    Text("Playing Patterns").font(.headline)
+                    EmptyStateView(
+                        imageName: "hand.draw",
+                        text: "创建演奏模式",
+                        action: {
+                            self.patternToEdit = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .eighth)
+                        }
+                    )
+                }
             }
         }
         .sheet(item: $patternToEdit) { pattern in

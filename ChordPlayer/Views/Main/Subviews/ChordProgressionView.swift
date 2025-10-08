@@ -13,23 +13,23 @@ struct ChordProgressionView: View {
         VStack(alignment: .leading, spacing: 20) {
             // Part 1: The library of chords available in this preset
             VStack(alignment: .leading) {
-                HStack {
-                    Text("Preset Chord Library").font(.headline)
-                    Spacer()
-                    Button(action: {
-                        self.isNewChord = true
-                        self.chordToEdit = Chord(name: "New Chord", frets: Array(repeating: 0, count: 6), fingers: Array(repeating: 0, count: 6))
-                        self.showChordEditor = true
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(.accentColor)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Define a new chord for this preset")
-                }
+                Text("Preset Chord Library").font(.headline)
 
                 if let preset = appData.preset, !preset.chords.isEmpty {
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            self.isNewChord = true
+                            self.chordToEdit = Chord(name: "New Chord", frets: Array(repeating: 0, count: 6), fingers: Array(repeating: 0, count: 6))
+                            self.showChordEditor = true
+                        }) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Define a new chord for this preset")
+                    }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 90))], spacing: 10) {
                         ForEach(preset.chords) { chord in
                             Button(action: {
@@ -54,9 +54,15 @@ struct ChordProgressionView: View {
                         }
                     }
                 } else {
-                    Text("No chords defined in this preset. Click + to add one.")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
+                    EmptyStateView(
+                        imageName: "guitars",
+                        text: "定义和弦",
+                        action: {
+                            self.isNewChord = true
+                            self.chordToEdit = Chord(name: "New Chord", frets: Array(repeating: 0, count: 6), fingers: Array(repeating: 0, count: 6))
+                            self.showChordEditor = true
+                        }
+                    )
                 }
             }
 

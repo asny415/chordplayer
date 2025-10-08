@@ -23,7 +23,7 @@ struct PlayingPatternView: View {
             }
 
             // Draw beat lines
-            let stepsPerBeat = pattern.resolution == .sixteenth ? 4 : 2
+            let stepsPerBeat = pattern.activeResolution.stepsPerBeat
             let beatCount = stepCount / stepsPerBeat
             for i in 1..<beatCount {
                 let x = CGFloat(i * stepsPerBeat) * stepWidth
@@ -50,25 +50,53 @@ struct PlayingPatternView: View {
                     }
                 
                 case .strum:
-                    // Draw a single arrow for the whole step
-                    let arrowPath = createArrowPath(center: CGPoint(x: x, y: size.height / 2), height: size.height * 0.7, direction: step.strumDirection)
+                    // Draw a single arrow for the whole step, passing the speed
+                    let arrowPath = createArrowPath(center: CGPoint(x: x, y: size.height / 2), height: size.height * 0.7, direction: step.strumDirection, speed: step.strumSpeed)
                     context.stroke(arrowPath, with: .color(color), lineWidth: 1.5)
                 }
             }
         }
     }
 
-    private func createArrowPath(center: CGPoint, height: CGFloat, direction: StrumDirection) -> Path {
+    private func createArrowPath(center: CGPoint, height: CGFloat, direction: StrumDirection, speed: StrumSpeed) -> Path {
         var path = Path()
         let arrowHeight = height
         let arrowWidth = arrowHeight * 0.4
         
-        let yStart = direction == .down ? center.y - arrowHeight / 2 : center.y + arrowHeight / 2
-        let yEnd = direction == .down ? center.y + arrowHeight / 2 : center.y - arrowHeight / 2
+        let startPoint = CGPoint(x: center.x, y: direction == .down ? center.y - arrowHeight / 2 : center.y + arrowHeight / 2)
+        let endPoint = CGPoint(x: center.x, y: direction == .down ? center.y + arrowHeight / 2 : center.y - arrowHeight / 2)
 
-        path.move(to: CGPoint(x: center.x, y: yStart))
-        path.addLine(to: CGPoint(x: center.x, y: yEnd))
+        path.move(to: startPoint)
+
+        if speed == .slow {
+            // Draw a wavy line with a fixed frequency
+            let waveCycleLength: CGFloat = 8.0 // The vertical length of one full wave cycle
+            let totalVerticalDistance = abs(endPoint.y - startPoint.y)
+            
+            // A full cycle has two segments (one left, one right). Calculate how many segments fit.
+            let segmentCount = max(2, Int(totalVerticalDistance / (waveCycleLength / 2.0)))
+            let segmentHeight = (endPoint.y - startPoint.y) / CGFloat(segmentCount)
+            let waveAmplitude = arrowWidth * 0.3
+
+            var currentPoint = startPoint
+            for i in 1...segmentCount {
+                let nextPoint = CGPoint(x: startPoint.x, y: startPoint.y + CGFloat(i) * segmentHeight)
+                
+                // Alternate the control point side for each segment
+                let controlPointX = startPoint.x + ((i % 2 == 0) ? waveAmplitude : -waveAmplitude)
+                let controlPointY = currentPoint.y + segmentHeight / 2
+                let controlPoint = CGPoint(x: controlPointX, y: controlPointY)
+                
+                path.addQuadCurve(to: nextPoint, control: controlPoint)
+                currentPoint = nextPoint
+            }
+        } else {
+            // Draw a straight line for medium/fast strums
+            path.addLine(to: endPoint)
+        }
         
+        // Draw arrowhead
+        let yEnd = endPoint.y
         path.move(to: CGPoint(x: center.x - arrowWidth / 2, y: yEnd + (direction == .down ? -arrowWidth / 2 : arrowWidth / 2)))
         path.addLine(to: CGPoint(x: center.x, y: yEnd))
         path.addLine(to: CGPoint(x: center.x + arrowWidth / 2, y: yEnd + (direction == .down ? -arrowWidth / 2 : arrowWidth / 2)))

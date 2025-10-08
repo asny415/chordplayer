@@ -55,27 +55,16 @@ struct SoloSegmentsView: View {
                     }
                 }
             } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "music.note.list")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary)
-                    
-                    Text("No solo segments defined")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    
-                    Text("Create solo segments to add melodic content to your preset")
-                        .foregroundColor(Color.secondary)
-                        .multilineTextAlignment(.center)
-                    
-                    Button("Create First Solo") {
-                        let newSegment = SoloSegment(name: "New Solo", lengthInBeats: 4.0)
+                EmptyStateView(
+                    imageName: "waveform.path.ecg",
+                    text: "创建独奏片段",
+                    action: {
+                        let count = appData.preset?.soloSegments.count ?? 0
+                        let newSegment = SoloSegment(name: "New Solo \(count + 1)", lengthInBeats: 4.0)
                         appData.addSoloSegment(newSegment)
                         self.segmentToEdit = newSegment
                     }
-                    .buttonStyle(.borderedProminent)
-                }
-                .frame(maxWidth: .infinity, minHeight: 120)
+                )
             }
         }
     }

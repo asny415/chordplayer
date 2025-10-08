@@ -7,22 +7,21 @@ struct AccompanimentSegmentsView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            HStack {
-                Text("Accompaniment Segments").font(.headline)
-                Spacer()
-                Button(action: {
-                    let newSegment = AccompanimentSegment(name: "New Accompaniment", lengthInMeasures: 4)
-                    self.segmentToEdit = newSegment
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
-                .help("Create a new accompaniment segment")
-            }
-
             if let preset = appData.preset, !preset.accompanimentSegments.isEmpty {
+                HStack {
+                    Text("Accompaniment Segments").font(.headline)
+                    Spacer()
+                    Button(action: {
+                        let newSegment = AccompanimentSegment(name: "New Accompaniment", lengthInMeasures: 4)
+                        self.segmentToEdit = newSegment
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Create a new accompaniment segment")
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))], spacing: 10) {
                     ForEach(preset.accompanimentSegments) { segment in
                         let isActive = appData.preset?.activeAccompanimentSegmentId == segment.id
@@ -55,9 +54,17 @@ struct AccompanimentSegmentsView: View {
                     }
                 }
             } else {
-                Text("No accompaniment segments. Click + to create one.")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: 80, alignment: .center)
+                VStack(alignment: .leading) {
+                    Text("Accompaniment Segments").font(.headline)
+                    EmptyStateView(
+                        imageName: "pianokeys",
+                        text: "创建伴奏片段",
+                        action: {
+                            let newSegment = AccompanimentSegment(name: "New Accompaniment", lengthInMeasures: 4)
+                            self.segmentToEdit = newSegment
+                        }
+                    )
+                }
             }
         }
         .sheet(item: $segmentToEdit) { segment in
