@@ -4,6 +4,7 @@ import SwiftUI
 struct MelodicLyricSegmentsView: View {
     @EnvironmentObject var appData: AppData
     @Binding var segmentToEdit: MelodicLyricSegment?
+    @Binding var activeMelodicLyricSegmentId: UUID?
     
     @State private var segmentToDelete: MelodicLyricSegment? = nil
     @State private var showingDeleteConfirmation = false
@@ -31,16 +32,25 @@ struct MelodicLyricSegmentsView: View {
                 // Grid of lyric segments
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(preset.melodicLyricSegments) { segment in
+                        let isActive = activeMelodicLyricSegmentId == segment.id
+                        
                         SegmentCardView(
                             title: segment.name,
                             systemImageName: "music.mic",
-                            isSelected: false // Active state not used for lyric segments currently
+                            isSelected: isActive
                         ) {
                             MelodicLyricCardContent(segment: segment)
                         }
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { // Double-tap to edit
                             self.segmentToEdit = segment
+                        }
+                        .onTapGesture { // Single-tap to select
+                            if isActive {
+                                activeMelodicLyricSegmentId = nil
+                            } else {
+                                activeMelodicLyricSegmentId = segment.id
+                            }
                         }
                         .contextMenu {
                             contextMenuFor(segment: segment)

@@ -8,6 +8,7 @@ struct PresetWorkspaceView: View {
     @EnvironmentObject var chordPlayer: PresetArrangerPlayer
     @State private var segmentToEdit: SoloSegment?
     @State private var lyricSegmentToEdit: MelodicLyricSegment?
+    @State private var activeMelodicLyricSegmentId: UUID?
     @State private var isPlayingKaraoke = false
     @State private var playheadPosition: Double = 0.0
 
@@ -37,7 +38,7 @@ struct PresetWorkspaceView: View {
                             AccompanimentSegmentsView()
                         }
                         GroupBox {
-                            MelodicLyricSegmentsView(segmentToEdit: $lyricSegmentToEdit)
+                            MelodicLyricSegmentsView(segmentToEdit: $lyricSegmentToEdit, activeMelodicLyricSegmentId: $activeMelodicLyricSegmentId)
                         }
                         // MARK: - Song Arrangement Section
                         if let presetBinding = Binding($appData.preset) {

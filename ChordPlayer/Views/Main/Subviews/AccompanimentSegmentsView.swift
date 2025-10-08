@@ -33,16 +33,16 @@ struct AccompanimentSegmentsView: View {
                         ) {
                             AccompanimentCardContent(segment: segment, preset: preset)
                         }
+                        .onTapGesture(count: 2) {
+                            self.segmentToEdit = segment
+                        }
                         .onTapGesture {
-                            if !isActive {
-                                appData.preset?.activeAccompanimentSegmentId = segment.id
-                                appData.saveChanges()
-                            }
+                            appData.preset?.activeAccompanimentSegmentId = isActive ? nil : segment.id
+                            appData.saveChanges()
                         }
                         .contextMenu {
                             contextMenuFor(segment: segment)
                         }
-                        // Double-click to edit will be handled by the context menu "Edit" action for now.
                     }
                 }
             } else {

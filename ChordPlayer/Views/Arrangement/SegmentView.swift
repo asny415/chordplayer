@@ -29,7 +29,7 @@ struct SegmentView: View {
                 .padding(.horizontal, 4)
                 .clipped()
         }
-        .frame(width: pixelsPerBeat * durationInBeats)
+        .frame(width: pixelsPerBeat * durationInBeats, height: 48)
         // The final position is the sum of the original position and the temporary drag offset
         .offset(x: (pixelsPerBeat * startBeat) + dragOffset)
         .gesture(

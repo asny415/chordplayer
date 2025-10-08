@@ -34,7 +34,7 @@ struct SoloSegmentsView: View {
                             segment: segment,
                             isActive: preset.activeSoloSegmentId == segment.id,
                             onSelect: {
-                                appData.preset?.activeSoloSegmentId = segment.id
+                                appData.preset?.activeSoloSegmentId = (preset.activeSoloSegmentId == segment.id) ? nil : segment.id
                                 appData.saveChanges()
                             },
                             onEdit: {
@@ -100,35 +100,15 @@ struct SoloSegmentCard: View {
     let onNameChange: (String) -> Void
     let onAddToTrack: (UUID) -> Void
 
-    @State private var isEditingName = false
-    @State private var editedName = ""
-    @FocusState private var isNameFieldFocused: Bool
-    
     @State private var showingDeleteConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // 标题行
             HStack {
-                if isEditingName {
-                    TextField("Segment Name", text: $editedName)
-                        .focused($isNameFieldFocused)
-                        .onSubmit {
-                            onNameChange(editedName)
-                            isEditingName = false
-                        }
-                        .textFieldStyle(.plain)
-                        .font(.headline)
-                } else {
-                    Text(segment.name)
-                        .font(.headline)
-                        .lineLimit(1)
-                        .onTapGesture(count: 2) {
-                            editedName = segment.name
-                            isEditingName = true
-                            isNameFieldFocused = true
-                        }
-                }
+                Text(segment.name)
+                    .font(.headline)
+                    .lineLimit(1)
                 
                 Spacer()
                 
@@ -186,11 +166,14 @@ struct SoloSegmentCard: View {
                 )
         )
         .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            onEdit()
+        }
         .onTapGesture {
+            onSelect()
             if !isActive {
-                onSelect()
+                soloPlayer.play(segment: segment)
             }
-            soloPlayer.play(segment: segment)
         }
         .contextMenu {
             if let preset = appData.preset {
