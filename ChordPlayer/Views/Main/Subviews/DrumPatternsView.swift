@@ -63,6 +63,10 @@ struct DrumPatternsView: View {
                             }
                         }
                         .contextMenu {
+                            Button("Add to Drum Track") {
+                                addToDrumTrack(pattern: pattern)
+                            }
+                            Divider()
                             Button("Edit") {
                                 sheetContext = SheetContext(pattern: pattern, isNew: false)
                             }
@@ -98,6 +102,31 @@ struct DrumPatternsView: View {
                 sheetContext = nil
             })
         }
+    }
+    
+    private func addToDrumTrack(pattern: DrumPattern) {
+        guard appData.preset != nil else { return }
+        
+        // 1. Get the drum track
+        let drumTrack = appData.preset!.arrangement.drumTrack
+        
+        // 2. Calculate the end beat of the last segment
+        let lastBeat = drumTrack.segments.map { $0.startBeat + $0.durationInBeats }.max() ?? 0.0
+        
+        // 3. Calculate the duration of the new segment in beats
+        let beatsPerStep = pattern.resolution == .sixteenth ? 0.25 : 0.5
+        let durationInBeats = Double(pattern.length) * beatsPerStep
+        
+        // 4. Create the new drum segment
+        let newSegment = DrumSegment(
+            startBeat: lastBeat,
+            durationInBeats: durationInBeats,
+            patternId: pattern.id
+        )
+        
+        // 5. Add the segment and save
+        appData.preset?.arrangement.drumTrack.segments.append(newSegment)
+        appData.saveChanges()
     }
 }
 
