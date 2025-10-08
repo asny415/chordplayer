@@ -4,12 +4,15 @@ import SwiftUI
 struct MelodicLyricSegmentsView: View {
     @EnvironmentObject var appData: AppData
     @Binding var segmentToEdit: MelodicLyricSegment?
+    
+    @State private var segmentToDelete: MelodicLyricSegment? = nil
+    @State private var showingDeleteConfirmation = false
 
     // Define the grid layout
-    private let columns = [GridItem(.adaptive(minimum: 200), spacing: 12)]
+    private let columns = [GridItem(.adaptive(minimum: 220), spacing: 16)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading) {
             if let preset = appData.preset, !preset.melodicLyricSegments.isEmpty {
                 // Header with title and add button
                 HStack {
@@ -25,28 +28,67 @@ struct MelodicLyricSegmentsView: View {
                     .help("Create a new lyric segment")
                 }
                 
-                // Grid of lyric segments or empty state view
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(Array(preset.melodicLyricSegments.enumerated()), id: \.element.id) { index, segment in
-                        MelodicLyricSegmentCard(
-                            segment: segment,
-                            isActive: false, // Placeholder for now
-                            onEdit: { self.segmentToEdit = segment },
-                            onDelete: { deleteSegment(at: IndexSet(integer: index)) },
-                            onDuplicate: { duplicateSegment(segment: segment) },
-                            onAddToTrack: { trackId in
-                                self.addToLyricsTrack(segment: segment, trackId: trackId)
-                            }
-                        )
+                // Grid of lyric segments
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(preset.melodicLyricSegments) { segment in
+                        SegmentCardView(
+                            title: segment.name,
+                            systemImageName: "music.mic",
+                            isSelected: false // Active state not used for lyric segments currently
+                        ) {
+                            MelodicLyricCardContent(segment: segment)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) { // Double-tap to edit
+                            self.segmentToEdit = segment
+                        }
+                        .contextMenu {
+                            contextMenuFor(segment: segment)
+                        }
                     }
                 }
             } else {
                 EmptyStateView(
                     imageName: "music.mic",
-                    text: "创建旋律歌词",
+                    text: "Create a Melodic Lyric",
                     action: addSegment
                 )
             }
+        }
+        .alert("Delete \(segmentToDelete?.name ?? "Segment")", isPresented: $showingDeleteConfirmation) {
+            Button("Delete", role: .destructive, action: confirmDelete)
+            Button("Cancel", role: .cancel) { segmentToDelete = nil }
+        } message: {
+            Text("Are you sure you want to delete this lyric segment? This action cannot be undone.")
+        }
+    }
+    
+    @ViewBuilder
+    private func contextMenuFor(segment: MelodicLyricSegment) -> some View {
+        if let preset = appData.preset {
+            let lyricsTracks = preset.arrangement.lyricsTracks
+            if !lyricsTracks.isEmpty {
+                Menu("Add to Arrangement") {
+                    ForEach(lyricsTracks) { track in
+                        Button("\(track.name)") {
+                            addToLyricsTrack(segment: segment, trackId: track.id)
+                        }
+                    }
+                }
+                Divider()
+            }
+        }
+
+        Button("Edit") {
+            self.segmentToEdit = segment
+        }
+        Button("Duplicate") {
+            duplicateSegment(segment: segment)
+        }
+        Divider()
+        Button("Delete", role: .destructive) {
+            self.segmentToDelete = segment
+            self.showingDeleteConfirmation = true
         }
     }
 
@@ -59,6 +101,12 @@ struct MelodicLyricSegmentsView: View {
         self.segmentToEdit = newSegment
     }
 
+    private func confirmDelete() {
+        guard let segment = segmentToDelete, let index = appData.preset?.melodicLyricSegments.firstIndex(where: { $0.id == segment.id }) else { return }
+        deleteSegment(at: IndexSet(integer: index))
+        segmentToDelete = nil
+    }
+    
     private func deleteSegment(at offsets: IndexSet) {
         guard appData.preset != nil else { return }
         appData.preset!.melodicLyricSegments.remove(atOffsets: offsets)
@@ -70,7 +118,7 @@ struct MelodicLyricSegmentsView: View {
         
         var newSegment = segment
         newSegment.id = UUID()
-        newSegment.name = "\(segment.name) 2"
+        newSegment.name = "\(segment.name) Copy"
         
         appData.preset!.melodicLyricSegments.insert(newSegment, at: index + 1)
         appData.saveChanges()
