@@ -81,19 +81,6 @@ struct AccompanimentCardContent: View {
         
         return chordNames.isEmpty ? "No chords" : chordNames.prefix(4).joined(separator: " → ")
     }
-    
-    private var patternName: String {
-        // Find the first pattern used in this segment
-        let patternId = segment.measures
-            .flatMap { $0.patternEvents }
-            .first?
-            .resourceId
-        
-        if let patternId = patternId, let pattern = preset.playingPatterns.first(where: { $0.id == patternId }) {
-            return pattern.name
-        }
-        return "Default Pattern"
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -104,8 +91,8 @@ struct AccompanimentCardContent: View {
                 .truncationMode(.tail)
 
             HStack(spacing: 4) {
-                Image(systemName: "pianokeys")
-                Text(patternName)
+                Image(systemName: "music.note.list")
+                Text("\(segment.lengthInMeasures) Bars")
             }
             .font(.caption)
             .foregroundColor(.secondary)
