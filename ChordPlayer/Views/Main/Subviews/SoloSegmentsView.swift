@@ -7,27 +7,27 @@ struct SoloSegmentsView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // 标题和操作按钮
-            HStack {
-                Text("Solo Segments").font(.headline)
-                Spacer()
-                
-                Button(action: {
-                    let count = appData.preset?.soloSegments.count ?? 0
-                    let newSegment = SoloSegment(name: "New Solo \(count + 1)", lengthInBeats: 4.0)
-                    appData.addSoloSegment(newSegment)
-                    self.segmentToEdit = newSegment
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
-                .help("Create a new solo segment")
-            }
-            
-            // Solo列表概览
             if let preset = appData.preset, !preset.soloSegments.isEmpty {
+                // 标题和操作按钮
+                HStack {
+                    Text("Solo Segments").font(.headline)
+                    Spacer()
+                    
+                    Button(action: {
+                        let count = appData.preset?.soloSegments.count ?? 0
+                        let newSegment = SoloSegment(name: "New Solo \(count + 1)", lengthInBeats: 4.0)
+                        appData.addSoloSegment(newSegment)
+                        self.segmentToEdit = newSegment
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Create a new solo segment")
+                }
+                
+                // Solo列表概览
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 200))], spacing: 12) {
                     ForEach(Array(preset.soloSegments.enumerated()), id: \.element.id) { index, segment in
                         SoloSegmentCard(

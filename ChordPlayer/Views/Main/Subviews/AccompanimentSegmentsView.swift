@@ -54,17 +54,14 @@ struct AccompanimentSegmentsView: View {
                     }
                 }
             } else {
-                VStack(alignment: .leading) {
-                    Text("Accompaniment Segments").font(.headline)
-                    EmptyStateView(
-                        imageName: "pianokeys",
-                        text: "创建伴奏片段",
-                        action: {
-                            let newSegment = AccompanimentSegment(name: "New Accompaniment", lengthInMeasures: 4)
-                            self.segmentToEdit = newSegment
-                        }
-                    )
-                }
+                EmptyStateView(
+                    imageName: "pianokeys",
+                    text: "创建伴奏片段",
+                    action: {
+                        let newSegment = AccompanimentSegment(name: "New Accompaniment", lengthInMeasures: 4)
+                        self.segmentToEdit = newSegment
+                    }
+                )
             }
         }
         .sheet(item: $segmentToEdit) { segment in

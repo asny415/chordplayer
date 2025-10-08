@@ -10,22 +10,22 @@ struct MelodicLyricSegmentsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // Header with title and add button
-            HStack {
-                Text("Melodic Lyric Segments").font(.headline)
-                Spacer()
-                
-                Button(action: addSegment) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
-                .help("Create a new lyric segment")
-            }
-            
-            // Grid of lyric segments or empty state view
             if let preset = appData.preset, !preset.melodicLyricSegments.isEmpty {
+                // Header with title and add button
+                HStack {
+                    Text("Melodic Lyric Segments").font(.headline)
+                    Spacer()
+                    
+                    Button(action: addSegment) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Create a new lyric segment")
+                }
+                
+                // Grid of lyric segments or empty state view
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(Array(preset.melodicLyricSegments.enumerated()), id: \.element.id) { index, segment in
                         MelodicLyricSegmentCard(

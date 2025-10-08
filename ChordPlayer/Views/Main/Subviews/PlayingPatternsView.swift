@@ -46,16 +46,13 @@ struct PlayingPatternsView: View {
                     }
                 }
             } else {
-                VStack(alignment: .leading) {
-                    Text("Playing Patterns").font(.headline)
-                    EmptyStateView(
-                        imageName: "hand.draw",
-                        text: "创建演奏模式",
-                        action: {
-                            self.patternToEdit = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .eighth)
-                        }
-                    )
-                }
+                EmptyStateView(
+                    imageName: "hand.draw",
+                    text: "创建演奏模式",
+                    action: {
+                        self.patternToEdit = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .eighth)
+                    }
+                )
             }
         }
         .sheet(item: $patternToEdit) { pattern in

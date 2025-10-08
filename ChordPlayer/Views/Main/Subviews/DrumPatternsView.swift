@@ -15,10 +15,9 @@ struct DrumPatternsView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Drum Patterns").font(.headline)
-
             if let preset = appData.preset, !preset.drumPatterns.isEmpty {
                 HStack {
+                    Text("Drum Patterns").font(.headline)
                     Spacer()
                     Button(action: {
                         let newPattern = DrumPattern(name: "New Beat", resolution: .sixteenth, length: 16, instruments: ["Kick", "Snare", "Hi-Hat", "Cymbal", "Tom"], midiNotes: [36, 38, 42, 49, 45])

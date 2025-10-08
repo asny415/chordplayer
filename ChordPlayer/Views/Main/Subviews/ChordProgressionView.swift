@@ -12,58 +12,56 @@ struct ChordProgressionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             // Part 1: The library of chords available in this preset
-            VStack(alignment: .leading) {
-                Text("Preset Chord Library").font(.headline)
+            if let preset = appData.preset, !preset.chords.isEmpty {
+                HStack {
+                    Text("Preset Chord Library").font(.headline)
+                    Spacer()
+                    Button(action: {
+                        self.isNewChord = true
+                        self.chordToEdit = Chord(name: "New Chord", frets: Array(repeating: 0, count: 6), fingers: Array(repeating: 0, count: 6))
+                        self.showChordEditor = true
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Define a new chord for this preset")
+                }
 
-                if let preset = appData.preset, !preset.chords.isEmpty {
-                    HStack {
-                        Spacer()
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 90))], spacing: 10) {
+                    ForEach(preset.chords) { chord in
                         Button(action: {
-                            self.isNewChord = true
-                            self.chordToEdit = Chord(name: "New Chord", frets: Array(repeating: 0, count: 6), fingers: Array(repeating: 0, count: 6))
-                            self.showChordEditor = true
+                            playChord(chord)
                         }) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title3)
-                                .foregroundColor(.accentColor)
+                            ChordCardView(chord: chord)
                         }
                         .buttonStyle(.plain)
-                        .help("Define a new chord for this preset")
-                    }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 90))], spacing: 10) {
-                        ForEach(preset.chords) { chord in
-                            Button(action: {
-                                playChord(chord)
-                            }) {
-                                ChordCardView(chord: chord)
+                        .onDrag { NSItemProvider(object: chord.name as NSString) }
+                        .contextMenu {
+                            Button("Edit") {
+                                self.isNewChord = false
+                                self.chordToEdit = chord
+                                self.showChordEditor = true
                             }
-                            .buttonStyle(.plain)
-                            .onDrag { NSItemProvider(object: chord.name as NSString) }
-                            .contextMenu {
-                                Button("Edit") {
-                                    self.isNewChord = false
-                                    self.chordToEdit = chord
-                                    self.showChordEditor = true
-                                }
-                                Button("Delete", role: .destructive) {
-                                    if let index = appData.preset?.chords.firstIndex(where: { $0.id == chord.id }) {
-                                        appData.removeChord(at: IndexSet(integer: index))
-                                    }
+                            Button("Delete", role: .destructive) {
+                                if let index = appData.preset?.chords.firstIndex(where: { $0.id == chord.id }) {
+                                    appData.removeChord(at: IndexSet(integer: index))
                                 }
                             }
                         }
                     }
-                } else {
-                    EmptyStateView(
-                        imageName: "guitars",
-                        text: "定义和弦",
-                        action: {
-                            self.isNewChord = true
-                            self.chordToEdit = Chord(name: "New Chord", frets: Array(repeating: 0, count: 6), fingers: Array(repeating: 0, count: 6))
-                            self.showChordEditor = true
-                        }
-                    )
                 }
+            } else {
+                EmptyStateView(
+                    imageName: "guitars",
+                    text: "定义和弦",
+                    action: {
+                        self.isNewChord = true
+                        self.chordToEdit = Chord(name: "New Chord", frets: Array(repeating: 0, count: 6), fingers: Array(repeating: 0, count: 6))
+                        self.showChordEditor = true
+                    }
+                )
             }
 
         }
