@@ -79,7 +79,6 @@ class SoloPlayer: ObservableObject {
         guard let preset = appData.preset else { return nil }
 
         let notesSortedByTime = segment.notes.sorted { $0.startTime < $1.startTime }
-        let transposition = self.transposition(forKey: preset.key)
         var consumedNoteIDs = Set<UUID>()
         var musicNotes: [MusicNote] = []
 
@@ -88,7 +87,7 @@ class SoloPlayer: ObservableObject {
             if consumedNoteIDs.contains(currentNote.id) || currentNote.fret < 0 { continue }
 
             var duration = currentNote.duration ?? 1.0
-            let pitch = midiNote(from: currentNote.string, fret: currentNote.fret, transposition: transposition)
+            let pitch = midiNote(from: currentNote.string, fret: currentNote.fret)
             var technique: MusicPlayingTechnique? = nil
 
             switch currentNote.technique {
@@ -102,7 +101,7 @@ class SoloPlayer: ObservableObject {
                         duration = slideTransitionDuration
                     }
 
-                    let targetPitch = midiNote(from: targetNote.string, fret: targetNote.fret, transposition: transposition)
+                    let targetPitch = midiNote(from: targetNote.string, fret: targetNote.fret)
                     let durationAtTarget = targetNote.duration ?? 1.0
                     technique = .slide(toPitch: Int(targetPitch), durationAtTarget: durationAtTarget)
                 } else {
@@ -112,8 +111,8 @@ class SoloPlayer: ObservableObject {
                 if i + 2 < notesSortedByTime.count {
                     let note2 = notesSortedByTime[i+1]
                     let note3 = notesSortedByTime[i+2]
-                    let pitch2 = midiNote(from: note2.string, fret: note2.fret, transposition: transposition)
-                    let pitch3 = midiNote(from: note3.string, fret: note3.fret, transposition: transposition)
+                    let pitch2 = midiNote(from: note2.string, fret: note2.fret)
+                    let pitch3 = midiNote(from: note3.string, fret: note3.fret)
 
                     if !consumedNoteIDs.contains(note2.id) && !consumedNoteIDs.contains(note3.id) &&
                        currentNote.string == note2.string && note2.string == note3.string &&
@@ -163,18 +162,11 @@ class SoloPlayer: ObservableObject {
         return song
     }
 
-    private func midiNote(from string: Int, fret: Int, transposition: Int) -> UInt8 {
+    private func midiNote(from string: Int, fret: Int) -> UInt8 {
         guard string >= 0 && string < openStringMIDINotes.count else { return 0 }
         let baseNote = openStringMIDINotes[string] + UInt8(fret)
-        return baseNote + UInt8(transposition)
+        return baseNote
     }
 
-    private func transposition(forKey key: String) -> Int {
-        let keyMap: [String: Int] = [
-            "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
-            "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9,
-            "A#": 10, "Bb": 10, "B": 11
-        ]
-        return keyMap[key] ?? 0
-    }
+
 }

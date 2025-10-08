@@ -196,7 +196,6 @@ class ChordPlayer: ObservableObject {
         }
 
         var temporalNotes: [TemporalNote] = []
-        let transpositionOffset = MusicTheory.KEY_CYCLE.firstIndex(of: preset.key) ?? 0
         let fretsForPlayback = Array(chord.frets.reversed())
         let singleStepDurationBeats = pattern.steps.isEmpty ? 0 : (patternDurationBeats / Double(pattern.steps.count))
 
@@ -207,7 +206,7 @@ class ChordPlayer: ObservableObject {
             let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
                 let finalFret = step.fretOverrides[stringIndex] ?? (stringIndex < fretsForPlayback.count ? fretsForPlayback[stringIndex] : -1)
                 guard finalFret >= 0 else { return nil }
-                let noteValue = MusicTheory.standardGuitarTuning[stringIndex] + finalFret + transpositionOffset
+                let noteValue = MusicTheory.standardGuitarTuning[stringIndex] + finalFret
                 return (note: UInt8(noteValue), stringIndex: stringIndex)
             }
 
