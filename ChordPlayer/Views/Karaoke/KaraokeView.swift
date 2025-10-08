@@ -137,6 +137,7 @@ struct KaraokeView: View {
                                 VStack(alignment: .leading, spacing: appData.karaokePrimaryLineFontSize / 2) {
                                     if let line = currentLine {
                                         KaraokeLineView(line: line, playbackTime: songPlayer.playbackPosition)
+                                            .id(line.id) // Force view replacement on line change
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     } else {
                                         Rectangle().fill(Color.clear).frame(height: appData.karaokePrimaryLineFontSize * 1.2)
@@ -171,9 +172,7 @@ struct KaraokeView: View {
             }
             .onAppear(perform: setupAndProcessLyrics)
             .onReceive(songPlayer.$playbackPosition) { time in
-                withAnimation(.linear(duration: 0.05)) {
-                    updateVisibleLines(at: time)
-                }
+                updateVisibleLines(at: time)
             }
             
             if let presetName = appData.preset?.name {
