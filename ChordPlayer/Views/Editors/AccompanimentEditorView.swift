@@ -423,11 +423,12 @@ struct TimelineEventView: View {
             }
             
             if type == .chord, let chord = appData.preset?.chords.first(where: { $0.id == event.resourceId }) {
-                HStack {
+                VStack {
                     Text(name).font(.callout).fontWeight(.semibold)
-                    Spacer()
                     ChordDiagramView(chord: chord, color: .white.opacity(0.8))
-                }.padding(.horizontal, 4)
+                }
+                .padding(.horizontal, 4)
+                .frame(maxWidth: .infinity)
             } else {
                 Text(name).font(.caption).padding(.horizontal, 4)
             }
@@ -766,6 +767,7 @@ struct ResourcePatternButton: View {
                         .stroke(isSelected ? Color.yellow : Color.clear, lineWidth: isSelected ? 2 : 0)
                 )
         )
+        .help(pattern.name)
     }
 }
 
