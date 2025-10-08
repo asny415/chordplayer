@@ -38,13 +38,9 @@ struct AccompanimentSegmentsView: View {
                             self.segmentToEdit = segment
                         }
                         .onTapGesture {
-                            appData.preset?.activeAccompanimentSegmentId = isActive ? nil : segment.id
+                            appData.preset?.activeAccompanimentSegmentId = segment.id
                             appData.saveChanges()
-                            if isActive {
-                                chordPlayer.stop()
-                            } else {
-                                chordPlayer.play(segment: segment)
-                            }
+                            chordPlayer.play(segment: segment)
                         }
                         .contextMenu {
                             contextMenuFor(segment: segment)

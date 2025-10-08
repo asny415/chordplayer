@@ -80,11 +80,9 @@ struct SoloSegmentsView: View {
                             self.segmentToEdit = segment
                         }
                         .onTapGesture {
-                            appData.preset?.activeSoloSegmentId = isActive ? nil : segment.id
+                            appData.preset?.activeSoloSegmentId = segment.id
                             appData.saveChanges()
-                            if !isActive {
-                                soloPlayer.play(segment: segment)
-                            }
+                            soloPlayer.play(segment: segment)
                         }
                         .contextMenu {
                             contextMenuFor(segment: segment, index: index)

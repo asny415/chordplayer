@@ -56,11 +56,9 @@ struct DrumPatternsView: View {
                             sheetContext = SheetContext(pattern: pattern, isNew: false)
                         }
                         .onTapGesture {
-                            appData.preset?.activeDrumPatternId = isActive ? nil : pattern.id
+                            appData.preset?.activeDrumPatternId = pattern.id
                             appData.saveChanges()
-                            if !isActive {
-                                drumPlayer.preview(pattern: pattern)
-                            }
+                            drumPlayer.preview(pattern: pattern)
                         }
                         .contextMenu {
                             Button("Add to Drum Track") {

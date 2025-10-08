@@ -46,13 +46,8 @@ struct MelodicLyricSegmentsView: View {
                             self.segmentToEdit = segment
                         }
                         .onTapGesture { // Single-tap to select
-                            if isActive {
-                                activeMelodicLyricSegmentId = nil
-                                melodicLyricPlayer.stop()
-                            } else {
-                                activeMelodicLyricSegmentId = segment.id
-                                melodicLyricPlayer.play(segment: segment)
-                            }
+                            activeMelodicLyricSegmentId = segment.id
+                            melodicLyricPlayer.play(segment: segment)
                         }
                         .contextMenu {
                             contextMenuFor(segment: segment)
