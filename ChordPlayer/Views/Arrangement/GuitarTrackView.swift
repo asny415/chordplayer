@@ -49,6 +49,7 @@ struct GuitarTrackView: View {
                         onMove: { newBeat in
                             if let index = track.segments.firstIndex(where: { $0.id == segment.id }) {
                                 track.segments[index].startBeat = newBeat
+                                appData.saveChanges()
                             }
                         },
                         onRemove: {

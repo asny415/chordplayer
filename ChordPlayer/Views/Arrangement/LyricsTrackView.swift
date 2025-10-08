@@ -49,6 +49,7 @@ struct LyricsTrackView: View {
                         onMove: { newBeat in
                             if let index = track.lyrics.firstIndex(where: { $0.id == segment.id }) {
                                 track.lyrics[index].startBeat = newBeat
+                                appData.saveChanges()
                             }
                         },
                         onRemove: {

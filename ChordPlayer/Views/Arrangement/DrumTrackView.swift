@@ -51,6 +51,7 @@ struct DrumTrackView: View {
                             if let index = track.segments.firstIndex(where: { $0.id == segment.id }) {
                                 // Update the startBeat in the data model. The @Binding will handle the rest.
                                 track.segments[index].startBeat = newBeat
+                                appData.saveChanges()
                             }
                         },
                         onRemove: {
