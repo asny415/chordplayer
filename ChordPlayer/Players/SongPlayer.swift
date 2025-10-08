@@ -127,7 +127,7 @@ class PresetArrangerPlayer: ObservableObject {
         // 2. Guitar Tracks (Solo & Accompaniment)
         for guitarTrack in preset.arrangement.guitarTracks where !guitarTrack.isMuted {
             for segment in guitarTrack.segments {
-                let channel = UInt8((guitarTrack.midiChannel ?? appData.chordMidiChannel) - 1)
+                let channel = UInt8((guitarTrack.midiChannel ?? 1) - 1)
                 // Set pitch bend range for this channel before creating the song
                 midiManager.setPitchBendRange(channel: channel)
                 

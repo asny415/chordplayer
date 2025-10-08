@@ -87,7 +87,7 @@ class DrumPlayer: ObservableObject {
     }
 
     func playNote(midiNote: Int) {
-        let channel = UInt8(appData.drumMidiChannel - 1)
+        let channel = UInt8((appData.preset?.arrangement.drumTrack.midiChannel ?? 10) - 1)
         midiManager.sendNoteOn(note: UInt8(midiNote), velocity: 100, channel: channel)
         // Schedule a note-off event shortly after, without using the sequencer.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {

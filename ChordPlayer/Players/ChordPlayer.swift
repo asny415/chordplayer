@@ -37,7 +37,7 @@ class ChordPlayer: ObservableObject {
         
         stop() // Stop any previous playback
 
-        let channel = UInt8((appData.chordMidiChannel) - 1)
+        let channel = UInt8(1 - 1)
         midiManager.setPitchBendRange(channel: channel)
 
         guard let song = createSong(from: segment, onChannel: channel),
@@ -76,7 +76,7 @@ class ChordPlayer: ObservableObject {
     func playSingle(chord: Chord, withPattern pattern: GuitarPattern) {
         stop()
         
-        let channel = UInt8((appData.chordMidiChannel) - 1)
+        let channel = UInt8(1 - 1)
         guard let preset = appData.preset else { return }
 
         let patternDurationBeats = Double(pattern.length) * (pattern.activeResolution == .sixteenth ? 0.25 : 0.5)

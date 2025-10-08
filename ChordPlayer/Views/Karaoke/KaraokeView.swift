@@ -34,13 +34,14 @@ struct KaraokeDisplayLine: Identifiable, Hashable {
 
 // MARK: - Karaoke Line View (Unchanged)
 struct KaraokeLineView: View {
+    @EnvironmentObject var appData: AppData
     let line: KaraokeDisplayLine
     let playbackTime: Double
     
     private let highlightColor = Color(red: 0, green: 1, blue: 0.9)
 
     var body: some View {
-        let baseFont = Font.system(.largeTitle, design: .monospaced).weight(.bold)
+        let baseFont = Font.system(size: appData.karaokePrimaryLineFontSize, design: .monospaced).weight(.bold)
         
         ZStack(alignment: .leading) {
             Text(line.lineText)
@@ -57,7 +58,7 @@ struct KaraokeLineView: View {
                 }
                 .animation(.linear(duration: 0.05), value: playbackTime)
         }
-        .frame(height: 60)
+        .frame(height: appData.karaokePrimaryLineFontSize * 1.2)
     }
 
     private func calculateMaskWidth() -> CGFloat {
@@ -83,7 +84,9 @@ struct KaraokeLineView: View {
     }
 
     private func estimateWidth(for text: String) -> CGFloat {
-        let charWidth: CGFloat = 28.8
+        // This factor (0.85) is an estimation. For monospaced fonts, it's more reliable.
+        // It was derived from the original hardcoded value of 28.8 for a .largeTitle font.
+        let charWidth: CGFloat = appData.karaokePrimaryLineFontSize * 0.85
         return CGFloat(text.count) * charWidth
     }
 }
@@ -131,21 +134,21 @@ struct KaraokeView: View {
                                     .opacity(countdown > 0 ? 1 : 0)
 
                                 // --- MIDDLE: THE LYRICS ---
-                                VStack(alignment: .leading, spacing: 20) {
+                                VStack(alignment: .leading, spacing: appData.karaokePrimaryLineFontSize / 2) {
                                     if let line = currentLine {
                                         KaraokeLineView(line: line, playbackTime: songPlayer.playbackPosition)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     } else {
-                                        Rectangle().fill(Color.clear).frame(height: 60)
+                                        Rectangle().fill(Color.clear).frame(height: appData.karaokePrimaryLineFontSize * 1.2)
                                     }
                                     
                                     if let line = nextLine {
                                         Text(line.lineText)
-                                            .font(.system(.title2, design: .monospaced).weight(.bold))
+                                            .font(.system(size: appData.karaokeSecondaryLineFontSize, design: .monospaced).weight(.bold))
                                             .foregroundStyle(.secondary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     } else {
-                                        Rectangle().fill(Color.clear).frame(height: 40)
+                                        Rectangle().fill(Color.clear).frame(height: appData.karaokeSecondaryLineFontSize * 1.2)
                                     }
                                 }
 

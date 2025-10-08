@@ -14,9 +14,9 @@ class AppData: ObservableObject {
     
     // Global MIDI Settings
     @Published var midiPortName: String
-    @Published var chordMidiChannel: Int
-    @Published var drumMidiChannel: Int
-    @Published var melodyMidiChannel: Int
+    // Karaoke Settings
+    @Published var karaokePrimaryLineFontSize: Double
+    @Published var karaokeSecondaryLineFontSize: Double
 
     private let presetManager = PresetManager.shared
     private var cancellables = Set<AnyCancellable>()
@@ -26,15 +26,16 @@ class AppData: ObservableObject {
         let defaultPortName = midiManager.availableOutputs.first.map { midiManager.displayName(for: $0) } ?? "None"
         
         self.midiPortName = UserDefaults.standard.string(forKey: "midiPortName") ?? defaultPortName
-        self.chordMidiChannel = UserDefaults.standard.object(forKey: "chordMidiChannel") as? Int ?? 1
-        self.drumMidiChannel = UserDefaults.standard.object(forKey: "drumMidiChannel") as? Int ?? 10
-        self.melodyMidiChannel = UserDefaults.standard.object(forKey: "melodyMidiChannel") as? Int ?? 4
+        
+        // Load Karaoke settings from UserDefaults or set defaults
+        self.karaokePrimaryLineFontSize = UserDefaults.standard.object(forKey: "karaokePrimaryLineFontSize") as? Double ?? 48.0
+        self.karaokeSecondaryLineFontSize = UserDefaults.standard.object(forKey: "karaokeSecondaryLineFontSize") as? Double ?? 28.0
 
         // Subscribe to the PresetManager's currentPreset
         presetManager.$currentPreset
             .assign(to: &$preset)
 
-        // Save MIDI settings to UserDefaults when they change
+        // Save settings to UserDefaults when they change
         $midiPortName
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .sink { portName in
@@ -45,25 +46,18 @@ class AppData: ObservableObject {
                 }
             }
             .store(in: &cancellables)
-
-        $chordMidiChannel
+            
+        $karaokePrimaryLineFontSize
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
-            .sink { channel in
-                UserDefaults.standard.set(channel, forKey: "chordMidiChannel")
+            .sink { size in
+                UserDefaults.standard.set(size, forKey: "karaokePrimaryLineFontSize")
             }
             .store(in: &cancellables)
-
-        $drumMidiChannel
+            
+        $karaokeSecondaryLineFontSize
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
-            .sink { channel in
-                UserDefaults.standard.set(channel, forKey: "drumMidiChannel")
-            }
-            .store(in: &cancellables)
-
-        $melodyMidiChannel
-            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
-            .sink { channel in
-                UserDefaults.standard.set(channel, forKey: "melodyMidiChannel")
+            .sink { size in
+                UserDefaults.standard.set(size, forKey: "karaokeSecondaryLineFontSize")
             }
             .store(in: &cancellables)
     }
