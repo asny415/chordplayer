@@ -31,12 +31,6 @@ struct PresetWorkspaceView: View {
                             DrumPatternsView()
                         }
                         GroupBox {
-                            ChordProgressionView()
-                        }
-                        GroupBox {
-                            PlayingPatternsView()
-                        }
-                        GroupBox {
                             SoloSegmentsView(segmentToEdit: $segmentToEdit)
                         }
                         GroupBox {

@@ -21,6 +21,15 @@ struct AccompanimentEditorView: View {
     @State private var isPlaying: Bool = false
     @State private var playbackEndTask: DispatchWorkItem?
     @State private var playbackStartTime: TimeInterval? = nil
+    @State private var isShowingChordCreator = false
+    @State private var isShowingPatternEditor = false
+    
+    @State private var newChordForEditing = Chord(name: "New Chord", frets: [-1, -1, -1, -1, -1, -1], fingers: [0, 0, 0, 0, 0, 0])
+    @State private var newPatternForEditing = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .sixteenth)
+    
+    @State private var showInUseAlert = false
+    @State private var inUseAlertMessage = ""
+
 
     private var timeSignature: TimeSignature { appData.preset?.timeSignature ?? TimeSignature() }
 
@@ -69,7 +78,14 @@ struct AccompanimentEditorView: View {
             HSplitView {
                 // Main content: Libraries on top, timeline on bottom with a draggable splitter
                 VSplitView {
-                    ResourceLibraryView(segment: $segment, selectedEventId: $selectedEventId)
+                    ResourceLibraryView(
+                        segment: $segment,
+                        selectedEventId: $selectedEventId,
+                        isShowingChordCreator: $isShowingChordCreator,
+                        isShowingPatternEditor: $isShowingPatternEditor,
+                        onDeleteChord: deleteChord,
+                        onDeletePattern: deletePattern
+                    )
                     TimelineContainerView(
                         segment: $segment,
                         timeSignature: timeSignature,
@@ -108,6 +124,51 @@ struct AccompanimentEditorView: View {
                 .keyboardShortcut(.delete, modifiers: [])
                 .opacity(0)
         )
+        .sheet(isPresented: $isShowingChordCreator) {
+            ChordEditorView(
+                chord: $newChordForEditing,
+                isNew: true,
+                onSave: { savedChord in
+                    appData.preset?.chords.append(savedChord)
+                    appData.saveChanges()
+                    isShowingChordCreator = false
+                    // Reset for next time
+                    newChordForEditing = Chord(name: "New Chord", frets: [-1, -1, -1, -1, -1, -1], fingers: [0, 0, 0, 0, 0, 0])
+                },
+                onCancel: {
+                    isShowingChordCreator = false
+                    // Reset for next time
+                    newChordForEditing = Chord(name: "New Chord", frets: [-1, -1, -1, -1, -1, -1], fingers: [0, 0, 0, 0, 0, 0])
+                }
+            )
+        }
+        .sheet(isPresented: $isShowingPatternEditor) {
+            PlayingPatternEditorView(
+                pattern: $newPatternForEditing,
+                isNew: true,
+                onSave: { newPattern in
+                    var patternToSave = newPattern
+                    if patternToSave.name == "New Pattern" {
+                        patternToSave.name = patternToSave.generateAutomaticName()
+                    }
+                    appData.preset?.playingPatterns.append(patternToSave)
+                    appData.saveChanges()
+                    isShowingPatternEditor = false
+                    // Reset for next time
+                    newPatternForEditing = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .sixteenth)
+                },
+                onCancel: {
+                    isShowingPatternEditor = false
+                    // Reset for next time
+                    newPatternForEditing = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .sixteenth)
+                }
+            )
+        }
+        .alert("Cannot Delete", isPresented: $showInUseAlert) {
+            Button("OK") { }
+        } message: {
+            Text(inUseAlertMessage)
+        }
     }
 
     private func deleteSelectedEvent() {
@@ -201,6 +262,38 @@ struct AccompanimentEditorView: View {
         var updatedSegment = segment
         updatedSegment.updateLength(updatedSegment.lengthInMeasures - 1)
         segment = updatedSegment
+    }
+    
+    private func deleteChord(withId chordId: UUID) {
+        let isChordInUse = appData.preset?.accompanimentSegments.contains { segment in
+            segment.measures.contains { measure in
+                measure.chordEvents.contains { $0.resourceId == chordId }
+            }
+        } ?? false
+
+        if isChordInUse {
+            inUseAlertMessage = "This chord is used in at least one accompaniment segment. Please remove it from all segments before deleting."
+            showInUseAlert = true
+        } else {
+            appData.preset?.chords.removeAll { $0.id == chordId }
+            appData.saveChanges()
+        }
+    }
+
+    private func deletePattern(withId patternId: UUID) {
+        let isPatternInUse = appData.preset?.accompanimentSegments.contains { segment in
+            segment.measures.contains { measure in
+                measure.patternEvents.contains { $0.resourceId == patternId }
+            }
+        } ?? false
+
+        if isPatternInUse {
+            inUseAlertMessage = "This pattern is used in at least one accompaniment segment. Please remove it from all segments before deleting."
+            showInUseAlert = true
+        } else {
+            appData.preset?.playingPatterns.removeAll { $0.id == patternId }
+            appData.saveChanges()
+        }
     }
 }
 
@@ -536,17 +629,28 @@ struct ResourceLibraryView: View {
     @EnvironmentObject var appData: AppData
     @Binding var segment: AccompanimentSegment
     @Binding var selectedEventId: UUID?
+    @Binding var isShowingChordCreator: Bool
+    @Binding var isShowingPatternEditor: Bool
+    let onDeleteChord: (UUID) -> Void
+    let onDeletePattern: (UUID) -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             // Chord Library
             VStack(alignment: .leading, spacing: 8) {
-                Text("Chords").font(.headline)
+                HStack {
+                    Text("Chords").font(.headline)
+                    Spacer()
+                    Button(action: { isShowingChordCreator = true }) {
+                        Image(systemName: "plus.circle")
+                    }
+                    .buttonStyle(.plain)
+                }
                 ScrollView {
                     if let chords = appData.preset?.chords, !chords.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 75))], spacing: 8) {
                             ForEach(chords) { chord in
-                                ResourceChordButton(chord: chord, isSelected: isSelectedChord(chord.id))
+                                ResourceChordButton(chord: chord, isSelected: isSelectedChord(chord.id), onDelete: { onDeleteChord(chord.id) })
                                     .onDrag {
                                         let dragData = DragData(source: .newResource, type: .chord, resourceId: chord.id, eventId: nil, durationInBeats: 1)
                                         let provider = NSItemProvider()
@@ -561,12 +665,19 @@ struct ResourceLibraryView: View {
             
             // Pattern Library
             VStack(alignment: .leading, spacing: 8) {
-                Text("Playing Patterns").font(.headline)
+                HStack {
+                    Text("Playing Patterns").font(.headline)
+                    Spacer()
+                    Button(action: { isShowingPatternEditor = true }) {
+                        Image(systemName: "plus.circle")
+                    }
+                    .buttonStyle(.plain)
+                }
                 ScrollView {
                     if let patterns = appData.preset?.playingPatterns, !patterns.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
                             ForEach(patterns) { pattern in
-                                ResourcePatternButton(pattern: pattern, isSelected: isSelectedPattern(pattern.id))
+                                ResourcePatternButton(pattern: pattern, isSelected: isSelectedPattern(pattern.id), onDelete: { onDeletePattern(pattern.id) })
                                     .onDrag {
                                         let beats = pattern.length / (pattern.resolution == .sixteenth ? 4 : 2)
                                         let dragData = DragData(source: .newResource, type: .pattern, resourceId: pattern.id, eventId: nil, durationInBeats: beats > 0 ? beats : 1)
@@ -728,6 +839,7 @@ struct ResourceLibraryView: View {
 struct ResourceChordButton: View {
     let chord: Chord
     let isSelected: Bool
+    let onDelete: () -> Void
     
     var body: some View {
         VStack(spacing: 2) {
@@ -744,12 +856,16 @@ struct ResourceChordButton: View {
                         .stroke(isSelected ? Color.yellow : Color.clear, lineWidth: isSelected ? 2 : 0)
                 )
         )
+        .contextMenu {
+            Button("Delete", role: .destructive, action: onDelete)
+        }
     }
 }
 
 struct ResourcePatternButton: View {
     let pattern: GuitarPattern
     let isSelected: Bool
+    let onDelete: () -> Void
     
     var body: some View {
         VStack(spacing: 4) {
@@ -768,6 +884,9 @@ struct ResourcePatternButton: View {
                 )
         )
         .help(pattern.name)
+        .contextMenu {
+            Button("Delete", role: .destructive, action: onDelete)
+        }
     }
 }
 
