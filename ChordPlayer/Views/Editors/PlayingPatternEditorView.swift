@@ -190,13 +190,32 @@ struct PlayingPatternEditorView: View {
     }
     
     // MARK: - Logic
+    private func triggerFeedback(stringIndex: Int, fret: Int) {
+        // 1. Play audio feedback
+        if fret >= 0, fret <= 24 {
+            // eBGDAE
+            let standardTuning = [64, 59, 55, 50, 45, 40]
+            if stringIndex < standardTuning.count {
+                let openStringNote = standardTuning[stringIndex]
+                let midiNoteToPlay = UInt8(openStringNote + fret)
+                chordPlayer.playSingleNote(midiNote: midiNoteToPlay)
+            }
+        }
+
+        // 2. Update pattern name
+        pattern.name = pattern.generateAutomaticName()
+    }
+
     private func toggleCell(step: Int, string: Int) {
         selectedCell = (step, string)
         if pattern.steps[step].activeNotes.contains(string) {
             pattern.steps[step].activeNotes.remove(string)
             pattern.steps[step].fretOverrides.removeValue(forKey: string)
+            pattern.name = pattern.generateAutomaticName()
         } else {
             pattern.steps[step].activeNotes.insert(string)
+            // When adding a note, default to fret 0 for audio feedback
+            triggerFeedback(stringIndex: string, fret: 0)
         }
     }
     
@@ -209,12 +228,14 @@ struct PlayingPatternEditorView: View {
     private func clearFretOverride(forStep step: Int, string: Int) {
         pattern.steps[step].fretOverrides.removeValue(forKey: string)
         selectedCell = (step, string)
+        pattern.name = pattern.generateAutomaticName()
     }
     
     private func commitFretOverride(_ fret: Int) {
         guard let selection = selectedCell else { return }
         guard pattern.steps[selection.step].activeNotes.contains(selection.string) else { return }
         pattern.steps[selection.step].fretOverrides[selection.string] = fret
+        triggerFeedback(stringIndex: selection.string, fret: fret)
     }
     
     private func handleKeyDown(_ event: NSEvent) -> Bool {

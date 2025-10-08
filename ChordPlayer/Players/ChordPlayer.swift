@@ -100,6 +100,20 @@ class ChordPlayer: ObservableObject {
         midiSequencer.play(song: song, on: endpoint)
     }
 
+    func playSingleNote(midiNote: UInt8) {
+        // Use a short, fixed duration for the feedback sound
+        let duration: TimeInterval = 0.2
+        let channel: UInt8 = 0 // Use a default channel for this simple feedback
+        let velocity: UInt8 = 100
+
+        midiManager.sendNoteOn(note: midiNote, velocity: velocity, channel: channel)
+
+        // Schedule NoteOff after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            self?.midiManager.sendNoteOff(note: midiNote, velocity: 0, channel: channel)
+        }
+    }
+
     // MARK: - Song Creation
 
     func createSong(from segment: AccompanimentSegment, onChannel midiChannel: UInt8) -> MusicSong? {
