@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AccompanimentSegmentsView: View {
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var chordPlayer: ChordPlayer
 
     @State private var segmentToEdit: AccompanimentSegment?
 
@@ -39,6 +40,11 @@ struct AccompanimentSegmentsView: View {
                         .onTapGesture {
                             appData.preset?.activeAccompanimentSegmentId = isActive ? nil : segment.id
                             appData.saveChanges()
+                            if isActive {
+                                chordPlayer.stop()
+                            } else {
+                                chordPlayer.play(segment: segment)
+                            }
                         }
                         .contextMenu {
                             contextMenuFor(segment: segment)

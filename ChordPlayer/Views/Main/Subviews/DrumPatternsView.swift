@@ -7,6 +7,17 @@ fileprivate struct SheetContext: Identifiable {
     let isNew: Bool
 }
 
+// The new content view for the generic SegmentCardView
+struct DrumPatternCardContent: View {
+    let pattern: DrumPattern
+    let isActive: Bool
+
+    var body: some View {
+        DrumPatternGridView(pattern: pattern, activeColor: .primary, inactiveColor: .secondary)
+            .opacity(isActive ? 0.9 : 0.6)
+    }
+}
+
 struct DrumPatternsView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var drumPlayer: DrumPlayer
@@ -33,14 +44,24 @@ struct DrumPatternsView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
                     ForEach(preset.drumPatterns) { pattern in
                         let isActive = appData.preset?.activeDrumPatternId == pattern.id
-                        Button(action: {
-                            appData.preset?.activeDrumPatternId = pattern.id
-                            appData.saveChanges()
-                            drumPlayer.preview(pattern: pattern)
-                        }) {
-                            DrumPatternCardView(pattern: pattern, isActive: isActive)
+                        
+                        SegmentCardView(
+                            title: pattern.name,
+                            systemImageName: "music.quarternote.3",
+                            isSelected: isActive
+                        ) {
+                            DrumPatternCardContent(pattern: pattern, isActive: isActive)
                         }
-                        .buttonStyle(.plain)
+                        .onTapGesture(count: 2) {
+                            sheetContext = SheetContext(pattern: pattern, isNew: false)
+                        }
+                        .onTapGesture {
+                            appData.preset?.activeDrumPatternId = isActive ? nil : pattern.id
+                            appData.saveChanges()
+                            if !isActive {
+                                drumPlayer.preview(pattern: pattern)
+                            }
+                        }
                         .contextMenu {
                             Button("Edit") {
                                 sheetContext = SheetContext(pattern: pattern, isNew: false)
@@ -101,30 +122,6 @@ private struct DrumPatternSheetWrapper: View {
             isNew: context.isNew,
             onSave: { savedPattern in onSave(savedPattern) },
             onCancel: onCancel
-        )
-    }
-}
-
-struct DrumPatternCardView: View {
-    let pattern: DrumPattern
-    let isActive: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            DrumPatternGridView(pattern: pattern, activeColor: .primary, inactiveColor: .secondary)
-                .opacity(isActive ? 0.9 : 0.6)
-
-            Text(pattern.name)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-        }
-        .foregroundColor(.primary)
-        .padding(8)
-        .frame(width: 140, height: 80)
-        .background(isActive ? Material.thick : Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(isActive ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: isActive ? 2.5 : 1)
         )
     }
 }

@@ -1,5 +1,42 @@
 import SwiftUI
 
+// The new content view, containing the details previously in SoloSegmentCard
+struct SoloCardContent: View {
+    let segment: SoloSegment
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 统计信息
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Length")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(String(format: "%.1f", segment.lengthInBeats)) beats")
+                        .font(.system(.subheadline, design: .monospaced))
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Notes")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(segment.notes.count)")
+                        .font(.system(.subheadline, design: .monospaced))
+                }
+            }
+            
+            // 简化的音符预览
+            if !segment.notes.isEmpty {
+                SoloPreviewView(segment: segment)
+                    .frame(height: 30)
+            }
+        }
+    }
+}
+
+
 struct SoloSegmentsView: View {
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var soloPlayer: SoloPlayer
@@ -30,28 +67,28 @@ struct SoloSegmentsView: View {
                 // Solo列表概览
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 200))], spacing: 12) {
                     ForEach(Array(preset.soloSegments.enumerated()), id: \.element.id) { index, segment in
-                        SoloSegmentCard(
-                            segment: segment,
-                            isActive: preset.activeSoloSegmentId == segment.id,
-                            onSelect: {
-                                appData.preset?.activeSoloSegmentId = (preset.activeSoloSegmentId == segment.id) ? nil : segment.id
-                                appData.saveChanges()
-                            },
-                            onEdit: {
-                                self.segmentToEdit = segment
-                            },
-                            onDelete: {
-                                appData.removeSoloSegment(at: IndexSet(integer: index))
-                            },
-                            onNameChange: { newName in
-                                var updatedSegment = segment
-                                updatedSegment.name = newName
-                                appData.updateSoloSegment(updatedSegment)
-                            },
-                            onAddToTrack: { trackId in
-                                self.addToGuitarTrack(soloSegment: segment, trackId: trackId)
+                        let isActive = preset.activeSoloSegmentId == segment.id
+                        
+                        SegmentCardView(
+                            title: segment.name,
+                            systemImageName: "waveform.path.ecg",
+                            isSelected: isActive
+                        ) {
+                            SoloCardContent(segment: segment)
+                        }
+                        .onTapGesture(count: 2) {
+                            self.segmentToEdit = segment
+                        }
+                        .onTapGesture {
+                            appData.preset?.activeSoloSegmentId = isActive ? nil : segment.id
+                            appData.saveChanges()
+                            if !isActive {
+                                soloPlayer.play(segment: segment)
                             }
-                        )
+                        }
+                        .contextMenu {
+                            contextMenuFor(segment: segment, index: index)
+                        }
                     }
                 }
             } else {
@@ -69,145 +106,33 @@ struct SoloSegmentsView: View {
         }
     }
     
-    private func addToGuitarTrack(soloSegment: SoloSegment, trackId: UUID) {
-        guard let preset = appData.preset, 
-              let trackIndex = preset.arrangement.guitarTracks.firstIndex(where: { $0.id == trackId }) else { return }
-        
-        let track = preset.arrangement.guitarTracks[trackIndex]
-        
-        // Calculate the end beat of the last segment on this track
-        let lastBeat = track.segments.map { $0.startBeat + $0.durationInBeats }.max() ?? 0.0
-        
-        let newSegment = GuitarSegment(
-            startBeat: lastBeat,
-            durationInBeats: soloSegment.lengthInBeats,
-            type: .solo(segmentId: soloSegment.id)
-        )
-        
-        appData.preset?.arrangement.guitarTracks[trackIndex].segments.append(newSegment)
-        appData.saveChanges()
-    }
-}
-
-struct SoloSegmentCard: View {
-    @EnvironmentObject var appData: AppData
-    @EnvironmentObject var soloPlayer: SoloPlayer
-    let segment: SoloSegment
-    let isActive: Bool
-    let onSelect: () -> Void
-    let onEdit: () -> Void
-    let onDelete: () -> Void
-    let onNameChange: (String) -> Void
-    let onAddToTrack: (UUID) -> Void
-
-    @State private var showingDeleteConfirmation = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 标题行
-            HStack {
-                Text(segment.name)
-                    .font(.headline)
-                    .lineLimit(1)
-                
-                Spacer()
-                
-                if isActive {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                }
-            }
-            
-            // 统计信息
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Length")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text("\(String(format: "%.1f", segment.lengthInBeats)) beats")
-                        .font(.system(.subheadline, design: .monospaced))
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Notes")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text("\(segment.notes.count)")
-                        .font(.system(.subheadline, design: .monospaced))
-                }
-            }
-            
-            // 简化的音符预览
-            if !segment.notes.isEmpty {
-                SoloPreviewView(segment: segment)
-                    .frame(height: 30)
-            }
-            
-            // 操作按钮
-            HStack {
-                Spacer()
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
-                        .font(.caption)
-                }
-                .buttonStyle(.borderless)
-                .help("Edit this solo")
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(NSColor.controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isActive ? Color.accentColor : Color.clear, lineWidth: 2)
-                )
-        )
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            onEdit()
-        }
-        .onTapGesture {
-            onSelect()
-            if !isActive {
-                soloPlayer.play(segment: segment)
-            }
-        }
-        .contextMenu {
-            if let preset = appData.preset {
-                let guitarTracks = preset.arrangement.guitarTracks
-                if !guitarTracks.isEmpty {
-                    if guitarTracks.count == 1,
-                       let firstTrack = guitarTracks.first {
-                        Button("Add to \(firstTrack.name)") {
-                            onAddToTrack(firstTrack.id)
-                        }
-                    } else {
-                        Menu("Add to Arrangement") {
-                            ForEach(guitarTracks) { track in
-                                Button("\(track.name)") {
-                                    onAddToTrack(track.id)
-                                }
-                            }
+    @ViewBuilder
+    private func contextMenuFor(segment: SoloSegment, index: Int) -> some View {
+        if let preset = appData.preset {
+            let guitarTracks = preset.arrangement.guitarTracks
+            if !guitarTracks.isEmpty {
+                Menu("Add to Arrangement") {
+                    ForEach(guitarTracks) { track in
+                        Button("\(track.name)") {
+                            addToGuitarTrack(soloSegment: segment, trackId: track.id)
                         }
                     }
-                    Divider()
                 }
-            }
-
-            Button("Edit", action: onEdit)
-            Divider()
-            Button("Delete", role: .destructive) {
-                showingDeleteConfirmation = true
+                Divider()
             }
         }
-        .alert("Delete \(segment.name)", isPresented: $showingDeleteConfirmation) {
-            Button("Delete", role: .destructive, action: onDelete)
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Are you sure you want to delete this solo segment? This action cannot be undone.")
+
+        Button("Edit") {
+            self.segmentToEdit = segment
+        }
+        Button("Duplicate") {
+            var duplicatedSegment = segment
+            duplicatedSegment.id = UUID()
+            duplicatedSegment.name = "\(segment.name) Copy"
+            appData.addSoloSegment(duplicatedSegment)
+        }
+        Button("Delete", role: .destructive) {
+            appData.removeSoloSegment(at: IndexSet(integer: index))
         }
     }
     

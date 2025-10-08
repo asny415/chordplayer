@@ -1,8 +1,8 @@
-
 import SwiftUI
 
 struct MelodicLyricSegmentsView: View {
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var melodicLyricPlayer: MelodicLyricPlayer
     @Binding var segmentToEdit: MelodicLyricSegment?
     @Binding var activeMelodicLyricSegmentId: UUID?
     
@@ -48,8 +48,10 @@ struct MelodicLyricSegmentsView: View {
                         .onTapGesture { // Single-tap to select
                             if isActive {
                                 activeMelodicLyricSegmentId = nil
+                                melodicLyricPlayer.stop()
                             } else {
                                 activeMelodicLyricSegmentId = segment.id
+                                melodicLyricPlayer.play(segment: segment)
                             }
                         }
                         .contextMenu {
