@@ -28,6 +28,14 @@ struct GlobalSettingsView: View {
                     appData.saveChanges()
                 }
             )
+            
+            let capoBinding = Binding<Int>(
+                get: { appData.preset?.capo ?? 0 },
+                set: { newValue in
+                    appData.preset?.capo = newValue
+                    appData.saveChanges()
+                }
+            )
 
             let timeSignatureBinding = Binding<TimeSignature>(
                 get: { appData.preset?.timeSignature ?? TimeSignature() },
@@ -43,6 +51,10 @@ struct GlobalSettingsView: View {
 
                 // Time signature selector
                 DraggableValueCard(label: "Time Sig", selection: timeSignatureBinding, options: TIME_SIGNATURE_OPTIONS)
+                    .frame(maxWidth: .infinity)
+
+                // Capo input card
+                CapoSettingCard(capo: capoBinding)
                     .frame(maxWidth: .infinity)
 
                 // Tempo card
@@ -156,6 +168,40 @@ struct DraggableValueCard<T: Equatable & CustomStringConvertible>: View {
                     }
                 }
                 .onEnded { _ in self.startIndex = nil }
+        )
+    }
+}
+
+struct CapoSettingCard: View {
+    @Binding var capo: Int
+    @State private var startCapo: Int? = nil
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            DashboardCardView(
+                label: "Capo", 
+                value: capo > 0 ? "\(capo)" : "Off",
+                unit: capo > 0 ? "Fret" : nil
+            )
+            
+            Image(systemName: "arrow.left.and.right")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(5)
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    if self.startCapo == nil { self.startCapo = self.capo }
+                    let dragAmount = value.translation.width
+                    let newCapo = max(0, min(12, self.startCapo! + Int(round(dragAmount / 40.0))))
+                    if newCapo != self.capo {
+                        self.capo = newCapo
+                    }
+                }
+                .onEnded { _ in 
+                    self.startCapo = nil
+                }
         )
     }
 }

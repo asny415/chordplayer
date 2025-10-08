@@ -199,12 +199,16 @@ class ChordPlayer: ObservableObject {
         let fretsForPlayback = Array(chord.frets.reversed())
         let singleStepDurationBeats = pattern.steps.isEmpty ? 0 : (patternDurationBeats / Double(pattern.steps.count))
 
+        // Get capo value from preset, default to 0 if not set (for backward compatibility)
+        let capoValue = preset.capo ?? 0
+        
         // 1. Flatten pattern into a temporal list of notes
         for (stepIndex, step) in pattern.steps.enumerated() {
             if step.type == .rest || step.activeNotes.isEmpty { continue }
 
             let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
-                let finalFret = step.fretOverrides[stringIndex] ?? (stringIndex < fretsForPlayback.count ? fretsForPlayback[stringIndex] : -1)
+                let baseFret = step.fretOverrides[stringIndex] ?? (stringIndex < fretsForPlayback.count ? fretsForPlayback[stringIndex] : -1)
+                let finalFret = baseFret >= 0 ? baseFret + capoValue : baseFret // Apply capo offset
                 guard finalFret >= 0 else { return nil }
                 let noteValue = MusicTheory.standardGuitarTuning[stringIndex] + finalFret
                 return (note: UInt8(noteValue), stringIndex: stringIndex)

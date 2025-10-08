@@ -78,6 +78,9 @@ class SoloPlayer: ObservableObject {
     func createSong(from segment: SoloSegment, onChannel midiChannel: UInt8) -> MusicSong? {
         guard let preset = appData.preset else { return nil }
 
+        // Get capo value from preset, default to 0 if not set (for backward compatibility)
+        let capoValue = preset.capo ?? 0
+        
         let notesSortedByTime = segment.notes.sorted { $0.startTime < $1.startTime }
         var consumedNoteIDs = Set<UUID>()
         var musicNotes: [MusicNote] = []
@@ -87,7 +90,7 @@ class SoloPlayer: ObservableObject {
             if consumedNoteIDs.contains(currentNote.id) || currentNote.fret < 0 { continue }
 
             var duration = currentNote.duration ?? 1.0
-            let pitch = midiNote(from: currentNote.string, fret: currentNote.fret)
+            let pitch = midiNote(from: currentNote.string, fret: currentNote.fret + capoValue) // Apply capo offset
             var technique: MusicPlayingTechnique? = nil
 
             switch currentNote.technique {
@@ -101,7 +104,7 @@ class SoloPlayer: ObservableObject {
                         duration = slideTransitionDuration
                     }
 
-                    let targetPitch = midiNote(from: targetNote.string, fret: targetNote.fret)
+                    let targetPitch = midiNote(from: targetNote.string, fret: targetNote.fret + capoValue) // Apply capo offset
                     let durationAtTarget = targetNote.duration ?? 1.0
                     technique = .slide(toPitch: Int(targetPitch), durationAtTarget: durationAtTarget)
                 } else {
@@ -111,8 +114,8 @@ class SoloPlayer: ObservableObject {
                 if i + 2 < notesSortedByTime.count {
                     let note2 = notesSortedByTime[i+1]
                     let note3 = notesSortedByTime[i+2]
-                    let pitch2 = midiNote(from: note2.string, fret: note2.fret)
-                    let pitch3 = midiNote(from: note3.string, fret: note3.fret)
+                    let pitch2 = midiNote(from: note2.string, fret: note2.fret + capoValue) // Apply capo offset
+                    let pitch3 = midiNote(from: note3.string, fret: note3.fret + capoValue) // Apply capo offset
 
                     if !consumedNoteIDs.contains(note2.id) && !consumedNoteIDs.contains(note3.id) &&
                        currentNote.string == note2.string && note2.string == note3.string &&

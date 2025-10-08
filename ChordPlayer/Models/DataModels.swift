@@ -394,6 +394,7 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
     var chordProgression: [String] // An array of chord names, e.g., ["Am", "G", "C"]
     var quantize: QuantizationMode = .none
     var key: String = "C"
+    var capo: Int? = nil // Capo position (0 = no capo, 1 = 1st fret, etc.) - optional for backward compatibility
 
     // Data Libraries (owned by the preset)
     var chords: [Chord]
@@ -430,7 +431,8 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
          activePlayingPatternId: UUID? = nil,
          activeDrumPatternId: UUID? = nil,
          activeSoloSegmentId: UUID? = nil,
-         activeAccompanimentSegmentId: UUID? = nil) {
+         activeAccompanimentSegmentId: UUID? = nil,
+         capo: Int? = nil) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
@@ -450,10 +452,69 @@ struct Preset: Codable, Identifiable, Hashable, Equatable {
         self.activeDrumPatternId = activeDrumPatternId
         self.activeSoloSegmentId = activeSoloSegmentId
         self.activeAccompanimentSegmentId = activeAccompanimentSegmentId
+        self.capo = capo
     }
     
     static func createNew(name: String = "New Preset") -> Preset {
         return Preset(name: name)
+    }
+    
+    // MARK: - Codable Implementation for Compatibility
+    enum CodingKeys: String, CodingKey {
+        case id, name, createdAt, updatedAt, bpm, timeSignature, chordProgression, quantize, key
+        case chords, playingPatterns, drumPatterns, soloSegments, accompanimentSegments, melodicLyricSegments
+        case arrangement, activePlayingPatternId, activeDrumPatternId, activeSoloSegmentId, activeAccompanimentSegmentId
+        case capo
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        bpm = try container.decode(Double.self, forKey: .bpm)
+        timeSignature = try container.decode(TimeSignature.self, forKey: .timeSignature)
+        chordProgression = try container.decode([String].self, forKey: .chordProgression)
+        quantize = try container.decodeIfPresent(QuantizationMode.self, forKey: .quantize) ?? .none
+        key = try container.decodeIfPresent(String.self, forKey: .key) ?? "C"
+        chords = try container.decode([Chord].self, forKey: .chords)
+        playingPatterns = try container.decode([GuitarPattern].self, forKey: .playingPatterns)
+        drumPatterns = try container.decode([DrumPattern].self, forKey: .drumPatterns)
+        soloSegments = try container.decodeIfPresent([SoloSegment].self, forKey: .soloSegments) ?? []
+        accompanimentSegments = try container.decodeIfPresent([AccompanimentSegment].self, forKey: .accompanimentSegments) ?? []
+        melodicLyricSegments = try container.decodeIfPresent([MelodicLyricSegment].self, forKey: .melodicLyricSegments) ?? []
+        arrangement = try container.decodeIfPresent(SongArrangement.self, forKey: .arrangement) ?? SongArrangement()
+        activePlayingPatternId = try container.decodeIfPresent(UUID.self, forKey: .activePlayingPatternId)
+        activeDrumPatternId = try container.decodeIfPresent(UUID.self, forKey: .activeDrumPatternId)
+        activeSoloSegmentId = try container.decodeIfPresent(UUID.self, forKey: .activeSoloSegmentId)
+        activeAccompanimentSegmentId = try container.decodeIfPresent(UUID.self, forKey: .activeAccompanimentSegmentId)
+        capo = try container.decodeIfPresent(Int.self, forKey: .capo)  // Optional - defaults to nil for backward compatibility
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(bpm, forKey: .bpm)
+        try container.encode(timeSignature, forKey: .timeSignature)
+        try container.encode(chordProgression, forKey: .chordProgression)
+        try container.encode(quantize, forKey: .quantize)
+        try container.encode(key, forKey: .key)
+        try container.encode(chords, forKey: .chords)
+        try container.encode(playingPatterns, forKey: .playingPatterns)
+        try container.encode(drumPatterns, forKey: .drumPatterns)
+        try container.encode(soloSegments, forKey: .soloSegments)
+        try container.encode(accompanimentSegments, forKey: .accompanimentSegments)
+        try container.encode(melodicLyricSegments, forKey: .melodicLyricSegments)
+        try container.encode(arrangement, forKey: .arrangement)
+        try container.encodeIfPresent(activePlayingPatternId, forKey: .activePlayingPatternId)
+        try container.encodeIfPresent(activeDrumPatternId, forKey: .activeDrumPatternId)
+        try container.encodeIfPresent(activeSoloSegmentId, forKey: .activeSoloSegmentId)
+        try container.encodeIfPresent(activeAccompanimentSegmentId, forKey: .activeAccompanimentSegmentId)
+        try container.encodeIfPresent(capo, forKey: .capo)
     }
 }
 
