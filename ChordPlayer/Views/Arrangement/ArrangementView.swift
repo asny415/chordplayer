@@ -62,12 +62,14 @@ struct ArrangementView: View {
                     .frame(height: 24)
 
                     // 2. The Tracks
-                    DrumTrackView(
-                        track: $arrangement.drumTrack,
-                        preset: $preset,
-                        pixelsPerBeat: pixelsPerBeat,
-                        onRemove: removeDrumSegment
-                    )
+                    if (preset.drumPatterns.isEmpty == false) || appData.showDrumPatternSectionByDefault {
+                        DrumTrackView(
+                            track: $arrangement.drumTrack,
+                            preset: $preset,
+                            pixelsPerBeat: pixelsPerBeat,
+                            onRemove: removeDrumSegment
+                        )
+                    }
 
                     ForEach($arrangement.guitarTracks) { $track in
                         GuitarTrackView(
