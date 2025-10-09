@@ -1,3 +1,4 @@
+import SwiftUI
 import Foundation
 import Combine
 import AppKit
@@ -11,6 +12,10 @@ class AppData: ObservableObject {
     @Published var currentBeatInfo: (beat: Int, measure: Int, timestamp: Double) = (-4, 0, 0)
     @Published var currentlyPlayingChordName: String? = nil
     @Published var playingMode: PlayingMode = .manual
+    
+    // UI State for collapsible sections
+    @AppStorage("showDrumPatternSectionByDefault") var showDrumPatternSectionByDefault: Bool = false
+    @AppStorage("showSoloSegmentSectionByDefault") var showSoloSegmentSectionByDefault: Bool = false
     
     // Global MIDI Settings
     @Published var midiPortName: String

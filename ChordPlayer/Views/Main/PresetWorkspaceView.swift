@@ -28,11 +28,15 @@ struct PresetWorkspaceView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        GroupBox {
-                            DrumPatternsView()
+                        if !(appData.preset?.drumPatterns.isEmpty ?? true) || appData.showDrumPatternSectionByDefault {
+                            GroupBox {
+                                DrumPatternsView()
+                            }
                         }
-                        GroupBox {
-                            SoloSegmentsView(segmentToEdit: $segmentToEdit)
+                        if !(appData.preset?.soloSegments.isEmpty ?? true) || appData.showSoloSegmentSectionByDefault {
+                            GroupBox {
+                                SoloSegmentsView(segmentToEdit: $segmentToEdit)
+                            }
                         }
                         GroupBox {
                             AccompanimentSegmentsView()

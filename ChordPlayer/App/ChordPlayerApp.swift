@@ -104,6 +104,18 @@ struct ChordPlayerApp: App {
                 }
                 .keyboardShortcut("I", modifiers: [.command, .shift])
             }
+            
+            CommandGroup(after: .sidebar) {
+                Toggle(isOn: $appData.showDrumPatternSectionByDefault) {
+                    Text("Show Drum Patterns Section")
+                }
+                .keyboardShortcut("1", modifiers: .option)
+                
+                Toggle(isOn: $appData.showSoloSegmentSectionByDefault) {
+                    Text("Show Solo Segments Section")
+                }
+                .keyboardShortcut("2", modifiers: .option)
+            }
         }
 
         
