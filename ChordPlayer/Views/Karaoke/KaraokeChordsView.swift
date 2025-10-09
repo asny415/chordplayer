@@ -1,4 +1,3 @@
-
 import SwiftUI
 
 /// A model to hold processed chord information for easy rendering.
@@ -24,18 +23,39 @@ struct KaraokeChordsView: View {
         Double(timeSignature.beatsPerMeasure)
     }
     
+    /// Gets the chords for a specific measure, handling carry-over chords.
+    private func chords(forMeasureStartingAt measureStartBeat: Double) -> [ChordDisplayInfo] {
+        // Find all chords that explicitly start within this measure.
+        var chordsInMeasure = allChords.filter {
+            $0.startBeat >= measureStartBeat && $0.startBeat < (measureStartBeat + beatsPerMeasure)
+        }
+        
+        // Check if a chord needs to be carried over from a previous measure.
+        let hasChordOnFirstBeat = chordsInMeasure.contains { $0.startBeat == measureStartBeat }
+        
+        if !hasChordOnFirstBeat {
+            // Find the last chord that started before this measure.
+            if let carryOverChord = allChords.last(where: { $0.startBeat < measureStartBeat }) {
+                // Create a new display info for the carry-over chord, starting at the beginning of this measure.
+                let carriedOverInfo = ChordDisplayInfo(
+                    chord: carryOverChord.chord,
+                    startBeat: measureStartBeat, // Position it visually at the start
+                    durationInBeats: carryOverChord.durationInBeats
+                )
+                chordsInMeasure.insert(carriedOverInfo, at: 0)
+            }
+        }
+        
+        return chordsInMeasure
+    }
+    
     var body: some View {
         let currentMeasureIndex = floor(playbackPosition / beatsPerMeasure)
         let currentMeasureStartBeat = currentMeasureIndex * beatsPerMeasure
         let nextMeasureStartBeat = (currentMeasureIndex + 1) * beatsPerMeasure
         
-        let currentMeasureChords = allChords.filter {
-            $0.startBeat >= currentMeasureStartBeat && $0.startBeat < nextMeasureStartBeat
-        }
-        
-        let nextMeasureChords = allChords.filter {
-            $0.startBeat >= nextMeasureStartBeat && $0.startBeat < (nextMeasureStartBeat + beatsPerMeasure)
-        }
+        let currentMeasureChords = chords(forMeasureStartingAt: currentMeasureStartBeat)
+        let nextMeasureChords = chords(forMeasureStartingAt: nextMeasureStartBeat)
 
         GeometryReader { geometry in
             let timelineHeight: CGFloat = 100
@@ -141,7 +161,9 @@ private struct MeasureChordsView: View {
 
                 ForEach(chords) { chordInfo in
                     let chordStartInMeasure = chordInfo.startBeat - measureStartBeat
-                    let xPosition = (chordStartInMeasure / beatsPerMeasure) * geometry.size.width
+                    // Ensure chord start is not negative if it's a carry-over
+                    let clampedStart = max(0, chordStartInMeasure)
+                    let xPosition = (clampedStart / beatsPerMeasure) * geometry.size.width
                     
                     VStack(spacing: 2) {
                         Text(chordInfo.chord.name)
