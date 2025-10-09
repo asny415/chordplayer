@@ -122,6 +122,12 @@ struct KaraokeView: View {
                         // This VStack contains both the content and the proportional spacer below it.
                         // Centering this entire VStack achieves the "slightly above center" effect.
                         VStack(spacing: 0) {
+                            // Add the new KaraokeChordsView here
+                            if let arrangement = appData.preset?.arrangement {
+                                KaraokeChordsView(playbackPosition: songPlayer.playbackPosition, arrangement: arrangement)
+                                    .padding(.bottom)
+                            }
+
                             // The "Sandwich" layout block for lyrics and countdown.
                             HStack(alignment: .firstTextBaseline, spacing: 16) {
                                 
