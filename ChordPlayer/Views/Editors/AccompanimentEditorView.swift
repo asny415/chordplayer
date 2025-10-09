@@ -210,13 +210,13 @@ struct AccompanimentEditorView: View {
         // Schedule a task to set isPlaying to false when playback finishes
         let durationInSeconds = Double(segment.lengthInMeasures * preset.timeSignature.beatsPerMeasure) * (60.0 / preset.bpm)
         
-        let task = DispatchWorkItem {
+        let task = DispatchWorkItem(block: {
             // Check if we are still in a playing state before automatically stopping
             if self.isPlaying {
                 self.isPlaying = false
                 self.playbackStartTime = nil
             }
-        }
+        })
         playbackEndTask = task
         
         // Add a small buffer to ensure sounds can finish
@@ -928,6 +928,49 @@ struct DropHandler: DropDelegate {
                     }
                 }
                 
+                // Smart copy logic for chord drops at the beginning of a measure
+                if self.trackType == .chord && startBeatInMeasure == 0 {
+                    // Find the closest previous measure that starts with the same chord by searching backwards.
+                    var sourceMeasureToCopy: AccompanimentMeasure? = nil
+                    for i in (0..<measureIndex).reversed() {
+                        let potentialSourceMeasure = updatedSegment.measures[i]
+                        if let firstChordEvent = potentialSourceMeasure.chordEvents.first(where: { $0.startBeat == 0 }),
+                           firstChordEvent.resourceId == dragData.resourceId {
+                            sourceMeasureToCopy = potentialSourceMeasure
+                            break // Found the closest match, use it
+                        }
+                    }
+                    
+                    // If a source measure was found, copy its entire contents
+                    if let sourceMeasure = sourceMeasureToCopy {
+                        // Clear existing events in the target measure before copying
+                        updatedSegment.measures[measureIndex].patternEvents.removeAll()
+                        updatedSegment.measures[measureIndex].chordEvents.removeAll()
+
+                        // Copy pattern events from the source measure
+                        for patternEventToCopy in sourceMeasure.patternEvents {
+                            let newPatternEvent = TimelineEvent(
+                                id: UUID(), // new unique ID
+                                resourceId: patternEventToCopy.resourceId,
+                                startBeat: patternEventToCopy.startBeat,
+                                durationInBeats: patternEventToCopy.durationInBeats
+                            )
+                            updatedSegment.measures[measureIndex].patternEvents.append(newPatternEvent)
+                        }
+                        
+                        // Copy chord events from the source measure
+                        for chordEventToCopy in sourceMeasure.chordEvents {
+                            let newChordEvent = TimelineEvent(
+                                id: UUID(), // new unique ID
+                                resourceId: chordEventToCopy.resourceId,
+                                startBeat: chordEventToCopy.startBeat,
+                                durationInBeats: chordEventToCopy.durationInBeats
+                            )
+                            updatedSegment.measures[measureIndex].chordEvents.append(newChordEvent)
+                        }
+                    }
+                }
+
                 // Step 2: Create the new event instance to be placed
                 let newEvent = TimelineEvent(
                     id: eventToDropId,
@@ -938,15 +981,14 @@ struct DropHandler: DropDelegate {
 
                 // Step 3: Add the new event to the target location
                 if self.trackType == .chord {
-                    // Prevent overlap
-                    if !updatedSegment.measures[measureIndex].chordEvents.contains(where: { $0.startBeat == newEvent.startBeat }) {
-                        updatedSegment.measures[measureIndex].chordEvents.append(newEvent)
-                    }
-                } else {
-                    // Prevent overlap
-                    if !updatedSegment.measures[measureIndex].patternEvents.contains(where: { $0.startBeat == newEvent.startBeat }) {
-                        updatedSegment.measures[measureIndex].patternEvents.append(newEvent)
-                    }
+                    // Prevent overlap by removing any existing chord at the exact same start beat
+                    updatedSegment.measures[measureIndex].chordEvents.removeAll(where: { $0.startBeat == newEvent.startBeat })
+                    updatedSegment.measures[measureIndex].chordEvents.append(newEvent)
+
+                } else { // .pattern
+                    // Prevent overlap by removing any existing pattern at the exact same start beat
+                    updatedSegment.measures[measureIndex].patternEvents.removeAll(where: { $0.startBeat == newEvent.startBeat })
+                    updatedSegment.measures[measureIndex].patternEvents.append(newEvent)
                 }
                 
                 // Step 4: Assign back to binding and update selection
