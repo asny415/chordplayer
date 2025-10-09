@@ -5,6 +5,7 @@ struct SoloEditorView: View {
     @EnvironmentObject var soloPlayer: SoloPlayer
     @EnvironmentObject var midiSequencer: MIDISequencer
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var midiManager: MidiManager
     
     @Binding var soloSegment: SoloSegment
     @State private var selectedNotes: Set<UUID> = []
@@ -151,6 +152,24 @@ struct SoloEditorView: View {
         appData.updateSoloSegment(soloSegment)
     }
 
+    private func playNoteFeedback(note: SoloNote) {
+        // Standard tuning MIDI notes for open strings EADGBe (6 to 1)
+        let baseMidiNotes = [64, 59, 55, 50, 45, 40]
+        guard note.string >= 0 && note.string < baseMidiNotes.count else { return }
+
+        let midiNoteNumber = baseMidiNotes[note.string] + note.fret
+        guard midiNoteNumber >= 0 && midiNoteNumber <= 127 else { return }
+
+        let velocity = note.velocity
+        
+        midiManager.sendNoteOn(note: UInt8(midiNoteNumber), velocity: UInt8(velocity), channel: midiChannel)
+        
+        // Schedule Note Off after a short duration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.midiManager.sendNoteOff(note: UInt8(midiNoteNumber), velocity: 0, channel: self.midiChannel)
+        }
+    }
+
     // MARK: - Note Editing Logic
     // MARK: - Note Editing Logic
 
@@ -158,7 +177,11 @@ struct SoloEditorView: View {
 
     private func updateSelectedNote(change: (inout SoloNote) -> Void) {
         if selectedNotes.count == 1, let index = soloSegment.notes.firstIndex(where: { $0.id == selectedNotes.first! }) {
+            let originalNote = soloSegment.notes[index]
             change(&soloSegment.notes[index])
+            
+            // Play sound feedback for the modified note
+            playNoteFeedback(note: soloSegment.notes[index])
         }
     }
 
@@ -198,6 +221,7 @@ struct SoloEditorView: View {
         
         let newNote = SoloNote(startTime: time, duration: gridSize, string: stringIndex, fret: currentFret, technique: currentTechnique)
         soloSegment.notes.append(newNote)
+        playNoteFeedback(note: newNote)
         recalculateDurations(forString: stringIndex)
         selectedNotes = [newNote.id]
     }
