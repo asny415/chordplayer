@@ -10,7 +10,7 @@ struct ChordDisplayInfo: Identifiable, Hashable {
 
 // MARK: - New Simplified, Uniquely Named Subviews
 
-/// A simple horizontal line with tick marks for the Karaoke view, with a highlighted active section.
+/// A static, colored timeline for the Karaoke view.
 private struct KaraokeTimelineRuler: View {
     let beatsPerMeasure: Double
     let measureCount: Int
@@ -20,61 +20,41 @@ private struct KaraokeTimelineRuler: View {
             let totalWidth = geometry.size.width
             let measureWidth = totalWidth / CGFloat(measureCount)
             
-            // Draw the second, inactive part of the ruler first
-            Path { path in
-                path.move(to: CGPoint(x: measureWidth, y: 0))
-                path.addLine(to: CGPoint(x: totalWidth, y: 0))
-                
-                // Ticks for the second measure
-                for i in 1...Int(beatsPerMeasure) {
-                    let beatWidth = measureWidth / CGFloat(beatsPerMeasure)
-                    let x = measureWidth + (CGFloat(i) * beatWidth)
-                    path.move(to: CGPoint(x: x, y: -2))
-                    path.addLine(to: CGPoint(x: x, y: 2))
+            ZStack(alignment: .leading) {
+                // Layer 1: Gray bar for the next measure
+                Path { path in
+                    path.move(to: CGPoint(x: measureWidth, y: 0))
+                    path.addLine(to: CGPoint(x: totalWidth, y: 0))
                 }
-                path.move(to: CGPoint(x: totalWidth, y: -4))
-                path.addLine(to: CGPoint(x: totalWidth, y: 4))
-            }
-            .stroke(Color.gray.opacity(0.7), lineWidth: 1)
+                .stroke(Color.gray.opacity(0.5), lineWidth: 1.5)
 
-            // Draw the first, active part of the ruler
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: 0))
-                path.addLine(to: CGPoint(x: measureWidth, y: 0))
-                
-                // Ticks for the first measure
-                for i in 0...Int(beatsPerMeasure) {
-                    let beatWidth = measureWidth / CGFloat(beatsPerMeasure)
-                    let x = CGFloat(i) * beatWidth
-                    path.move(to: CGPoint(x: x, y: -2))
-                    path.addLine(to: CGPoint(x: x, y: 2))
+                // Layer 2: Green bar for the current measure
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: 0))
+                    path.addLine(to: CGPoint(x: measureWidth, y: 0))
                 }
-                path.move(to: CGPoint(x: 0, y: -4))
-                path.addLine(to: CGPoint(x: 0, y: 4))
-                path.move(to: CGPoint(x: measureWidth, y: -4))
-                path.addLine(to: CGPoint(x: measureWidth, y: 4))
+                .stroke(Color.green, lineWidth: 1.5)
+                
+                // Layer 3: Ticks for all measures, drawn on top
+                Path { path in
+                    for i in 0...measureCount {
+                        let x = CGFloat(i) * measureWidth
+                        path.move(to: CGPoint(x: x, y: -4))
+                        path.addLine(to: CGPoint(x: x, y: 4))
+                    }
+                    for i in 0..<(Int(beatsPerMeasure) * measureCount) {
+                        let beatWidth = measureWidth / CGFloat(beatsPerMeasure)
+                        let x = CGFloat(i) * beatWidth
+                        path.move(to: CGPoint(x: x, y: -2))
+                        path.addLine(to: CGPoint(x: x, y: 2))
+                    }
+                }
+                .stroke(Color.white.opacity(0.7), lineWidth: 1)
             }
-            .stroke(Color.cyan, lineWidth: 1.5) // Use a distinct color and slightly thicker line
         }
         .frame(height: 10)
     }
 }
-
-/// A small triangle playhead indicator that points upwards.
-private struct KaraokePlayheadIndicator: View {
-    var body: some View {
-        Path { path in
-            path.move(to: CGPoint(x: 5, y: 0)) // The tip
-            path.addLine(to: CGPoint(x: 10, y: 8)) // Bottom-right
-            path.addLine(to: CGPoint(x: 0, y: 8)) // Bottom-left
-            path.closeSubpath()
-        }
-        .fill(Color.yellow)
-        .frame(width: 10, height: 8)
-        .shadow(color: .black.opacity(0.4), radius: 2, y: -1)
-    }
-}
-
 
 // MARK: - Main Karaoke Chords View
 
@@ -125,11 +105,8 @@ struct KaraokeChordsView: View {
         GeometryReader { geometry in
             let totalWidth = geometry.size.width * 0.8
             let measureWidth = totalWidth / 2
-            
-            let progressInMeasure = (playbackPosition - currentMeasureStartBeat) / beatsPerMeasure
-            let playheadX = measureWidth * CGFloat(progressInMeasure)
 
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
                 // The two measures of chords
                 HStack(spacing: 0) {
                     MeasureChordsView(
@@ -147,20 +124,17 @@ struct KaraokeChordsView: View {
                     .frame(width: measureWidth)
                 }
                 .frame(width: totalWidth)
-                .padding(.bottom, 8) // Adjust padding for new internal layout of ChordDiagramView
                 
-                // New Timeline Ruler and Playhead
-                ZStack(alignment: .topLeading) {
-                    KaraokeTimelineRuler(beatsPerMeasure: beatsPerMeasure, measureCount: 2)
-                        .frame(width: totalWidth)
-                    
-                    KaraokePlayheadIndicator()
-                        .offset(x: playheadX - 5) // Center the triangle on the line
-                }
+                // New static Timeline Ruler
+                KaraokeTimelineRuler(
+                    beatsPerMeasure: beatsPerMeasure, 
+                    measureCount: 2
+                )
+                .frame(width: totalWidth)
             }
             .frame(maxWidth: .infinity)
         }
-        .frame(height: 165) // Adjusted height for new internal layout
+        .frame(height: 175)
         .onAppear(perform: updateChordData)
         .onChange(of: arrangement) { _ in updateChordData() }
     }
