@@ -26,20 +26,13 @@ private struct DynamicKaraokeRulerView: View {
             let progressWidth = measureWidth * progressInMeasure
 
             ZStack(alignment: .leading) {
-                // Layer 1: Background Lines
-                // Gray line for the entire length (next measure's default color)
+                // Layer 1: Background Line
+                // Gray line for the entire length
                 Path { path in
                     path.move(to: CGPoint(x: 0, y: 0))
                     path.addLine(to: CGPoint(x: totalWidth, y: 0))
                 }
                 .stroke(Color.gray.opacity(0.5), lineWidth: lineWidth)
-
-                // White line for the current measure (drawn on top of the gray)
-                Path { path in
-                    path.move(to: CGPoint(x: 0, y: 0))
-                    path.addLine(to: CGPoint(x: measureWidth, y: 0))
-                }
-                .stroke(Color.white, lineWidth: lineWidth)
 
                 // Layer 2: Animated Progress Line (Subtle Green)
                 Path { path in
