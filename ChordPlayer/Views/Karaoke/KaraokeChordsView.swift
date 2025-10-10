@@ -160,7 +160,7 @@ struct KaraokeChordsView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .frame(height: 155) // Adjusted height for larger diagrams
+        .frame(height: 175) // Adjusted height for larger diagrams + chord names
         .onAppear(perform: updateChordData)
         .onChange(of: arrangement) { _ in updateChordData() }
     }
@@ -218,9 +218,13 @@ private struct MeasureChordsView: View {
                     let clampedStart = max(0, chordStartInMeasure)
                     let xPosition = (clampedStart / beatsPerMeasure) * geometry.size.width
                     
-                    VStack {
+                    VStack(spacing: 4) {
                         ChordDiagramView(chord: chordInfo.chord, color: .primary)
                             .frame(width: 100, height: 117) // Increased size again
+                        
+                        Text(chordInfo.chord.name)
+                            .font(.system(.callout, design: .monospaced).weight(.semibold))
+                            .foregroundColor(.secondary)
                     }
                     .offset(x: xPosition)
                 }
