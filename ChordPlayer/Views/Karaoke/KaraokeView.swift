@@ -62,7 +62,9 @@ struct KaraokeLineView: View {
     }
 
     private func calculateMaskWidth() -> CGFloat {
-        let lookaheadTime = playbackTime + 1.0 // Apply 1-beat lookahead
+        let tempo = appData.preset?.bpm ?? 120.0
+        let lookaheadInBeats = 0.5 * (tempo / 60.0)
+        let lookaheadTime = playbackTime + lookaheadInBeats
 
         // Basic guards
         guard let firstWord = line.words.first else { return 0 }
