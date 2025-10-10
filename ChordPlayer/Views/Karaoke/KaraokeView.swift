@@ -62,19 +62,21 @@ struct KaraokeLineView: View {
     }
 
     private func calculateMaskWidth() -> CGFloat {
+        let lookaheadTime = playbackTime + 1.0 // Apply 1-beat lookahead
+        
         guard let firstWord = line.words.first else { return 0 }
         let fullWidth = estimateWidth(for: line.lineText)
         
-        if playbackTime < firstWord.startTime { return 0 }
-        if playbackTime >= line.endTime { return fullWidth }
+        if lookaheadTime < firstWord.startTime { return 0 }
+        if lookaheadTime >= line.endTime { return fullWidth }
 
         var accumulatedWidth: CGFloat = 0
         for word in line.words {
-            if playbackTime >= word.startTime + word.duration {
+            if lookaheadTime >= word.startTime + word.duration {
                 accumulatedWidth += estimateWidth(for: word.text)
-            } else if playbackTime >= word.startTime && playbackTime < word.startTime + word.duration {
+            } else if lookaheadTime >= word.startTime && lookaheadTime < word.startTime + word.duration {
                 if word.duration > 0 {
-                    let progress = (playbackTime - word.startTime) / word.duration
+                    let progress = (lookaheadTime - word.startTime) / word.duration
                     accumulatedWidth += estimateWidth(for: word.text) * CGFloat(progress)
                 }
                 break

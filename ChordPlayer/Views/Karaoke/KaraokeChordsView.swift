@@ -8,6 +8,76 @@ struct ChordDisplayInfo: Identifiable, Hashable {
     let durationInBeats: Double
 }
 
+// MARK: - New Simplified, Uniquely Named Subviews
+
+/// A simple horizontal line with tick marks for the Karaoke view, with a highlighted active section.
+private struct KaraokeTimelineRuler: View {
+    let beatsPerMeasure: Double
+    let measureCount: Int
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let totalWidth = geometry.size.width
+            let measureWidth = totalWidth / CGFloat(measureCount)
+            
+            // Draw the second, inactive part of the ruler first
+            Path { path in
+                path.move(to: CGPoint(x: measureWidth, y: 0))
+                path.addLine(to: CGPoint(x: totalWidth, y: 0))
+                
+                // Ticks for the second measure
+                for i in 1...Int(beatsPerMeasure) {
+                    let beatWidth = measureWidth / CGFloat(beatsPerMeasure)
+                    let x = measureWidth + (CGFloat(i) * beatWidth)
+                    path.move(to: CGPoint(x: x, y: -2))
+                    path.addLine(to: CGPoint(x: x, y: 2))
+                }
+                path.move(to: CGPoint(x: totalWidth, y: -4))
+                path.addLine(to: CGPoint(x: totalWidth, y: 4))
+            }
+            .stroke(Color.gray.opacity(0.7), lineWidth: 1)
+
+            // Draw the first, active part of the ruler
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 0))
+                path.addLine(to: CGPoint(x: measureWidth, y: 0))
+                
+                // Ticks for the first measure
+                for i in 0...Int(beatsPerMeasure) {
+                    let beatWidth = measureWidth / CGFloat(beatsPerMeasure)
+                    let x = CGFloat(i) * beatWidth
+                    path.move(to: CGPoint(x: x, y: -2))
+                    path.addLine(to: CGPoint(x: x, y: 2))
+                }
+                path.move(to: CGPoint(x: 0, y: -4))
+                path.addLine(to: CGPoint(x: 0, y: 4))
+                path.move(to: CGPoint(x: measureWidth, y: -4))
+                path.addLine(to: CGPoint(x: measureWidth, y: 4))
+            }
+            .stroke(Color.cyan, lineWidth: 1.5) // Use a distinct color and slightly thicker line
+        }
+        .frame(height: 10)
+    }
+}
+
+/// A small triangle playhead indicator that points upwards.
+private struct KaraokePlayheadIndicator: View {
+    var body: some View {
+        Path { path in
+            path.move(to: CGPoint(x: 5, y: 0)) // The tip
+            path.addLine(to: CGPoint(x: 10, y: 8)) // Bottom-right
+            path.addLine(to: CGPoint(x: 0, y: 8)) // Bottom-left
+            path.closeSubpath()
+        }
+        .fill(Color.yellow)
+        .frame(width: 10, height: 8)
+        .shadow(color: .black.opacity(0.4), radius: 2, y: -1)
+    }
+}
+
+
+// MARK: - Main Karaoke Chords View
+
 struct KaraokeChordsView: View {
     @EnvironmentObject var appData: AppData
     let playbackPosition: Double
@@ -23,23 +93,18 @@ struct KaraokeChordsView: View {
         Double(timeSignature.beatsPerMeasure)
     }
     
-    /// Gets the chords for a specific measure, handling carry-over chords.
     private func chords(forMeasureStartingAt measureStartBeat: Double) -> [ChordDisplayInfo] {
-        // Find all chords that explicitly start within this measure.
         var chordsInMeasure = allChords.filter {
             $0.startBeat >= measureStartBeat && $0.startBeat < (measureStartBeat + beatsPerMeasure)
         }
         
-        // Check if a chord needs to be carried over from a previous measure.
         let hasChordOnFirstBeat = chordsInMeasure.contains { $0.startBeat == measureStartBeat }
         
         if !hasChordOnFirstBeat {
-            // Find the last chord that started before this measure.
             if let carryOverChord = allChords.last(where: { $0.startBeat < measureStartBeat }) {
-                // Create a new display info for the carry-over chord, starting at the beginning of this measure.
                 let carriedOverInfo = ChordDisplayInfo(
                     chord: carryOverChord.chord,
-                    startBeat: measureStartBeat, // Position it visually at the start
+                    startBeat: measureStartBeat,
                     durationInBeats: carryOverChord.durationInBeats
                 )
                 chordsInMeasure.insert(carriedOverInfo, at: 0)
@@ -58,43 +123,44 @@ struct KaraokeChordsView: View {
         let nextMeasureChords = chords(forMeasureStartingAt: nextMeasureStartBeat)
 
         GeometryReader { geometry in
-            let timelineHeight: CGFloat = 100
             let totalWidth = geometry.size.width * 0.8
             let measureWidth = totalWidth / 2
             
             let progressInMeasure = (playbackPosition - currentMeasureStartBeat) / beatsPerMeasure
             let playheadX = measureWidth * CGFloat(progressInMeasure)
 
-            HStack(spacing: 0) {
-                MeasureChordsView(
-                    chords: currentMeasureChords,
-                    measureStartBeat: currentMeasureStartBeat,
-                    beatsPerMeasure: beatsPerMeasure,
-                    isCurrent: true
-                )
-                .frame(width: measureWidth)
+            VStack(spacing: 0) {
+                // The two measures of chords
+                HStack(spacing: 0) {
+                    MeasureChordsView(
+                        chords: currentMeasureChords,
+                        measureStartBeat: currentMeasureStartBeat,
+                        beatsPerMeasure: beatsPerMeasure
+                    )
+                    .frame(width: measureWidth)
+                    
+                    MeasureChordsView(
+                        chords: nextMeasureChords,
+                        measureStartBeat: nextMeasureStartBeat,
+                        beatsPerMeasure: beatsPerMeasure
+                    )
+                    .frame(width: measureWidth)
+                }
+                .frame(width: totalWidth)
+                .padding(.bottom, 4) // Space for the playhead triangle
                 
-                MeasureChordsView(
-                    chords: nextMeasureChords,
-                    measureStartBeat: nextMeasureStartBeat,
-                    beatsPerMeasure: beatsPerMeasure,
-                    isCurrent: false
-                )
-                .frame(width: measureWidth)
+                // New Timeline Ruler and Playhead
+                ZStack(alignment: .topLeading) {
+                    KaraokeTimelineRuler(beatsPerMeasure: beatsPerMeasure, measureCount: 2)
+                        .frame(width: totalWidth)
+                    
+                    KaraokePlayheadIndicator()
+                        .offset(x: playheadX - 5) // Center the triangle on the line
+                }
             }
-            .frame(width: totalWidth, height: timelineHeight)
-            .background(Color.black.opacity(0.3))
-            .cornerRadius(8)
-            .overlay(
-                Rectangle()
-                    .fill(Color.yellow)
-                    .frame(width: 2)
-                    .offset(x: playheadX)
-                , alignment: .leading
-            )
             .frame(maxWidth: .infinity)
         }
-        .frame(height: 120)
+        .frame(height: 155) // Adjusted height for larger diagrams
         .onAppear(perform: updateChordData)
         .onChange(of: arrangement) { _ in updateChordData() }
     }
@@ -137,44 +203,24 @@ struct KaraokeChordsView: View {
     }
 }
 
+// MARK: - Simplified Measure Chords View
+
 private struct MeasureChordsView: View {
     let chords: [ChordDisplayInfo]
     let measureStartBeat: Double
     let beatsPerMeasure: Double
-    let isCurrent: Bool
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottomLeading) {
-                Rectangle()
-                    .fill(isCurrent ? Color.gray.opacity(0.4) : Color.gray.opacity(0.2))
-                
-                Path { path in
-                    for i in 1..<Int(beatsPerMeasure) {
-                        let x = (CGFloat(i) / CGFloat(beatsPerMeasure)) * geometry.size.width
-                        path.move(to: CGPoint(x: x, y: 0))
-                        path.addLine(to: CGPoint(x: x, y: 8))
-                    }
-                }
-                .stroke(isCurrent ? Color.white.opacity(0.5) : Color.white.opacity(0.3), lineWidth: 1)
-                .frame(height: 8)
-
                 ForEach(chords) { chordInfo in
                     let chordStartInMeasure = chordInfo.startBeat - measureStartBeat
-                    // Ensure chord start is not negative if it's a carry-over
                     let clampedStart = max(0, chordStartInMeasure)
                     let xPosition = (clampedStart / beatsPerMeasure) * geometry.size.width
                     
-                    VStack(spacing: 2) {
-                        Text(chordInfo.chord.name)
-                            .font(.caption)
-                            .foregroundColor(isCurrent ? .white : .gray)
-                            .padding(.horizontal, 4)
-                            .background(isCurrent ? Color.blue.opacity(0.7) : Color.gray.opacity(0.5))
-                            .cornerRadius(4)
-                        
-                        ChordDiagramView(chord: chordInfo.chord, color: isCurrent ? .white : .gray)
-                            .frame(width: 60, height: 70)
+                    VStack {
+                        ChordDiagramView(chord: chordInfo.chord, color: .primary)
+                            .frame(width: 100, height: 117) // Increased size again
                     }
                     .offset(x: xPosition)
                 }

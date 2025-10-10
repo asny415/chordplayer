@@ -378,8 +378,6 @@ struct SoloToolbar: View {
     let onPlay: () -> Void
     let onSetFret: () -> Void
     
-    private let durations: [(String, Double)] = [("1/1", 1.0), ("1/2", 0.5), ("1/4", 0.25), ("1/8", 0.125), ("1/16", 0.0625)]
-    
     var body: some View {
         HStack(spacing: 20) {
             Button(action: onPlay) {
@@ -409,8 +407,8 @@ struct SoloToolbar: View {
 
             HStack(spacing: 15) {
                 Picker("Grid", selection: $gridSize) {
-                    ForEach(durations, id: \.1) { name, value in
-                        Label(name, systemImage: "squareshape.split.2x2").tag(value)
+                    ForEach(GridResolution.allCases, id: \.self) { resolution in
+                        Text(resolution.rawValue).tag(1.0 / Double(resolution.stepsPerBeat))
                     }
                 }.frame(minWidth: 80).help("Grid Snap")
                 

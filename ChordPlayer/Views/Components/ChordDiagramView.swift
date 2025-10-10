@@ -36,27 +36,39 @@ struct ChordDiagramView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let baseWidth = geometry.size.width * 0.85
-            let stringSpacing = baseWidth / 5
+            let fretNumberWidth = geometry.size.width * 0.15
+            let diagramWidth = geometry.size.width * 0.85
+            
+            let stringSpacing = diagramWidth / 5
             let fretSpacing = geometry.size.height / CGFloat(fretCount + 2)
 
-            ZStack(alignment: .topLeading) {
-                drawGrid(width: baseWidth, height: geometry.size.height, stringSpacing: stringSpacing, fretSpacing: fretSpacing)
-                drawIndicators(width: baseWidth, stringSpacing: stringSpacing, fretSpacing: fretSpacing)
-                drawDots(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
-
+            HStack(alignment: .top, spacing: 0) {
+                // Fret number view on the left
                 if baseFret > 1 {
-                    Text("\(baseFret)fr")
+                    Text("\(baseFret)")
                         .font(.system(size: fretSpacing * 0.6, weight: .semibold))
                         .foregroundColor(color)
-                        .position(x: geometry.size.width * 0.05, y: fretSpacing * 1.5)
+                        .frame(width: fretNumberWidth, alignment: .trailing)
+                        .padding(.trailing, 2)
+                        .offset(y: fretSpacing * 1.4)
+                } else {
+                    // Placeholder to maintain layout consistency
+                    Spacer().frame(width: fretNumberWidth + 2)
                 }
+                
+                // Main diagram grid on the right
+                ZStack(alignment: .topLeading) {
+                    drawGrid(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
+                    drawIndicators(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
+                    drawDots(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
+                }
+                .frame(width: diagramWidth)
             }
         }
         .aspectRatio(5/6, contentMode: .fit)
     }
 
-    private func drawGrid(width: CGFloat, height: CGFloat, stringSpacing: CGFloat, fretSpacing: CGFloat) -> some View {
+    private func drawGrid(stringSpacing: CGFloat, fretSpacing: CGFloat) -> some View {
         Path { path in
             let startX = (fretSpacing / 2)
             for i in 0..<6 {
@@ -73,7 +85,7 @@ struct ChordDiagramView: View {
         .stroke(color, lineWidth: 0.7)
     }
 
-    private func drawIndicators(width: CGFloat, stringSpacing: CGFloat, fretSpacing: CGFloat) -> some View {
+    private func drawIndicators(stringSpacing: CGFloat, fretSpacing: CGFloat) -> some View {
         HStack(spacing: 0) {
             ForEach(0..<6, id: \.self) { i in
                 let fret = chord.frets.indices.contains(i) ? chord.frets[i] : -1
