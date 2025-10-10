@@ -516,12 +516,22 @@ struct TimelineEventView: View {
             }
             
             if type == .chord, let chord = appData.preset?.chords.first(where: { $0.id == event.resourceId }) {
-                VStack {
-                    Text(name).font(.callout).fontWeight(.semibold)
-                    ChordDiagramView(chord: chord, color: .white.opacity(0.8))
+                GeometryReader { geometry in
+                    if geometry.size.width > 35 {
+                        VStack {
+                            Text(name).font(.callout).fontWeight(.semibold)
+                            ChordDiagramView(chord: chord, color: .white.opacity(0.8))
+                        }
+                        .padding(.horizontal, 4)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        Text(name)
+                            .font(.system(.caption, design: .monospaced))
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 4)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
-                .padding(.horizontal, 4)
-                .frame(maxWidth: .infinity)
             } else {
                 Text(name).font(.caption).padding(.horizontal, 4)
             }
@@ -648,7 +658,7 @@ struct ResourceLibraryView: View {
                 }
                 ScrollView {
                     if let chords = appData.preset?.chords, !chords.isEmpty {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 75))], spacing: 8) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 60))], spacing: 8) {
                             ForEach(chords) { chord in
                                 ResourceChordButton(chord: chord, isSelected: isSelectedChord(chord.id), onDelete: { onDeleteChord(chord.id) })
                                     .onDrag {
@@ -844,10 +854,10 @@ struct ResourceChordButton: View {
     var body: some View {
         VStack(spacing: 2) {
             Text(chord.name).font(.caption).fontWeight(.semibold)
-            ChordDiagramView(chord: chord, color: .primary).frame(height: 30)
+            ChordDiagramView(chord: chord, color: .primary)
         }
         .padding(4)
-        .frame(width: 80, height: 50)
+        .frame(width: 60, height: 70)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected ? Color.yellow.opacity(0.3) : Color(NSColor.controlBackgroundColor))
