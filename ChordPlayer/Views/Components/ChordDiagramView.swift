@@ -4,15 +4,17 @@ struct ChordDiagramView: View {
     let chord: Chord
     let color: Color
     let showName: Bool
+    let alpha: Double
 
     private let fretCount = 4 // Display 4 frets for a more compact view
     private var baseFret: Int
     private var relativeFrets: [Int] = []
 
-    init(chord: Chord, color: Color, showName: Bool = false) {
+    init(chord: Chord, color: Color, showName: Bool = false, alpha: Double = 1.0) {
         self.chord = chord
         self.color = color
         self.showName = showName
+        self.alpha = alpha
 
         let intFrets = chord.frets.filter { $0 > 0 }
 
@@ -48,6 +50,16 @@ struct ChordDiagramView: View {
             let stringSpacing = diagramGridWidth / 5
 
             VStack(alignment: .leading, spacing: 0) {
+                // MARK: - Chord Name
+                if showName {
+                    Text(chord.name)
+                        .font(.system(.callout, design: .monospaced).weight(.semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: diagramGridWidth, alignment: .center) // 1. Set frame to grid width, center text inside
+                        .offset(x: fretNumberWidth + 2) // 2. Offset the whole frame to align with grid
+                        .frame(height: nameHeight)
+                }
+                
                 // MARK: - Diagram
                 HStack(alignment: .top, spacing: 0) {
                     // Fret number view on the left
@@ -72,19 +84,10 @@ struct ChordDiagramView: View {
                     .frame(width: diagramGridWidth)
                 }
                 .frame(height: diagramHeight)
-
-                // MARK: - Chord Name
-                if showName {
-                    Text(chord.name)
-                        .font(.system(.callout, design: .monospaced).weight(.semibold))
-                        .foregroundColor(.secondary)
-                        .frame(width: diagramGridWidth, alignment: .center) // 1. Set frame to grid width, center text inside
-                        .offset(x: fretNumberWidth + 2) // 2. Offset the whole frame to align with grid
-                        .frame(height: nameHeight)
-                }
             }
         }
         .aspectRatio(showName ? 5/7 : 5/6, contentMode: .fit)
+        .opacity(alpha)
     }
 
     private func drawGrid(stringSpacing: CGFloat, fretSpacing: CGFloat) -> some View {

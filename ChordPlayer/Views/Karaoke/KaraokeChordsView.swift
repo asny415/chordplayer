@@ -112,14 +112,16 @@ struct KaraokeChordsView: View {
                     MeasureChordsView(
                         chords: currentMeasureChords,
                         measureStartBeat: currentMeasureStartBeat,
-                        beatsPerMeasure: beatsPerMeasure
+                        beatsPerMeasure: beatsPerMeasure,
+                        alpha: 1.0
                     )
                     .frame(width: measureWidth)
                     
                     MeasureChordsView(
                         chords: nextMeasureChords,
                         measureStartBeat: nextMeasureStartBeat,
-                        beatsPerMeasure: beatsPerMeasure
+                        beatsPerMeasure: beatsPerMeasure,
+                        alpha: 0.5
                     )
                     .frame(width: measureWidth)
                 }
@@ -183,6 +185,7 @@ private struct MeasureChordsView: View {
     let chords: [ChordDisplayInfo]
     let measureStartBeat: Double
     let beatsPerMeasure: Double
+    let alpha: Double
 
     var body: some View {
         GeometryReader { geometry in
@@ -193,7 +196,7 @@ private struct MeasureChordsView: View {
                     let xPosition = (clampedStart / beatsPerMeasure) * geometry.size.width
                     
                     // The VStack and Text are removed. ChordDiagramView is now the only view here.
-                    ChordDiagramView(chord: chordInfo.chord, color: .primary, showName: true)
+                    ChordDiagramView(chord: chordInfo.chord, color: .primary, showName: true, alpha: alpha)
                         .frame(width: 100, height: 140)
                         .offset(x: xPosition)
                 }
