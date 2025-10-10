@@ -3,14 +3,16 @@ import SwiftUI
 struct ChordDiagramView: View {
     let chord: Chord
     let color: Color
+    let showName: Bool
 
     private let fretCount = 4 // Display 4 frets for a more compact view
     private var baseFret: Int
     private var relativeFrets: [Int] = []
 
-    init(chord: Chord, color: Color) {
+    init(chord: Chord, color: Color, showName: Bool = false) {
         self.chord = chord
         self.color = color
+        self.showName = showName
 
         let intFrets = chord.frets.filter { $0 > 0 }
 
@@ -37,35 +39,52 @@ struct ChordDiagramView: View {
     var body: some View {
         GeometryReader { geometry in
             let fretNumberWidth = geometry.size.width * 0.15
-            let diagramWidth = geometry.size.width * 0.85
+            let diagramGridWidth = geometry.size.width * 0.85
             
-            let stringSpacing = diagramWidth / 5
-            let fretSpacing = geometry.size.height / CGFloat(fretCount + 2)
+            let diagramHeight = showName ? geometry.size.height * 0.8 : geometry.size.height
+            let nameHeight = showName ? geometry.size.height * 0.2 : 0
+            
+            let fretSpacing = diagramHeight / CGFloat(fretCount + 1)
+            let stringSpacing = diagramGridWidth / 5
 
-            HStack(alignment: .top, spacing: 0) {
-                // Fret number view on the left
-                if baseFret > 1 {
-                    Text("\(baseFret)")
-                        .font(.system(size: fretSpacing * 0.6, weight: .semibold))
-                        .foregroundColor(color)
-                        .frame(width: fretNumberWidth, alignment: .trailing)
-                        .padding(.trailing, 2)
-                        .offset(y: fretSpacing * 1.4)
-                } else {
-                    // Placeholder to maintain layout consistency
-                    Spacer().frame(width: fretNumberWidth + 2)
+            VStack(alignment: .leading, spacing: 0) {
+                // MARK: - Diagram
+                HStack(alignment: .top, spacing: 0) {
+                    // Fret number view on the left
+                    if baseFret > 1 {
+                        Text("\(baseFret)")
+                            .font(.system(size: fretSpacing * 0.6, weight: .semibold))
+                            .foregroundColor(color)
+                            .frame(width: fretNumberWidth, alignment: .trailing)
+                            .padding(.trailing, 2)
+                            .offset(y: fretSpacing * 0.9)
+                    } else {
+                        // Placeholder to maintain layout consistency
+                        Spacer().frame(width: fretNumberWidth + 2)
+                    }
+                    
+                    // Main diagram grid on the right
+                    ZStack(alignment: .topLeading) {
+                        drawGrid(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
+                        drawIndicators(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
+                        drawDots(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
+                    }
+                    .frame(width: diagramGridWidth)
                 }
-                
-                // Main diagram grid on the right
-                ZStack(alignment: .topLeading) {
-                    drawGrid(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
-                    drawIndicators(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
-                    drawDots(stringSpacing: stringSpacing, fretSpacing: fretSpacing)
+                .frame(height: diagramHeight)
+
+                // MARK: - Chord Name
+                if showName {
+                    Text(chord.name)
+                        .font(.system(.callout, design: .monospaced).weight(.semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: diagramGridWidth, alignment: .center) // 1. Set frame to grid width, center text inside
+                        .offset(x: fretNumberWidth + 2) // 2. Offset the whole frame to align with grid
+                        .frame(height: nameHeight)
                 }
-                .frame(width: diagramWidth)
             }
         }
-        .aspectRatio(5/6, contentMode: .fit)
+        .aspectRatio(showName ? 5/7 : 5/6, contentMode: .fit)
     }
 
     private func drawGrid(stringSpacing: CGFloat, fretSpacing: CGFloat) -> some View {

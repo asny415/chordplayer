@@ -147,7 +147,7 @@ struct KaraokeChordsView: View {
                     .frame(width: measureWidth)
                 }
                 .frame(width: totalWidth)
-                .padding(.bottom, 4) // Space for the playhead triangle
+                .padding(.bottom, 8) // Adjust padding for new internal layout of ChordDiagramView
                 
                 // New Timeline Ruler and Playhead
                 ZStack(alignment: .topLeading) {
@@ -160,7 +160,7 @@ struct KaraokeChordsView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .frame(height: 175) // Adjusted height for larger diagrams + chord names
+        .frame(height: 165) // Adjusted height for new internal layout
         .onAppear(perform: updateChordData)
         .onChange(of: arrangement) { _ in updateChordData() }
     }
@@ -218,15 +218,10 @@ private struct MeasureChordsView: View {
                     let clampedStart = max(0, chordStartInMeasure)
                     let xPosition = (clampedStart / beatsPerMeasure) * geometry.size.width
                     
-                    VStack(spacing: 4) {
-                        ChordDiagramView(chord: chordInfo.chord, color: .primary)
-                            .frame(width: 100, height: 117) // Increased size again
-                        
-                        Text(chordInfo.chord.name)
-                            .font(.system(.callout, design: .monospaced).weight(.semibold))
-                            .foregroundColor(.secondary)
-                    }
-                    .offset(x: xPosition)
+                    // The VStack and Text are removed. ChordDiagramView is now the only view here.
+                    ChordDiagramView(chord: chordInfo.chord, color: .primary, showName: true)
+                        .frame(width: 100, height: 140)
+                        .offset(x: xPosition)
                 }
             }
         }
