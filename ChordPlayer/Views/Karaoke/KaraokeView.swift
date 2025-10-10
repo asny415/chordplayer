@@ -63,26 +63,36 @@ struct KaraokeLineView: View {
 
     private func calculateMaskWidth() -> CGFloat {
         let lookaheadTime = playbackTime + 1.0 // Apply 1-beat lookahead
-        
-        guard let firstWord = line.words.first else { return 0 }
-        let fullWidth = estimateWidth(for: line.lineText)
-        
-        if lookaheadTime < firstWord.startTime { return 0 }
-        if lookaheadTime >= line.endTime { return fullWidth }
 
-        var accumulatedWidth: CGFloat = 0
-        for word in line.words {
-            if lookaheadTime >= word.startTime + word.duration {
-                accumulatedWidth += estimateWidth(for: word.text)
-            } else if lookaheadTime >= word.startTime && lookaheadTime < word.startTime + word.duration {
-                if word.duration > 0 {
-                    let progress = (lookaheadTime - word.startTime) / word.duration
-                    accumulatedWidth += estimateWidth(for: word.text) * CGFloat(progress)
-                }
-                break
+        // Basic guards
+        guard let firstWord = line.words.first else { return 0 }
+        if lookaheadTime < firstWord.startTime { return 0 }
+
+        // CORRECTED: Calculate fullWidth by summing individual word widths to match the progressive calculation.
+        let fullWidth = line.words.reduce(0) { $0 + estimateWidth(for: $1.text) }
+
+        // Find the index of the word that is currently being highlighted.
+        // If no word is found, it means we are past the end of the line.
+        guard let activeWordIndex = line.words.firstIndex(where: { lookaheadTime < $0.startTime + $0.duration }) else {
+            return fullWidth
+        }
+
+        // Calculate the total width of all words before the active one.
+        let widthBeforeActive = line.words.prefix(activeWordIndex).reduce(0) { partialResult, word in
+            partialResult + estimateWidth(for: word.text)
+        }
+
+        // Calculate the partial width of the currently active word.
+        let activeWord = line.words[activeWordIndex]
+        var partialWidthOfActiveWord: CGFloat = 0
+        if lookaheadTime >= activeWord.startTime { // Ensure we don't highlight words we haven't reached yet
+            if activeWord.duration > 0 {
+                let progress = (lookaheadTime - activeWord.startTime) / activeWord.duration
+                partialWidthOfActiveWord = estimateWidth(for: activeWord.text) * CGFloat(progress)
             }
         }
-        return accumulatedWidth
+        
+        return widthBeforeActive + partialWidthOfActiveWord
     }
 
     private func estimateWidth(for text: String) -> CGFloat {
