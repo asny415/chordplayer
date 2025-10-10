@@ -8,34 +8,48 @@ struct ChordDisplayInfo: Identifiable, Hashable {
     let durationInBeats: Double
 }
 
-// MARK: - New Simplified, Uniquely Named Subviews
 
-/// A static, colored timeline for the Karaoke view.
-private struct KaraokeTimelineRuler: View {
+/// A dynamic, animated timeline for the Karaoke view, drawn with lines.
+private struct DynamicKaraokeRulerView: View {
+    let playbackPosition: Double
     let beatsPerMeasure: Double
-    let measureCount: Int
-    
+    private let measureCount = 2
+    private let lineWidth: CGFloat = 2.0 // Define line width for consistency
+
     var body: some View {
         GeometryReader { geometry in
             let totalWidth = geometry.size.width
             let measureWidth = totalWidth / CGFloat(measureCount)
             
+            // Calculate progress within the current measure (0.0 to 1.0)
+            let progressInMeasure = (playbackPosition / beatsPerMeasure).truncatingRemainder(dividingBy: 1.0)
+            let progressWidth = measureWidth * progressInMeasure
+
             ZStack(alignment: .leading) {
-                // Layer 1: Gray bar for the next measure
+                // Layer 1: Background Lines
+                // Gray line for the entire length (next measure's default color)
                 Path { path in
-                    path.move(to: CGPoint(x: measureWidth, y: 0))
+                    path.move(to: CGPoint(x: 0, y: 0))
                     path.addLine(to: CGPoint(x: totalWidth, y: 0))
                 }
-                .stroke(Color.gray.opacity(0.5), lineWidth: 1.5)
+                .stroke(Color.gray.opacity(0.5), lineWidth: lineWidth)
 
-                // Layer 2: Green bar for the current measure
+                // White line for the current measure (drawn on top of the gray)
                 Path { path in
                     path.move(to: CGPoint(x: 0, y: 0))
                     path.addLine(to: CGPoint(x: measureWidth, y: 0))
                 }
-                .stroke(Color.green, lineWidth: 1.5)
-                
-                // Layer 3: Ticks for all measures, drawn on top
+                .stroke(Color.white, lineWidth: lineWidth)
+
+                // Layer 2: Animated Progress Line (Subtle Green)
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: 0))
+                    path.addLine(to: CGPoint(x: progressWidth, y: 0))
+                }
+                .stroke(Color.green.opacity(0.6), lineWidth: lineWidth)
+                .animation(.linear, value: progressInMeasure) // Key to smoothness
+
+                // Layer 3: Ticks (drawn on top of all lines)
                 Path { path in
                     for i in 0...measureCount {
                         let x = CGFloat(i) * measureWidth
@@ -127,10 +141,10 @@ struct KaraokeChordsView: View {
                 }
                 .frame(width: totalWidth)
                 
-                // New static Timeline Ruler
-                KaraokeTimelineRuler(
-                    beatsPerMeasure: beatsPerMeasure, 
-                    measureCount: 2
+                // Dynamic animated Timeline Ruler
+                DynamicKaraokeRulerView(
+                    playbackPosition: playbackPosition,
+                    beatsPerMeasure: beatsPerMeasure
                 )
                 .frame(width: totalWidth)
             }
