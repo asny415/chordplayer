@@ -13,6 +13,16 @@ class AppData: ObservableObject {
     @Published var currentlyPlayingChordName: String? = nil
     @Published var playingMode: PlayingMode = .manual
     
+    // Arrangement View Settings
+    let timelineScaleLevels: [Double] = Array(stride(from: 0.1, through: 2.0, by: 0.1))
+    @AppStorage("timelineScaleIndex") var timelineScaleIndex: Int = 9 // Default to 1.0 (100%) which is the 10th element (index 9)
+    var currentTimelineScale: Double {
+        guard timelineScaleIndex >= 0 && timelineScaleIndex < timelineScaleLevels.count else {
+            return 1.0 // Return default scale if index is out of bounds
+        }
+        return timelineScaleLevels[timelineScaleIndex]
+    }
+    
     // UI State for collapsible sections
     @AppStorage("showDrumPatternSectionByDefault") var showDrumPatternSectionByDefault: Bool = false
     @AppStorage("showSoloSegmentSectionByDefault") var showSoloSegmentSectionByDefault: Bool = false
