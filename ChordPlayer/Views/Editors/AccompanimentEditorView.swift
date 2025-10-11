@@ -689,7 +689,8 @@ struct ResourceLibraryView: View {
                             ForEach(patterns) { pattern in
                                 ResourcePatternButton(pattern: pattern, isSelected: isSelectedPattern(pattern.id), onDelete: { onDeletePattern(pattern.id) })
                                     .onDrag {
-                                        let beats = pattern.length / (pattern.resolution == .sixteenth ? 4 : 2)
+                                        // Correctly calculate duration in beats using the active resolution's steps per beat.
+                                        let beats = pattern.length / pattern.activeResolution.stepsPerBeat
                                         let dragData = DragData(source: .newResource, type: .pattern, resourceId: pattern.id, eventId: nil, durationInBeats: beats > 0 ? beats : 1)
                                         let provider = NSItemProvider()
                                         provider.registerCodable(dragData)
