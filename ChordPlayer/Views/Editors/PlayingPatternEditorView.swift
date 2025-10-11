@@ -48,6 +48,12 @@ struct PlayingPatternEditorView: View {
         } message: {
             Text("A pattern named '\(duplicateName)' already exists. Please choose a unique name.")
         }
+        .onAppear {
+            if isNew {
+                // Set the default length to one measure based on the current time signature
+                lengthInBeats.wrappedValue = appData.preset?.timeSignature.beatsPerMeasure ?? 4
+            }
+        }
     }
 
     // MARK: - Subviews
@@ -92,9 +98,17 @@ struct PlayingPatternEditorView: View {
 
     private var toolbarView: some View {
         HStack(spacing: 20) {
+            let beats = lengthInBeats.wrappedValue // Capture the beat count before any change
+            
             Picker("Resolution", selection: $pattern.activeResolution) {
                 ForEach(GridResolution.allCases) { res in Text(res.rawValue).tag(res) }
-            }.pickerStyle(.menu)
+            }
+            .pickerStyle(.menu)
+            .onChange(of: pattern.activeResolution) { _ in
+                // When resolution changes, maintain the same number of beats
+                // by recalculating the underlying total steps (pattern.length).
+                lengthInBeats.wrappedValue = beats
+            }
             
             Stepper("Length: \(lengthInBeats.wrappedValue) beats", value: lengthInBeats, in: 1...64)
             
