@@ -227,13 +227,20 @@ class ChordPlayer: ObservableObject {
             let adaptiveVelocity = calculateAdaptiveVelocity(baseVelocity: velocityWithDynamics, noteCount: activeNotesInStep.count)
             
             let sortedNotes = activeNotesInStep.sorted { $0.stringIndex > $1.stringIndex }
-            let isStrum = step.type == .strum
-            let strumDelayBeats = isStrum ? strumDelayInBeats(for: step.strumSpeed, bpm: preset.bpm) : (singleStepDurationBeats / Double(activeNotesInStep.count))
-            let strumDirectionSortedNotes = isStrum ? (step.strumDirection == .down ? sortedNotes : sortedNotes.reversed()) : sortedNotes
+            let strumDelayBeats: MusicTimeStamp
+            switch step.type {
+            case .strum:
+                strumDelayBeats = strumDelayInBeats(for: step.strumSpeed, bpm: preset.bpm)
+            case .arpeggio:
+                strumDelayBeats = 0.0 // For arpeggio, notes should play simultaneously
+            case .rest:
+                strumDelayBeats = 0.0 // Rest steps are skipped, but for completeness
+            }
+            let strumDirectionSortedNotes = (step.type == .strum) ? (step.strumDirection == .down ? sortedNotes : sortedNotes.reversed()) : sortedNotes
 
             for (noteIndex, noteItem) in strumDirectionSortedNotes.enumerated() {
                 let noteStartTimeBeat = patternStartBeat + (Double(stepIndex) * singleStepDurationBeats) + (Double(noteIndex) * strumDelayBeats)
-                let finalVelocity = isStrum ? adaptiveVelocity : velocityWithDynamics
+                let finalVelocity = (step.type == .strum) ? adaptiveVelocity : velocityWithDynamics
                 let technique = step.techniques[noteItem.stringIndex]
 
                 let temporalNote = TemporalNote(stringIndex: noteItem.stringIndex, startTime: noteStartTimeBeat, duration: 0, pitch: Int(noteItem.note), velocity: Int(finalVelocity), technique: technique)
