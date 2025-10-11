@@ -10,11 +10,11 @@ struct ChordEditorView: View {
     @State private var isPlaying = false
     @State private var fretPosition: Int = 1
 
-    private var isNewChord: Bool
+    @Binding var isNew: Bool
 
-    init(chord: Binding<Chord>, isNew: Bool, onSave: @escaping (Chord) -> Void, onCancel: @escaping () -> Void) {
+    init(chord: Binding<Chord>, isNew: Binding<Bool>, onSave: @escaping (Chord) -> Void, onCancel: @escaping () -> Void) {
         self._chord = chord
-        self.isNewChord = isNew
+        self._isNew = isNew
         self.onSave = onSave
         self.onCancel = onCancel
     }
@@ -49,7 +49,7 @@ struct ChordEditorView: View {
     
     private var headerView: some View {
         HStack {
-            Text(isNewChord ? "Create Custom Chord" : "Edit Chord")
+            Text(isNew ? "Create Custom Chord" : "Edit Chord")
                 .font(.title2).fontWeight(.bold)
             Spacer()
             Button("Cancel", role: .cancel) { onCancel() }

@@ -133,7 +133,7 @@ struct AccompanimentEditorView: View {
         .sheet(isPresented: $isShowingChordCreator) {
             ChordEditorView(
                 chord: $chordForEditing,
-                isNew: isEditingNewChord,
+                isNew: $isEditingNewChord,
                 onSave: { savedChord in
                     if isEditingNewChord {
                         appData.preset?.chords.append(savedChord)
@@ -149,6 +149,7 @@ struct AccompanimentEditorView: View {
                     isShowingChordCreator = false
                 }
             )
+            .id(chordForEditing.id)
         }
         .sheet(isPresented: $isShowingPatternEditor) {
             PlayingPatternEditorView(
@@ -173,7 +174,7 @@ struct AccompanimentEditorView: View {
                     isShowingPatternEditor = false
                 }
             )
-            .id(UUID())
+            .id(patternForEditing.id)
         }
         .alert("Cannot Delete", isPresented: $showInUseAlert) {
             Button("OK") { }

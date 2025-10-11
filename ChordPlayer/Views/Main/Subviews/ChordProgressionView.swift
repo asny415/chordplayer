@@ -66,7 +66,7 @@ struct ChordProgressionView: View {
 
         }
         .sheet(isPresented: $showChordEditor) {
-            ChordEditorView(chord: $chordToEdit, isNew: self.isNewChord, onSave: { savedChord in
+            ChordEditorView(chord: $chordToEdit, isNew: $isNewChord, onSave: { savedChord in
                 if let index = appData.preset?.chords.firstIndex(where: { $0.id == savedChord.id }) {
                     appData.preset?.chords[index] = savedChord
                 } else {
@@ -77,6 +77,7 @@ struct ChordProgressionView: View {
             }, onCancel: {
                 showChordEditor = false
             })
+            .id(chordToEdit.id)
         }
     }
     
