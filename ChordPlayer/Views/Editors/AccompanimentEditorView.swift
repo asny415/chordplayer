@@ -442,6 +442,11 @@ struct TrackHeadersView: View {
     }
 }
 
+private struct ViewOffsetKey: PreferenceKey {
+    static var defaultValue: CGPoint = .zero
+    static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) {}
+}
+
 struct TimelineContainerView: View {
     @Binding var segment: AccompanimentSegment
     let timeSignature: TimeSignature
@@ -458,6 +463,8 @@ struct TimelineContainerView: View {
     private var totalBeats: Int { segment.lengthInMeasures * timeSignature.beatsPerMeasure }
     private var totalWidth: CGFloat { CGFloat(totalBeats) * beatWidth * zoomLevel }
     private var secondsPerBeat: Double { 60.0 / (appData.preset?.bpm ?? 120.0) }
+    
+    @State private var visibleXRange: ClosedRange<CGFloat> = 0...0
 
     var body: some View {
         TimelineView(.animation) { context in
@@ -466,25 +473,41 @@ struct TimelineContainerView: View {
             HStack(spacing: 0) {
                 TrackHeadersView(trackHeight: trackHeight, headerHeight: headerHeight)
                 
-                ScrollView([.horizontal, .vertical]) {
-                    ZStack(alignment: .topLeading) {
-                        TimelineGridView(totalBeats: totalBeats, beatsPerMeasure: timeSignature.beatsPerMeasure, beatWidth: beatWidth, height: trackHeight * 2 + headerHeight, zoom: zoomLevel)
-                        TimelineHeaderView(totalMeasures: segment.lengthInMeasures, beatsPerMeasure: timeSignature.beatsPerMeasure, beatWidth: beatWidth, height: headerHeight, zoom: zoomLevel)
+                GeometryReader { geo in
+                    ScrollView([.horizontal, .vertical]) {
+                        ZStack(alignment: .topLeading) {
+                            Color.clear
+                                .frame(width: 1, height: 1)
+                                .background(
+                                    GeometryReader { proxy in
+                                        Color.clear.preference(key: ViewOffsetKey.self, value: proxy.frame(in: .named("scrollView")).origin)
+                                    }
+                                )
 
-                        VStack(alignment: .leading, spacing: 0) {
-                            TrackView(type: .chord, segment: $segment, timeSignature: timeSignature, height: trackHeight, beatWidth: beatWidth, zoom: zoomLevel, selectedEventId: $selectedEventId)
-                            TrackView(type: .pattern, segment: $segment, timeSignature: timeSignature, height: trackHeight, beatWidth: beatWidth, zoom: zoomLevel, selectedEventId: $selectedEventId)
+                            TimelineGridView(totalBeats: totalBeats, beatsPerMeasure: timeSignature.beatsPerMeasure, beatWidth: beatWidth, height: trackHeight * 2 + headerHeight, zoom: zoomLevel)
+                            TimelineHeaderView(totalMeasures: segment.lengthInMeasures, beatsPerMeasure: timeSignature.beatsPerMeasure, beatWidth: beatWidth, height: headerHeight, zoom: zoomLevel)
+
+                            VStack(alignment: .leading, spacing: 0) {
+                                TrackView(type: .chord, segment: $segment, timeSignature: timeSignature, height: trackHeight, beatWidth: beatWidth, zoom: zoomLevel, selectedEventId: $selectedEventId, visibleXRange: visibleXRange)
+                                TrackView(type: .pattern, segment: $segment, timeSignature: timeSignature, height: trackHeight, beatWidth: beatWidth, zoom: zoomLevel, selectedEventId: $selectedEventId, visibleXRange: visibleXRange)
+                            }
+                            .padding(.top, headerHeight)
+                            
+                            if let playheadInBeats = playheadInBeats {
+                                EditorPlayheadView(
+                                    position: CGFloat(playheadInBeats) * beatWidth * zoomLevel,
+                                    height: trackHeight * 2 + headerHeight
+                                )
+                            }
                         }
-                        .padding(.top, headerHeight)
-                        
-                        if let playheadInBeats = playheadInBeats {
-                            EditorPlayheadView(
-                                position: CGFloat(playheadInBeats) * beatWidth * zoomLevel,
-                                height: trackHeight * 2 + headerHeight
-                            )
-                        }
+                        .frame(width: totalWidth)
                     }
-                    .frame(width: totalWidth)
+                    .coordinateSpace(name: "scrollView")
+                    .onPreferenceChange(ViewOffsetKey.self) { offset in
+                        let startX = -offset.x
+                        let endX = startX + geo.size.width
+                        self.visibleXRange = startX...endX
+                    }
                 }
             }
         }
@@ -512,22 +535,29 @@ struct TrackView: View {
     let beatWidth: CGFloat
     let zoom: CGFloat
     @Binding var selectedEventId: UUID?
+    let visibleXRange: ClosedRange<CGFloat>
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             Rectangle().fill(type == .chord ? Color.blue.opacity(0.05) : Color.green.opacity(0.05))
             
             ForEach(0..<segment.measures.count, id: \.self) { measureIndex in
-                let measureStartBeat = measureIndex * timeSignature.beatsPerMeasure
-                let events = (type == .chord) ? segment.measures[measureIndex].chordEvents : segment.measures[measureIndex].patternEvents
+                let measureWidth = CGFloat(timeSignature.beatsPerMeasure) * beatWidth * zoom
+                let measureStartX = CGFloat(measureIndex) * measureWidth
                 
-                ForEach(events) { event in
-                    TimelineEventView(event: event, type: type, isSelected: selectedEventId == event.id)
-                        .frame(width: CGFloat(event.durationInBeats) * beatWidth * zoom)
-                        .offset(x: (CGFloat(measureStartBeat) + CGFloat(event.startBeat)) * beatWidth * zoom)
-                        .onTapGesture {
-                            selectedEventId = event.id
-                        }
+                // Check if the measure is within the visible range before processing its events
+                if measureStartX + measureWidth >= visibleXRange.lowerBound && measureStartX <= visibleXRange.upperBound {
+                    let measureStartBeat = measureIndex * timeSignature.beatsPerMeasure
+                    let events = (type == .chord) ? segment.measures[measureIndex].chordEvents : segment.measures[measureIndex].patternEvents
+                    
+                    ForEach(events) { event in
+                        TimelineEventView(event: event, type: type, isSelected: selectedEventId == event.id)
+                            .frame(width: CGFloat(event.durationInBeats) * beatWidth * zoom)
+                            .offset(x: (CGFloat(measureStartBeat) + CGFloat(event.startBeat)) * beatWidth * zoom)
+                            .onTapGesture {
+                                selectedEventId = event.id
+                            }
+                    }
                 }
             }
         }
