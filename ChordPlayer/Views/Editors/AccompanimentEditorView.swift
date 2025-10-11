@@ -14,6 +14,7 @@ struct AccompanimentEditorView: View {
 
     @EnvironmentObject var appData: AppData
     @EnvironmentObject var chordPlayer: ChordPlayer
+    @EnvironmentObject var settings: PatternEditorSettings
 
     @State private var zoomLevel: CGFloat = 1.0
     @State private var selectedEventId: UUID? // Can be either chord or pattern
@@ -24,8 +25,11 @@ struct AccompanimentEditorView: View {
     @State private var isShowingChordCreator = false
     @State private var isShowingPatternEditor = false
     
-    @State private var newChordForEditing = Chord(name: "New Chord", frets: [-1, -1, -1, -1, -1, -1], fingers: [0, 0, 0, 0, 0, 0])
-    @State private var newPatternForEditing = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .sixteenth)
+    @State private var chordForEditing = Chord(name: "New Chord", frets: [-1, -1, -1, -1, -1, -1], fingers: [0, 0, 0, 0, 0, 0])
+    @State private var patternForEditing = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .sixteenth)
+    @State private var isEditingNewChord = true
+    @State private var isEditingNewPattern = true
+
     
     @State private var showInUseAlert = false
     @State private var inUseAlertMessage = ""
@@ -81,9 +85,11 @@ struct AccompanimentEditorView: View {
                     ResourceLibraryView(
                         segment: $segment,
                         selectedEventId: $selectedEventId,
-                        isShowingChordCreator: $isShowingChordCreator,
-                        isShowingPatternEditor: $isShowingPatternEditor,
+                        onAddChord: addChord,
+                        onEditChord: editChord,
                         onDeleteChord: deleteChord,
+                        onAddPattern: addPattern,
+                        onEditPattern: editPattern,
                         onDeletePattern: deletePattern
                     )
                     TimelineContainerView(
@@ -126,43 +132,48 @@ struct AccompanimentEditorView: View {
         )
         .sheet(isPresented: $isShowingChordCreator) {
             ChordEditorView(
-                chord: $newChordForEditing,
-                isNew: true,
+                chord: $chordForEditing,
+                isNew: isEditingNewChord,
                 onSave: { savedChord in
-                    appData.preset?.chords.append(savedChord)
+                    if isEditingNewChord {
+                        appData.preset?.chords.append(savedChord)
+                    } else {
+                        if let index = appData.preset?.chords.firstIndex(where: { $0.id == savedChord.id }) {
+                            appData.preset?.chords[index] = savedChord
+                        }
+                    }
                     appData.saveChanges()
                     isShowingChordCreator = false
-                    // Reset for next time
-                    newChordForEditing = Chord(name: "New Chord", frets: [-1, -1, -1, -1, -1, -1], fingers: [0, 0, 0, 0, 0, 0])
                 },
                 onCancel: {
                     isShowingChordCreator = false
-                    // Reset for next time
-                    newChordForEditing = Chord(name: "New Chord", frets: [-1, -1, -1, -1, -1, -1], fingers: [0, 0, 0, 0, 0, 0])
                 }
             )
         }
         .sheet(isPresented: $isShowingPatternEditor) {
             PlayingPatternEditorView(
-                pattern: $newPatternForEditing,
-                isNew: true,
+                pattern: $patternForEditing,
+                isNew: $isEditingNewPattern,
                 onSave: { newPattern in
                     var patternToSave = newPattern
-                    if patternToSave.name == "New Pattern" {
-                        patternToSave.name = patternToSave.generateAutomaticName()
+                    if isEditingNewPattern {
+                        if patternToSave.name == "New Pattern" {
+                            patternToSave.name = patternToSave.generateAutomaticName()
+                        }
+                        appData.preset?.playingPatterns.append(patternToSave)
+                    } else {
+                        if let index = appData.preset?.playingPatterns.firstIndex(where: { $0.id == patternToSave.id }) {
+                            appData.preset?.playingPatterns[index] = patternToSave
+                        }
                     }
-                    appData.preset?.playingPatterns.append(patternToSave)
                     appData.saveChanges()
                     isShowingPatternEditor = false
-                    // Reset for next time
-                    newPatternForEditing = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .sixteenth)
                 },
                 onCancel: {
                     isShowingPatternEditor = false
-                    // Reset for next time
-                    newPatternForEditing = GuitarPattern.createNew(name: "New Pattern", length: 8, resolution: .sixteenth)
                 }
             )
+            .id(UUID())
         }
         .alert("Cannot Delete", isPresented: $showInUseAlert) {
             Button("OK") { }
@@ -262,6 +273,40 @@ struct AccompanimentEditorView: View {
         var updatedSegment = segment
         updatedSegment.updateLength(updatedSegment.lengthInMeasures - 1)
         segment = updatedSegment
+    }
+    
+    private func addChord() {
+        chordForEditing = Chord(name: "New Chord", frets: [-1, -1, -1, -1, -1, -1], fingers: [0, 0, 0, 0, 0, 0])
+        isEditingNewChord = true
+        isShowingChordCreator = true
+    }
+
+    private func editChord(_ chord: Chord) {
+        chordForEditing = chord
+        isEditingNewChord = false
+        isShowingChordCreator = true
+    }
+
+    private func addPattern() {
+        let timeSignature = appData.preset?.timeSignature ?? TimeSignature()
+        let beatUnit = timeSignature.beatUnit > 0 ? timeSignature.beatUnit : 4
+        let stepsPerQuarterNote = settings.resolution.stepsPerBeat
+        let actualStepsPerBeat = Double(stepsPerQuarterNote) * (4.0 / Double(beatUnit))
+        let initialLengthInSteps = Int(round(Double(settings.lengthInBeats) * actualStepsPerBeat))
+
+        self.patternForEditing = GuitarPattern(
+            name: "New Pattern",
+            resolution: settings.resolution,
+            length: initialLengthInSteps
+        )
+        isEditingNewPattern = true
+        isShowingPatternEditor = true
+    }
+
+    private func editPattern(_ pattern: GuitarPattern) {
+        patternForEditing = pattern
+        isEditingNewPattern = false
+        isShowingPatternEditor = true
     }
     
     private func deleteChord(withId chordId: UUID) {
@@ -639,9 +684,11 @@ struct ResourceLibraryView: View {
     @EnvironmentObject var appData: AppData
     @Binding var segment: AccompanimentSegment
     @Binding var selectedEventId: UUID?
-    @Binding var isShowingChordCreator: Bool
-    @Binding var isShowingPatternEditor: Bool
+    let onAddChord: () -> Void
+    let onEditChord: (Chord) -> Void
     let onDeleteChord: (UUID) -> Void
+    let onAddPattern: () -> Void
+    let onEditPattern: (GuitarPattern) -> Void
     let onDeletePattern: (UUID) -> Void
 
     var body: some View {
@@ -651,7 +698,7 @@ struct ResourceLibraryView: View {
                 HStack {
                     Text("Chords").font(.headline)
                     Spacer()
-                    Button(action: { isShowingChordCreator = true }) {
+                    Button(action: onAddChord) {
                         Image(systemName: "plus.circle")
                     }
                     .buttonStyle(.plain)
@@ -660,7 +707,7 @@ struct ResourceLibraryView: View {
                     if let chords = appData.preset?.chords, !chords.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 60))], spacing: 8) {
                             ForEach(chords) { chord in
-                                ResourceChordButton(chord: chord, isSelected: isSelectedChord(chord.id), onDelete: { onDeleteChord(chord.id) })
+                                ResourceChordButton(chord: chord, isSelected: isSelectedChord(chord.id), onEdit: { onEditChord(chord) }, onDelete: { onDeleteChord(chord.id) })
                                     .onDrag {
                                         let dragData = DragData(source: .newResource, type: .chord, resourceId: chord.id, eventId: nil, durationInBeats: 1)
                                         let provider = NSItemProvider()
@@ -678,7 +725,7 @@ struct ResourceLibraryView: View {
                 HStack {
                     Text("Playing Patterns").font(.headline)
                     Spacer()
-                    Button(action: { isShowingPatternEditor = true }) {
+                    Button(action: onAddPattern) {
                         Image(systemName: "plus.circle")
                     }
                     .buttonStyle(.plain)
@@ -687,7 +734,7 @@ struct ResourceLibraryView: View {
                     if let patterns = appData.preset?.playingPatterns, !patterns.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
                             ForEach(patterns) { pattern in
-                                ResourcePatternButton(pattern: pattern, isSelected: isSelectedPattern(pattern.id), onDelete: { onDeletePattern(pattern.id) })
+                                ResourcePatternButton(pattern: pattern, isSelected: isSelectedPattern(pattern.id), onEdit: { onEditPattern(pattern) }, onDelete: { onDeletePattern(pattern.id) })
                                     .onDrag {
                                         // Correctly calculate duration in beats using the active resolution's steps per beat.
                                         let beats = pattern.length / pattern.activeResolution.stepsPerBeat
@@ -850,6 +897,7 @@ struct ResourceLibraryView: View {
 struct ResourceChordButton: View {
     let chord: Chord
     let isSelected: Bool
+    let onEdit: () -> Void
     let onDelete: () -> Void
     
     var body: some View {
@@ -868,6 +916,7 @@ struct ResourceChordButton: View {
                 )
         )
         .contextMenu {
+            Button("Edit", action: onEdit)
             Button("Delete", role: .destructive, action: onDelete)
         }
     }
@@ -876,6 +925,7 @@ struct ResourceChordButton: View {
 struct ResourcePatternButton: View {
     let pattern: GuitarPattern
     let isSelected: Bool
+    let onEdit: () -> Void
     let onDelete: () -> Void
     
     var body: some View {
@@ -896,6 +946,7 @@ struct ResourcePatternButton: View {
         )
         .help(pattern.name)
         .contextMenu {
+            Button("Edit", action: onEdit)
             Button("Delete", role: .destructive, action: onDelete)
         }
     }

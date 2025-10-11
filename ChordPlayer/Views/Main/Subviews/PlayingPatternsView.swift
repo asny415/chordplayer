@@ -120,6 +120,6 @@ private struct PlayingPatternEditorSheetView: View {
     }
 
     var body: some View {
-        PlayingPatternEditorView(pattern: $pattern, isNew: isNew, onSave: onSave, onCancel: onCancel)
+        PlayingPatternEditorView(pattern: $pattern, isNew: .constant(isNew), onSave: onSave, onCancel: onCancel)
     }
 }

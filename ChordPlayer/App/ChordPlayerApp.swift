@@ -12,6 +12,7 @@ struct ChordPlayerApp: App {
     @StateObject private var presetArrangerPlayer: PresetArrangerPlayer
     @StateObject private var keyboardHandler: KeyboardHandler
     @StateObject private var melodicLyricPlayer: MelodicLyricPlayer
+    @StateObject private var patternEditorSettings = PatternEditorSettings()
 
     init() {
         let initialMidiManager = MidiManager()
@@ -59,6 +60,7 @@ struct ChordPlayerApp: App {
                 .environmentObject(keyboardHandler)
                 .environmentObject(melodicLyricPlayer)
                 .environmentObject(PresetManager.shared)
+                .environmentObject(patternEditorSettings)
                 .fileImporter(isPresented: $isImporting, allowedContentTypes: [.json], allowsMultipleSelection: false) { result in
                     switch result {
                     case .success(let urls):

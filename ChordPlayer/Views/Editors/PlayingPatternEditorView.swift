@@ -3,12 +3,13 @@ import Combine
 
 struct PlayingPatternEditorView: View {
     @Binding var pattern: GuitarPattern
-    let isNew: Bool
+    @Binding var isNew: Bool
     let onSave: (GuitarPattern) -> Void
     let onCancel: () -> Void
 
     @EnvironmentObject var chordPlayer: ChordPlayer
     @EnvironmentObject var appData: AppData
+    @EnvironmentObject var settings: PatternEditorSettings
     
     // State for the editor
     @State private var popoverStepIndex: Int? = nil
@@ -34,6 +35,7 @@ struct PlayingPatternEditorView: View {
             Divider()
             footerButtons.padding()
         }
+
         .frame(minWidth: 800, idealWidth: 1000, maxWidth: 1200, minHeight: 500)
         .background(Color(.windowBackgroundColor))
         .onKeyDown { event in handleKeyDown(event) }
@@ -48,18 +50,13 @@ struct PlayingPatternEditorView: View {
         } message: {
             Text("A pattern named '\(duplicateName)' already exists. Please choose a unique name.")
         }
-        .onAppear {
-            if isNew {
-                // Set the default length to one measure based on the current time signature
-                lengthInBeats.wrappedValue = appData.preset?.timeSignature.beatsPerMeasure ?? 4
-            }
-        }
+
     }
 
     // MARK: - Subviews
     private var headerView: some View {
         HStack {
-            Text(isNew ? "Create Playing Pattern" : "Edit: \(pattern.name)")
+            Text(isNew ? "Create Playing Pattern" : "Edit Playing Pattern")
                 .font(.title).fontWeight(.bold)
             Spacer()
             HStack {
@@ -104,13 +101,17 @@ struct PlayingPatternEditorView: View {
                 ForEach(GridResolution.allCases) { res in Text(res.rawValue).tag(res) }
             }
             .pickerStyle(.menu)
-            .onChange(of: pattern.activeResolution) { _ in
+            .onChange(of: pattern.activeResolution) { newValue in
                 // When resolution changes, maintain the same number of beats
                 // by recalculating the underlying total steps (pattern.length).
                 lengthInBeats.wrappedValue = beats
+                settings.resolution = newValue // Persist immediately
             }
             
             Stepper("Length: \(lengthInBeats.wrappedValue) beats", value: lengthInBeats, in: 1...64)
+                .onChange(of: lengthInBeats.wrappedValue) { newValue in
+                    settings.lengthInBeats = newValue // Persist immediately
+                }
             
             Spacer()
             
