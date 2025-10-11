@@ -259,3 +259,6 @@
 "Edit Drum Pattern" = "Edit Drum Pattern";
 "Length: %@ steps" = "Length: %@ steps";
 "Preview BPM:" = "Preview BPM:";
+
+"menu.view.show_drum_patterns_section" = "Show Drum Patterns Section";
+"menu.view.show_solo_segments_section" = "Show Solo Segments Section";

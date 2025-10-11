@@ -75,19 +75,19 @@ struct ChordPlayerApp: App {
                         print("Error importing file: \(error.localizedDescription)")
                     }
                 }
-                .alert("Preset Conflict", isPresented: $showingImportConflictAlert, presenting: conflictingPreset) { preset in
-                    Button("Overwrite", role: .destructive) {
+                .alert(Text(LocalizedStringKey("Preset Conflict")), isPresented: $showingImportConflictAlert, presenting: conflictingPreset) { preset in
+                    Button(LocalizedStringKey("Overwrite"), role: .destructive) {
                         PresetManager.shared.addOrUpdatePreset(preset)
                         processNextImport()
                     }
-                    Button("Skip", role: .cancel) {
+                    Button(LocalizedStringKey("Skip"), role: .cancel) {
                         processNextImport()
                     }
                 } message: { preset in
-                    Text("A preset named '\(preset.name)' with the same ID already exists. Do you want to overwrite it?")
+                    Text(String(format: NSLocalizedString("A preset named '%@' with the same ID already exists. Do you want to overwrite it?", comment: ""), preset.name))
                 }
-                .alert("Import Failed", isPresented: $showingImportErrorAlert) {
-                    Button("OK", role: .cancel) { }
+                .alert(Text(LocalizedStringKey("Import Failed")), isPresented: $showingImportErrorAlert) {
+                    Button(LocalizedStringKey("OK"), role: .cancel) { }
                 } message: { 
                     Text(importErrorMessage)
                 }
@@ -107,12 +107,12 @@ struct ChordPlayerApp: App {
             
             CommandGroup(after: .sidebar) {
                 Toggle(isOn: $appData.showDrumPatternSectionByDefault) {
-                    Text("Show Drum Patterns Section")
+                    Text("menu.view.show_drum_patterns_section")
                 }
                 .keyboardShortcut("1", modifiers: .option)
                 
                 Toggle(isOn: $appData.showSoloSegmentSectionByDefault) {
-                    Text("Show Solo Segments Section")
+                    Text("menu.view.show_solo_segments_section")
                 }
                 .keyboardShortcut("2", modifiers: .option)
             }

@@ -1,4 +1,3 @@
-
 /* 
   Localizable.strings
   ChordPlayer
@@ -260,3 +259,6 @@
 "Edit Drum Pattern" = "编辑鼓模式";
 "Length: %@ steps" = "长度: %@步";
 "Preview BPM:" = "预览BPM:";
+
+"menu.view.show_drum_patterns_section" = "显示鼓组模式区域";
+"menu.view.show_solo_segments_section" = "显示独奏片段区域";
