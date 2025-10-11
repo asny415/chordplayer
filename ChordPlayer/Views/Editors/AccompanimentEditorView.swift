@@ -705,7 +705,7 @@ struct ResourceLibraryView: View {
                     .buttonStyle(.plain)
                 }
                 ScrollView {
-                    if let chords = appData.preset?.chords, !chords.isEmpty {
+                    if let chords = appData.preset?.chords.sorted(by: { $0.name < $1.name }), !chords.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 60))], spacing: 8) {
                             ForEach(chords) { chord in
                                 ResourceChordButton(chord: chord, isSelected: isSelectedChord(chord.id), onEdit: { onEditChord(chord) }, onDelete: { onDeleteChord(chord.id) })
@@ -732,7 +732,7 @@ struct ResourceLibraryView: View {
                     .buttonStyle(.plain)
                 }
                 ScrollView {
-                    if let patterns = appData.preset?.playingPatterns, !patterns.isEmpty {
+                    if let patterns = appData.preset?.playingPatterns.sorted(by: { $0.name < $1.name }), !patterns.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
                             ForEach(patterns) { pattern in
                                 ResourcePatternButton(pattern: pattern, isSelected: isSelectedPattern(pattern.id), onEdit: { onEditPattern(pattern) }, onDelete: { onDeletePattern(pattern.id) })
