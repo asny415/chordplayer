@@ -195,17 +195,24 @@ class ChordPlayer: ObservableObject {
             }
         }
 
-        var temporalNotes: [TemporalNote] = []
-        let fretsForPlayback = Array(chord.frets.reversed())
-        let singleStepDurationBeats = pattern.steps.isEmpty ? 0 : (patternDurationBeats / Double(pattern.steps.count))
-
-        // Get capo value from preset, default to 0 if not set (for backward compatibility)
-        let capoValue = preset.capo ?? 0
+            var temporalNotes: [TemporalNote] = []
+            let fretsForPlayback = Array(chord.frets.reversed())
+            let singleStepDurationBeats = pattern.steps.isEmpty ? 0 : (patternDurationBeats / Double(pattern.steps.count))
         
-        // 1. Flatten pattern into a temporal list of notes
-        for (stepIndex, step) in pattern.steps.enumerated() {
-            if step.type == .rest || step.activeNotes.isEmpty { continue }
-
+            // Get capo value from preset, default to 0 if not set (for backward compatibility)
+            let capoValue = preset.capo ?? 0
+            
+            // 1. Flatten pattern into a temporal list of notes
+            //    同时，收集所有休止符的开始时间
+            var restStartTimes: [Double] = [] // 新增：存储休止符的开始时间
+            for (stepIndex, step) in pattern.steps.enumerated() {
+                let stepStartTime = patternStartBeat + (Double(stepIndex) * singleStepDurationBeats)
+                
+                if step.type == .rest {
+                    restStartTimes.append(stepStartTime) // 如果是休止符，记录其开始时间
+                    continue // 仍然跳过为休止符创建音符
+                }
+                if step.activeNotes.isEmpty { continue } // 保持原有的空步骤跳过逻辑
             let activeNotesInStep = step.activeNotes.compactMap { stringIndex -> (note: UInt8, stringIndex: Int)? in
                 let baseFret = step.fretOverrides[stringIndex] ?? (stringIndex < fretsForPlayback.count ? fretsForPlayback[stringIndex] : -1)
                 let finalFret = baseFret >= 0 ? baseFret + capoValue : baseFret // Apply capo offset
@@ -249,11 +256,17 @@ class ChordPlayer: ObservableObject {
             if let nextNote = nextNoteOnSameString {
                 calculatedDuration = nextNote.startTime - currentNote.startTime
             } else {
-                // If no next note, it plays until the end of the pattern
-                calculatedDuration = (patternStartBeat + patternDurationBeats) - currentNote.startTime
-            }
-            temporalNotes[i].duration = calculatedDuration
-        }
+                        // If no next note, it plays until the end of the pattern
+                        calculatedDuration = (patternStartBeat + patternDurationBeats) - currentNote.startTime
+                    }
+                    
+                    // 新增逻辑：查找在当前音符之后开始的最近的休止符
+                    if let nextRestTime = restStartTimes.first(where: { $0 > currentNote.startTime }) {
+                        // 如果休止符在音符原定结束之前开始，则截断音符的持续时间
+                        calculatedDuration = min(calculatedDuration, nextRestTime - currentNote.startTime)
+                    }
+                    
+                    temporalNotes[i].duration = calculatedDuration        }
 
         // 2. Process techniques with look-ahead
         var musicNotes: [MusicNote] = []

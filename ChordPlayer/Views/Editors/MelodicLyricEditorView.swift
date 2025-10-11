@@ -30,7 +30,7 @@ struct MelodicLyricEditorView: View {
 
     // Layout constants
     private let beatWidth: CGFloat = 120
-    private let beatsPerBar: Int = 4
+    private var beatsPerBar: Int { appData.preset?.timeSignature.beatsPerMeasure ?? 4 } // Use time signature from AppData
     private let ticksPerBeat: Int = 12 // The core of the new timing system
     private var totalTicks: Int { segment.lengthInBars * beatsPerBar * ticksPerBeat }
     private var tickWidth: CGFloat { (beatWidth / CGFloat(ticksPerBeat)) * zoomLevel }
