@@ -508,6 +508,9 @@ struct TimelineContainerView: View {
                         let endX = startX + geo.size.width
                         self.visibleXRange = startX...endX
                     }
+                    .onAppear {
+                        self.visibleXRange = 0...geo.size.width
+                    }
                 }
             }
         }
