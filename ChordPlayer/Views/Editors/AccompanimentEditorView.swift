@@ -1083,7 +1083,7 @@ struct TimelineGridView: View {
 struct TimelineHeaderView: View {
     let totalMeasures: Int, beatsPerMeasure: Int, beatWidth: CGFloat, height: CGFloat, zoom: CGFloat
     var body: some View {
-        HStack(spacing: 0) {
+        LazyHStack(spacing: 0) {
             ForEach(0..<totalMeasures, id: \.self) { i in
                 Text("\(i + 1)").font(.caption).foregroundColor(.secondary)
                     .frame(width: CGFloat(beatsPerMeasure) * beatWidth * zoom, height: height)
@@ -1091,6 +1091,7 @@ struct TimelineHeaderView: View {
                     .border(Color.secondary, width: 0.5)
             }
         }
+        .frame(height: height)
     }
 }
 
