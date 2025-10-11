@@ -47,7 +47,8 @@ struct MelodicLyricSegmentsView: View {
                         }
                         .onTapGesture { // Single-tap to select
                             activeMelodicLyricSegmentId = segment.id
-                            melodicLyricPlayer.play(segment: segment)
+                            // Use the persistent MIDI channel from AppData for playback
+                            melodicLyricPlayer.play(segment: segment, midiChannel: UInt8(appData.lyricsEditorMidiChannel-1))
                         }
                         .contextMenu {
                             contextMenuFor(segment: segment)

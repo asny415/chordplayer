@@ -26,19 +26,15 @@ class MelodicLyricPlayer: ObservableObject {
         }.store(in: &cancellables)
     }
 
-    func play(segment: MelodicLyricSegment) {
+    func play(segment: MelodicLyricSegment, midiChannel: UInt8) {
         if isPlaying && currentlyPlayingSegmentID == segment.id {
             stop()
             return
         }
         
-        stop()
+        stop() // Stop any previous playback
 
-        // TODO: Add a dedicated MIDI channel for melody in AppData
-        let channel: UInt8 = 3
-        midiManager.setPitchBendRange(channel: channel)
-
-        guard let song = createSong(from: segment, onChannel: channel),
+        guard let song = createSong(from: segment, onChannel: midiChannel),
               let endpoint = midiManager.selectedOutput else {
             print("[MelodicLyricPlayer] Failed to create song or get MIDI endpoint.")
             return

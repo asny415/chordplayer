@@ -21,7 +21,6 @@ struct MelodicLyricEditorView: View {
     @State private var keyMonitor: Any?
     @State private var lastPreviewNote: UInt8? = nil
     
-    @State private var editorMidiChannel: Int = 1
     
     // In-place name editing state
     @State private var isEditingName = false
@@ -111,7 +110,7 @@ struct MelodicLyricEditorView: View {
             resolution: $segment.activeResolution,
             zoomLevel: $zoomLevel,
             segmentLengthInBars: $segment.lengthInBars,
-            midiChannel: $editorMidiChannel,
+            midiChannel: $appData.lyricsEditorMidiChannel,
             isPlayingSegment: $melodicLyricPlayer.isPlaying,
             onTogglePlayback: toggleSegmentPlayback
         )
@@ -718,7 +717,8 @@ struct MelodicLyricEditorView: View {
     }
 
     private func toggleSegmentPlayback() {
-        melodicLyricPlayer.play(segment: segment)
+        let channel = UInt8(max(0, min(15, sanitizedEditorMidiChannel - 1)))
+        melodicLyricPlayer.play(segment: segment, midiChannel: channel)
     }
 
     private func previewPitch(pitch: Int, octave: Int, offset: Int? = nil) {
@@ -749,7 +749,7 @@ struct MelodicLyricEditorView: View {
 
 
     private var sanitizedEditorMidiChannel: Int {
-        min(max(editorMidiChannel, 1), 16)
+        min(max(appData.lyricsEditorMidiChannel, 1), 16)
     }
 }
 

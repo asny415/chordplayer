@@ -27,6 +27,9 @@ class AppData: ObservableObject {
     @AppStorage("showDrumPatternSectionByDefault") var showDrumPatternSectionByDefault: Bool = false
     @AppStorage("showSoloSegmentSectionByDefault") var showSoloSegmentSectionByDefault: Bool = false
     
+    // Melodic Lyric Editor Settings
+    @AppStorage("lyricsEditorMidiChannel") var lyricsEditorMidiChannel: Int = 1 // Default to channel 1
+    
     // Global MIDI Settings
     @Published var midiPortName: String
     // Karaoke Settings
