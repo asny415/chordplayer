@@ -112,6 +112,8 @@ struct MelodicLyricEditorView: View {
             segmentLengthInBars: $segment.lengthInBars,
             midiChannel: $appData.lyricsEditorMidiChannel,
             isPlayingSegment: $melodicLyricPlayer.isPlaying,
+            segmentKey: $segment.key,
+            presetKey: appData.preset?.key ?? "C",
             onTogglePlayback: toggleSegmentPlayback
         )
         .padding(.horizontal)
@@ -763,7 +765,11 @@ struct MelodicLyricToolbar: View {
     @Binding var midiChannel: Int
     @State private var showingSettings = false
     @Binding var isPlayingSegment: Bool
+    @Binding var segmentKey: String?
+    let presetKey: String
     let onTogglePlayback: () -> Void
+
+    private let allKeys = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
     var body: some View {
         HStack(spacing: 16) {
@@ -790,6 +796,8 @@ struct MelodicLyricToolbar: View {
             .pickerStyle(.menu)
             .frame(minWidth: 120)
             .help("Grid Snap")
+            
+            keySelectionMenu // Add the key selection menu here
 
             Spacer()
 
@@ -812,6 +820,32 @@ struct MelodicLyricToolbar: View {
             }
         }
         .labelStyle(.iconOnly)
+    }
+    
+    @ViewBuilder
+    private var keySelectionMenu: some View {
+        Menu {
+            ForEach(allKeys, id: \.self) { key in
+                Button(action: { segmentKey = key }) {
+                    Text(key)
+                }
+            }
+            if segmentKey != nil {
+                Divider()
+                Button(role: .destructive, action: { segmentKey = nil }) {
+                    Text("Reset to Preset Key")
+                }
+            }
+        } label: {
+            Text("Key: \(segmentKey ?? presetKey)")
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.primary.opacity(0.1))
+                .cornerRadius(5)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 }
 
@@ -1013,6 +1047,6 @@ struct MelodicLyricEditorView_Previews: PreviewProvider {
         return MelodicLyricEditorView(segment: $mockSegment)
             .environmentObject(midiManager)
             .environmentObject(appData)
-            .frame(width: 800, height: 400)
+            .frame(width: 1000, height: 400)
     }
 }

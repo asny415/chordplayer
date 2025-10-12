@@ -49,10 +49,13 @@ class MelodicLyricPlayer: ObservableObject {
     func createSong(from segment: MelodicLyricSegment, onChannel midiChannel: UInt8) -> MusicSong? {
         guard let preset = appData.preset else { return nil }
         
+        // Determine the key for this specific segment
+        let effectiveKey = segment.key ?? preset.key
+        
         let itemsSorted = segment.items.sorted { $0.positionInTicks < $1.positionInTicks }
         var musicNotes: [MusicNote] = []
         var consumedItemIDs = Set<UUID>()
-        let transposition = self.transposition(forKey: preset.key)
+        let transposition = self.transposition(forKey: effectiveKey) // Use effectiveKey
         let ticksPerBeat = 12.0 // Use a double for division
         let segmentEndBeat = Double(segment.lengthInBars * preset.timeSignature.beatsPerMeasure)
 
@@ -126,7 +129,7 @@ class MelodicLyricPlayer: ObservableObject {
         }
 
         let track = SongTrack(instrumentName: "Melody", midiChannel: Int(midiChannel), notes: musicNotes)
-        let song = MusicSong(tempo: preset.bpm, key: preset.key, timeSignature: .init(numerator: preset.timeSignature.beatsPerMeasure, denominator: preset.timeSignature.beatUnit), tracks: [track])
+        let song = MusicSong(tempo: preset.bpm, key: effectiveKey, timeSignature: .init(numerator: preset.timeSignature.beatsPerMeasure, denominator: preset.timeSignature.beatUnit), tracks: [track])
         
         return song
     }

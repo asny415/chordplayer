@@ -1071,6 +1071,9 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
     
     /// 组成该片段的歌词单元数组
     var items: [MelodicLyricItem]
+    
+    /// 可选的片段独立调性
+    var key: String?
 
     // Legacy property for migration
     private var gridUnit: Int?
@@ -1080,18 +1083,19 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
         set { resolution = newValue }
     }
 
-    init(id: UUID = UUID(), name: String, lengthInBars: Int, resolution: GridResolution? = .sixteenth, items: [MelodicLyricItem] = []) {
+    init(id: UUID = UUID(), name: String, lengthInBars: Int, resolution: GridResolution? = .sixteenth, items: [MelodicLyricItem] = [], key: String? = nil) {
         self.id = id
         self.name = name
         self.lengthInBars = lengthInBars
         self.resolution = resolution
         self.items = items
+        self.key = key
     }
     
     // MARK: - Codable Implementation for Compatibility
     
     enum CodingKeys: String, CodingKey {
-        case id, name, lengthInBars, resolution, items, gridUnit
+        case id, name, lengthInBars, resolution, items, gridUnit, key
     }
 
     init(from decoder: Decoder) throws {
@@ -1100,6 +1104,7 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
         self.name = try container.decode(String.self, forKey: .name)
         self.lengthInBars = try container.decode(Int.self, forKey: .lengthInBars)
         self.items = try container.decode([MelodicLyricItem].self, forKey: .items)
+        self.key = try container.decodeIfPresent(String.self, forKey: .key) // Add this line
 
         // Decode new resolution if available, otherwise fall back to legacy gridUnit
         if let res = try container.decodeIfPresent(GridResolution.self, forKey: .resolution) {
@@ -1123,6 +1128,7 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
         try container.encode(name, forKey: .name)
         try container.encode(lengthInBars, forKey: .lengthInBars)
         try container.encode(items, forKey: .items)
+        try container.encodeIfPresent(key, forKey: .key) // Add this line
         // Always encode the new resolution property
         try container.encode(resolution, forKey: .resolution)
     }
