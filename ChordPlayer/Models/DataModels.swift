@@ -819,6 +819,7 @@ struct GuitarTrack: Codable, Identifiable, Hashable, Equatable {
     var volume: Double = 1.0
     var pan: Double = 0.0 // -1.0 (左) 到 1.0 (右)
     var midiChannel: Int?
+    var capo: Int?
 
     init(name: String) {
         self.name = name

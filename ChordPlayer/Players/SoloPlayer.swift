@@ -53,7 +53,8 @@ class SoloPlayer: ObservableObject {
 
         midiManager.setPitchBendRange(channel: channel)
 
-        guard let song = createSong(from: segment, onChannel: channel),
+        let capoValue = appData.preset?.capo ?? 0
+        guard let song = createSong(from: segment, onChannel: channel, capo: capoValue),
               let endpoint = midiManager.selectedOutput else {
             print("Failed to create song or get MIDI endpoint.")
             return
@@ -75,11 +76,11 @@ class SoloPlayer: ObservableObject {
         }
     }
     
-    func createSong(from segment: SoloSegment, onChannel midiChannel: UInt8) -> MusicSong? {
+    func createSong(from segment: SoloSegment, onChannel midiChannel: UInt8, capo: Int) -> MusicSong? {
         guard let preset = appData.preset else { return nil }
 
-        // Get capo value from preset, default to 0 if not set (for backward compatibility)
-        let capoValue = preset.capo ?? 0
+        // Use the passed-in capo value directly
+        let capoValue = capo
         
         let notesSortedByTime = segment.notes.sorted { $0.startTime < $1.startTime }
         var consumedNoteIDs = Set<UUID>()

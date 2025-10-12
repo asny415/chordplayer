@@ -26,6 +26,23 @@ struct GuitarTrackView: View {
                             }
                         }
                     }
+                
+                Text("Capo: \(track.capo == nil || track.capo == 0 ? "Off" : String(track.capo!))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .contextMenu {
+                        Button("Off") {
+                            track.capo = nil
+                            appData.saveChanges()
+                        }
+                        ForEach(1...16, id: \.self) { capoValue in
+                            Button("\(capoValue)") {
+                                track.capo = capoValue
+                                appData.saveChanges()
+                            }
+                        }
+                    }
+
                 Spacer()
             }
             .padding(4)

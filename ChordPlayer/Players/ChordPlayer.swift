@@ -40,7 +40,8 @@ class ChordPlayer: ObservableObject {
         let channel = UInt8(1 - 1)
         midiManager.setPitchBendRange(channel: channel)
 
-        guard let song = createSong(from: segment, onChannel: channel),
+        let capoValue = appData.preset?.capo ?? 0
+        guard let song = createSong(from: segment, onChannel: channel, capo: capoValue),
               let endpoint = midiManager.selectedOutput else {
             print("[ChordPlayer] Failed to create song or get MIDI endpoint.")
             return
@@ -81,13 +82,15 @@ class ChordPlayer: ObservableObject {
 
         let patternDurationBeats = Double(pattern.length) * (pattern.activeResolution == .sixteenth ? 0.25 : 0.5)
         
+        let capoValue = preset.capo ?? 0
         let notes = createNotesForPattern(
             chord: chord,
             pattern: pattern,
             preset: preset,
             patternStartBeat: 0.0,
             patternDurationBeats: patternDurationBeats,
-            dynamics: .medium
+            dynamics: .medium,
+            capo: capoValue
         )
         
         let track = SongTrack(instrumentName: "Single Play", midiChannel: Int(channel), notes: notes)
@@ -116,7 +119,7 @@ class ChordPlayer: ObservableObject {
 
     // MARK: - Song Creation
 
-    func createSong(from segment: AccompanimentSegment, onChannel midiChannel: UInt8) -> MusicSong? {
+    func createSong(from segment: AccompanimentSegment, onChannel midiChannel: UInt8, capo: Int) -> MusicSong? {
         guard let preset = appData.preset else { return nil }
         
         var allNotes: [MusicNote] = []
@@ -146,7 +149,8 @@ class ChordPlayer: ObservableObject {
                     preset: preset,
                     patternStartBeat: Double(absolutePatternStartBeatInt),
                     patternDurationBeats: Double(patternEvent.durationInBeats),
-                    dynamics: measure.dynamics
+                    dynamics: measure.dynamics,
+                    capo: capo
                 )
                 allNotes.append(contentsOf: notesForPattern)
             }
@@ -163,13 +167,15 @@ class ChordPlayer: ObservableObject {
         let previewChord = Chord(name: "C", frets: [-1, 3, 2, 0, 1, 0], fingers: [])
         let patternDurationBeats = Double(pattern.length) * (pattern.activeResolution == .sixteenth ? 0.25 : 0.5)
 
+        let capoValue = preset.capo ?? 0
         let notes = createNotesForPattern(
             chord: previewChord,
             pattern: pattern,
             preset: preset,
             patternStartBeat: 0.0,
             patternDurationBeats: patternDurationBeats,
-            dynamics: .medium
+            dynamics: .medium,
+            capo: capoValue
         )
         
         let track = SongTrack(instrumentName: "Pattern Preview", midiChannel: Int(midiChannel), notes: notes)
@@ -177,7 +183,7 @@ class ChordPlayer: ObservableObject {
         return song
     }
 
-    private func createNotesForPattern(chord: Chord, pattern: GuitarPattern, preset: Preset, patternStartBeat: MusicTimeStamp, patternDurationBeats: MusicTimeStamp, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100) -> [MusicNote] {
+    private func createNotesForPattern(chord: Chord, pattern: GuitarPattern, preset: Preset, patternStartBeat: MusicTimeStamp, patternDurationBeats: MusicTimeStamp, dynamics: MeasureDynamics, baseVelocity: UInt8 = 100, capo: Int) -> [MusicNote] {
         
         struct TemporalNote: Comparable {
             let stringIndex: Int
@@ -199,8 +205,8 @@ class ChordPlayer: ObservableObject {
             let fretsForPlayback = Array(chord.frets.reversed())
             let singleStepDurationBeats = pattern.steps.isEmpty ? 0 : (patternDurationBeats / Double(pattern.steps.count))
         
-            // Get capo value from preset, default to 0 if not set (for backward compatibility)
-            let capoValue = preset.capo ?? 0
+            // Use the passed-in capo value directly
+            let capoValue = capo
             
             // 1. Flatten pattern into a temporal list of notes
             //    同时，收集所有休止符的开始时间

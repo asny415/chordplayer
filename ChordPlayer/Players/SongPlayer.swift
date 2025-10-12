@@ -131,16 +131,19 @@ class PresetArrangerPlayer: ObservableObject {
                 // Set pitch bend range for this channel before creating the song
                 midiManager.setPitchBendRange(channel: channel)
                 
+                // Determine the correct capo to use: track-specific > global > default(0)
+                let capoForTrack = guitarTrack.capo ?? preset.capo ?? 0
+                
                 var segmentSong: MusicSong?
                 
                 switch segment.type {
                 case .solo(let segmentId):
                     if let soloData = appData.getSoloSegment(for: segmentId) {
-                        segmentSong = soloPlayer.createSong(from: soloData, onChannel: channel)
+                        segmentSong = soloPlayer.createSong(from: soloData, onChannel: channel, capo: capoForTrack)
                     }
                 case .accompaniment(let segmentId):
                     if let accompData = appData.getAccompanimentSegment(for: segmentId) {
-                        segmentSong = chordPlayer.createSong(from: accompData, onChannel: channel)
+                        segmentSong = chordPlayer.createSong(from: accompData, onChannel: channel, capo: capoForTrack)
                     }
                 }
                 
