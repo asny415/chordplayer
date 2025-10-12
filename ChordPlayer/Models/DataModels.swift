@@ -55,7 +55,7 @@ struct PatternStep: Codable, Identifiable, Hashable, Equatable {
     var type: StepType = .arpeggio
     // Strum parameters (only used when type is .strum)
     var strumDirection: StrumDirection = .down
-    var strumSpeed: StrumSpeed = .medium
+    var strumSpeed: StrumSpeed = .fast
     
     // Default initializer to allow creating empty steps (e.g., PatternStep())
     init() {}
@@ -71,7 +71,7 @@ struct PatternStep: Codable, Identifiable, Hashable, Equatable {
         self.fretOverrides = try container.decodeIfPresent([Int: Int].self, forKey: .fretOverrides) ?? [:]
         self.type = try container.decodeIfPresent(StepType.self, forKey: .type) ?? .arpeggio
         self.strumDirection = try container.decodeIfPresent(StrumDirection.self, forKey: .strumDirection) ?? .down
-        self.strumSpeed = try container.decodeIfPresent(StrumSpeed.self, forKey: .strumSpeed) ?? .medium
+        self.strumSpeed = try container.decodeIfPresent(StrumSpeed.self, forKey: .strumSpeed) ?? .fast
         
         // Safely decode the new 'techniques' property, falling back to an empty dictionary if missing.
         self.techniques = try container.decodeIfPresent([Int: PlayingTechnique].self, forKey: .techniques) ?? [:]

@@ -417,7 +417,7 @@ private struct StepPopoverView: View {
                 }.pickerStyle(SegmentedPickerStyle())
                 Picker("Speed", selection: $step.strumSpeed) {
                     ForEach(StrumSpeed.allCases) { speed in Text(speed.rawValue).tag(speed) }
-                }
+                }.pickerStyle(SegmentedPickerStyle())
             }
             Spacer()
             HStack {
