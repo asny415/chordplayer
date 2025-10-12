@@ -127,6 +127,7 @@ struct ArrangementView: View {
                             }
                         )
                     }
+                    .scrollIndicators(.hidden)
                     .onChange(of: playheadPosition) { newPosition in
                         let currentBeat = Int(newPosition)
                         let targetID = "beat_\(currentBeat)"
