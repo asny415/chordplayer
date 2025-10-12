@@ -151,12 +151,26 @@ struct KaraokeChordsView: View {
     private func updateChordData() {
         guard let preset = appData.preset else { self.allChords = []; return }
         
-        guard let track = arrangement.guitarTracks.first(where: { track in
-            track.segments.contains(where: { segment in
-                if case .accompaniment = segment.type { return true }
-                return false
-            })
-        }) else {
+        // Find the track containing the accompaniment segment with the earliest start time.
+        let trackWithEarliestAccompaniment = arrangement.guitarTracks
+            .compactMap { track -> (track: GuitarTrack, earliestStartBeat: Double)? in
+                // Find the minimum start beat of accompaniment segments within this track.
+                let earliestBeat = track.segments.compactMap { segment -> Double? in
+                    if case .accompaniment = segment.type {
+                        return segment.startBeat
+                    }
+                    return nil
+                }.min()
+                
+                // If an earliest beat was found, return the track and that beat.
+                if let earliestBeat = earliestBeat {
+                    return (track, earliestBeat)
+                }
+                return nil
+            }
+            .min(by: { $0.earliestStartBeat < $1.earliestStartBeat })
+        
+        guard let track = trackWithEarliestAccompaniment?.track else {
             self.allChords = []
             return
         }
