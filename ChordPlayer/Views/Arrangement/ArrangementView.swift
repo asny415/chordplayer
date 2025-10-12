@@ -51,68 +51,93 @@ struct ArrangementView: View {
                 .padding(.bottom, 5)
 
                 // A single ScrollView for the ruler and all tracks to ensure synchronized scrolling
-                ScrollView([.horizontal, .vertical]) {
-                    // Calculate the total width of the timeline content outside the VStack
-                    let totalWidth = max(1200, pixelsPerBeat * arrangement.lengthInBeats)
-                    VStack(alignment: .leading, spacing: 4) {
-
-                        // 1. The real Timeline Ruler, wrapped in an HStack to align with track headers
-                        HStack(spacing: 0) {
-                            // Spacer to align with track headers
-                            Rectangle().fill(Color.clear).frame(width: 120)
-                            
-                            TimelineRulerView(
-                                playheadPosition: $playheadPosition,
-                                lengthInBeats: arrangement.lengthInBeats,
-                                timeSignature: preset.timeSignature,
-                                pixelsPerBeat: pixelsPerBeat
-                            )
-                        }
-                        .frame(height: 24)
-
-                        // 2. The Tracks
-                        if (preset.drumPatterns.isEmpty == false) || appData.showDrumPatternSectionByDefault {
-                            DrumTrackView(
-                                track: $arrangement.drumTrack,
-                                preset: $preset,
-                                pixelsPerBeat: pixelsPerBeat,
-                                onRemove: removeDrumSegment
-                            )
-                        }
-
-                        ForEach($arrangement.guitarTracks) { $track in
-                            GuitarTrackView(
-                                track: $track,
-                                preset: $preset,
-                                pixelsPerBeat: pixelsPerBeat,
-                                onRemove: { segmentId in
-                                    removeGuitarSegment(segmentId: segmentId, from: track.id)
+                ScrollViewReader { proxy in
+                    ScrollView([.horizontal, .vertical]) {
+                        // Calculate the total width of the timeline content outside the VStack
+                        let totalWidth = max(1200, pixelsPerBeat * arrangement.lengthInBeats)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            // "Anchor Rail" - A static, invisible rail of all possible beat anchors
+                            HStack(spacing: 0) {
+                                ForEach(0..<Int(arrangement.lengthInBeats), id: \.self) { beat in
+                                    Rectangle()
+                                        .fill(Color.clear) // Invisible
+                                        .frame(width: pixelsPerBeat, height: 1)
+                                        .id("beat_\(beat)")
                                 }
-                            )
-                        }
+                            }
+                            .frame(height: 1)
+                            .padding(.leading, 120) // Align with timeline content
 
-                        ForEach($arrangement.lyricsTracks) { $track in
-                            LyricsTrackView(
-                                track: $track,
-                                preset: $preset,
-                                pixelsPerBeat: pixelsPerBeat,
-                                onRemove: { segmentId in
-                                    removeLyricsSegment(segmentId: segmentId, from: track.id)
-                                }
-                            )
+                            // 1. The real Timeline Ruler, wrapped in an HStack to align with track headers
+                            HStack(spacing: 0) {
+                                // Spacer to align with track headers
+                                Rectangle().fill(Color.clear).frame(width: 120)
+                                
+                                TimelineRulerView(
+                                    playheadPosition: $playheadPosition,
+                                    lengthInBeats: arrangement.lengthInBeats,
+                                    timeSignature: preset.timeSignature,
+                                    pixelsPerBeat: pixelsPerBeat
+                                )
+                            }
+                            .frame(height: 24)
+
+                            // 2. The Tracks
+                            if (preset.drumPatterns.isEmpty == false) || appData.showDrumPatternSectionByDefault {
+                                DrumTrackView(
+                                    track: $arrangement.drumTrack,
+                                    preset: $preset,
+                                    pixelsPerBeat: pixelsPerBeat,
+                                    onRemove: removeDrumSegment
+                                )
+                            }
+
+                            ForEach($arrangement.guitarTracks) { $track in
+                                GuitarTrackView(
+                                    track: $track,
+                                    preset: $preset,
+                                    pixelsPerBeat: pixelsPerBeat,
+                                    onRemove: { segmentId in
+                                        removeGuitarSegment(segmentId: segmentId, from: track.id)
+                                    }
+                                )
+                            }
+
+                            ForEach($arrangement.lyricsTracks) { $track in
+                                LyricsTrackView(
+                                    track: $track,
+                                    preset: $preset,
+                                    pixelsPerBeat: pixelsPerBeat,
+                                    onRemove: { segmentId in
+                                        removeLyricsSegment(segmentId: segmentId, from: track.id)
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.top, 4)
+                        // Apply the calculated total width to the VStack containing all timeline content
+                        .frame(minWidth: totalWidth + 120)
+                        .overlay(
+                            // GeometryReader to get the full height of the content for the playhead line
+                            GeometryReader { geometry in
+                                PlayheadView()
+                                    .frame(height: geometry.size.height)
+                                    .offset(x: 120 + (playheadPosition * pixelsPerBeat)) // 120 for track header width
+                            }
+                        )
+                    }
+                    .onChange(of: playheadPosition) { newPosition in
+                        let currentBeat = Int(newPosition)
+                        let targetID = "beat_\(currentBeat)"
+                        
+                        // This handles both playback and seeking.
+                        if newPosition >= 0 {
+                            withAnimation(.linear(duration: 0.1)) {
+                                proxy.scrollTo(targetID, anchor: .center)
+                            }
                         }
                     }
-                    .padding(.top, 4)
-                    // Apply the calculated total width to the VStack containing all timeline content
-                    .frame(minWidth: totalWidth + 120)
-                    .overlay(
-                        // GeometryReader to get the full height of the content for the playhead line
-                        GeometryReader { geometry in
-                            PlayheadView()
-                                .frame(height: geometry.size.height)
-                                .offset(x: 120 + (playheadPosition * pixelsPerBeat)) // 120 for track header width
-                        }
-                    )
                 }
             }
             
