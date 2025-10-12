@@ -26,6 +26,7 @@ class AppData: ObservableObject {
     // UI State for collapsible sections
     @AppStorage("showDrumPatternSectionByDefault") var showDrumPatternSectionByDefault: Bool = false
     @AppStorage("showSoloSegmentSectionByDefault") var showSoloSegmentSectionByDefault: Bool = false
+    @AppStorage("autoSwitchToKaraokeViewOnPlay") var autoSwitchToKaraokeViewOnPlay: Bool = true
     
     // Melodic Lyric Editor Settings
     @AppStorage("lyricsEditorMidiChannel") var lyricsEditorMidiChannel: Int = 1 // Default to channel 1

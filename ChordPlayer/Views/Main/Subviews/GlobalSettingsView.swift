@@ -250,24 +250,27 @@ struct ArrangementPlaybackCard: View {
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 60)
         .padding(8)
         .background(Material.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .onTapGesture {
-            if chordPlayer.isPlaying {
-                chordPlayer.stop()
-                isPlayingKaraoke = false // Also stop karaoke view
-            } else {
-                // 如果当前位置小于1拍，从头开始播放，否则，从当前位置开始播放
-                if playheadPosition < 1.0 {
-                    chordPlayer.play()
-                    isPlayingKaraoke = true // Also start karaoke view
-                } else {
-                    // Seek to the UI's playhead position, then play from there.
-                    chordPlayer.seekTo(beat: playheadPosition)
-                    chordPlayer.playFromCurrentPosition()
-                    isPlayingKaraoke = true // Also start karaoke view
-                }
-            }
-        }
-        .onChange(of: chordPlayer.isPlaying) { _,newIsPlaying in
+                    .onTapGesture {
+                        if chordPlayer.isPlaying {
+                            chordPlayer.stop()
+                            isPlayingKaraoke = false // Also stop karaoke view
+                        } else {
+                            // 如果当前位置小于1拍，从头开始播放，否则，从当前位置开始播放
+                            if playheadPosition < 1.0 {
+                                chordPlayer.play()
+                                if appData.autoSwitchToKaraokeViewOnPlay {
+                                    isPlayingKaraoke = true // Also start karaoke view
+                                }
+                            } else {
+                                // Seek to the UI's playhead position, then play from there.
+                                chordPlayer.seekTo(beat: playheadPosition)
+                                chordPlayer.playFromCurrentPosition()
+                                if appData.autoSwitchToKaraokeViewOnPlay {
+                                    isPlayingKaraoke = true // Also start karaoke view
+                                }
+                            }
+                        }
+                    }        .onChange(of: chordPlayer.isPlaying) { _,newIsPlaying in
             // If the sequencer stops playing for any reason (e.g., song ends),
             // ensure we exit the karaoke view.
             if !newIsPlaying {

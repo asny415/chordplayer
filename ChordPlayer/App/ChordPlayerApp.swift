@@ -117,6 +117,11 @@ struct ChordPlayerApp: App {
                     Text("menu.view.show_solo_segments_section")
                 }
                 .keyboardShortcut("2", modifiers: .option)
+
+                Toggle(isOn: $appData.autoSwitchToKaraokeViewOnPlay) {
+                    Text("menu.view.show_karaoke_view")
+                }
+                .keyboardShortcut("3", modifiers: .option)
             }
         }
 
