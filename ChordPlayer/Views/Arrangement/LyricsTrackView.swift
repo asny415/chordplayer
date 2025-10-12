@@ -6,7 +6,9 @@ struct LyricsTrackView: View {
     @Binding var preset: Preset
     let pixelsPerBeat: CGFloat
     var onRemove: ((UUID) -> Void)? = nil
+    var onRemoveTrack: ((UUID) -> Void)? = nil
     @EnvironmentObject var appData: AppData
+    @State private var showingAlert = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -31,6 +33,20 @@ struct LyricsTrackView: View {
             .padding(4)
             .frame(width: 120, alignment: .leading)
             .background(Color.gray.opacity(0.1))
+            .contextMenu {
+                Button(action: {
+                    if track.lyrics.isEmpty {
+                        onRemoveTrack?(track.id)
+                    } else {
+                        showingAlert = true
+                    }
+                }) {
+                    Label("移除轨道", systemImage: "trash")
+                }
+            }
+            .alert(isPresented: $showingAlert) {
+                Alert(title: Text("无法移除轨道"), message: Text("轨道非空，不可删除。"), dismissButton: .default(Text("好")))
+            }
 
             // Timeline area for the segments
             ZStack(alignment: .leading) {

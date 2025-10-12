@@ -100,6 +100,9 @@ struct ArrangementView: View {
                                     pixelsPerBeat: pixelsPerBeat,
                                     onRemove: { segmentId in
                                         removeGuitarSegment(segmentId: segmentId, from: track.id)
+                                    },
+                                    onRemoveTrack: { trackId in
+                                        removeGuitarTrack(trackId: trackId)
                                     }
                                 )
                             }
@@ -111,6 +114,9 @@ struct ArrangementView: View {
                                     pixelsPerBeat: pixelsPerBeat,
                                     onRemove: { segmentId in
                                         removeLyricsSegment(segmentId: segmentId, from: track.id)
+                                    },
+                                    onRemoveTrack: { trackId in
+                                        removeLyricsTrack(trackId: trackId)
                                     }
                                 )
                             }
@@ -202,5 +208,15 @@ struct ArrangementView: View {
             arrangement.lyricsTracks[trackIndex].removeLyrics(withId: segmentId)
             appData.saveChanges()
         }
+    }
+    
+    private func removeGuitarTrack(trackId: UUID) {
+        arrangement.guitarTracks.removeAll { $0.id == trackId }
+        appData.saveChanges()
+    }
+    
+    private func removeLyricsTrack(trackId: UUID) {
+        arrangement.lyricsTracks.removeAll { $0.id == trackId }
+        appData.saveChanges()
     }
 }
