@@ -128,13 +128,13 @@ struct ArrangementView: View {
                         )
                     }
                     .scrollIndicators(.hidden)
-                    .onChange(of: playheadPosition) { newPosition in
+                    .onChange(of: playheadPosition) { _,newPosition in
                         let currentBeat = Int(newPosition)
                         let targetID = "beat_\(currentBeat)"
                         
                         // This handles both playback and seeking.
                         if newPosition >= 0 {
-                            withAnimation(.linear(duration: 0.1)) {
+                            withAnimation(.easeIn(duration: 0.3)) {
                                 proxy.scrollTo(targetID, anchor: .center)
                             }
                         }
