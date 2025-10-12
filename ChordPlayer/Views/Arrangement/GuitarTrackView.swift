@@ -15,34 +15,35 @@ struct GuitarTrackView: View {
                 Text(track.name)
                     .font(.headline)
                 
-                Text("Ch: \(track.midiChannel ?? 1)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .contextMenu {
-                        ForEach(1...16, id: \.self) { channel in
-                            Button("Channel \(channel)") {
-                                track.midiChannel = channel
-                                appData.saveChanges()
+                HStack(spacing: 8) {
+                    Text("Ch: \(track.midiChannel ?? 1)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .contextMenu {
+                            ForEach(1...16, id: \.self) { channel in
+                                Button("Channel \(channel)") {
+                                    track.midiChannel = channel
+                                    appData.saveChanges()
+                                }
                             }
                         }
-                    }
-                
-                Text("Capo: \(track.capo == nil || track.capo == 0 ? "Off" : String(track.capo!))")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .contextMenu {
-                        Button("Off") {
-                            track.capo = nil
-                            appData.saveChanges()
-                        }
-                        ForEach(1...16, id: \.self) { capoValue in
-                            Button("\(capoValue)") {
-                                track.capo = capoValue
+                    
+                    Text("Capo: \(track.capo == nil || track.capo == 0 ? "Off" : String(track.capo!))")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .contextMenu {
+                            Button("Off") {
+                                track.capo = nil
                                 appData.saveChanges()
                             }
+                            ForEach(1...16, id: \.self) { capoValue in
+                                Button("\(capoValue)") {
+                                    track.capo = capoValue
+                                    appData.saveChanges()
+                                }
+                            }
                         }
-                    }
-
+                }
                 Spacer()
             }
             .padding(4)
