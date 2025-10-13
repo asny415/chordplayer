@@ -380,6 +380,8 @@ struct SoloEditorView: View {
                         soloSegment.notes[precedingNoteIndex].duration = newDuration
                     }
                 }
+                let maxTimeStep = Int(soloSegment.lengthInBeats / gridSize) - 1
+                activeCell.timeStep = min(maxTimeStep, activeCell.timeStep + 1)
                 return true
             default:
                 return false // Not a recognized character
@@ -405,6 +407,8 @@ struct SoloEditorView: View {
                 recalculateDurations(forString: position.stringIndex)
                 selectedNotes = [newNote.id]
             }
+            let maxTimeStep = Int(soloSegment.lengthInBeats / gridSize) - 1
+            activeCell.timeStep = min(maxTimeStep, activeCell.timeStep + 1)
         }
         fretInputBuffer = ""
         fretInputCancellable = nil
