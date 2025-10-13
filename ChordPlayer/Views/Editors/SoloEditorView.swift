@@ -24,6 +24,7 @@ struct SoloEditorView: View {
 
     @State private var isEditingName = false
     @FocusState private var isNameFieldFocused: Bool
+    @State private var temporaryName: String = ""
 
     private let stringNames = ["E", "B", "G", "D", "A", "E"]
     private let beatWidth: CGFloat = 80
@@ -36,12 +37,15 @@ struct SoloEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             if isEditingName {
-                TextField("Segment Name", text: $soloSegment.name)
+                TextField("Segment Name", text: $temporaryName)
                     .font(.largeTitle)
                     .textFieldStyle(.plain)
                     .padding()
                     .focused($isNameFieldFocused)
-                    .onSubmit { isEditingName = false }
+                    .onSubmit {
+                        soloSegment.name = temporaryName
+                        isEditingName = false
+                    }
                     .onDisappear { isEditingName = false } // Ensure editing stops if view disappears
             } else {
                 Text(soloSegment.name)
@@ -49,6 +53,7 @@ struct SoloEditorView: View {
                     .fontWeight(.bold)
                     .padding()
                     .onTapGesture(count: 2) {
+                        temporaryName = soloSegment.name
                         isEditingName = true
                         isNameFieldFocused = true
                     }
