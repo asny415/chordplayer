@@ -50,18 +50,40 @@ struct PlayingPatternView: View {
                     }
                 
                 case .strum:
-                    // Draw a single arrow for the whole step, passing the speed
-                    let arrowPath = createArrowPath(center: CGPoint(x: x, y: size.height / 2), height: size.height * 0.7, direction: step.strumDirection, speed: step.strumSpeed)
+                    guard let minStringIndex = step.activeNotes.min(),
+                          let maxStringIndex = step.activeNotes.max() else {
+                        break
+                    }
+
+                    let topStringY = stringSpacing / 2 + CGFloat(minStringIndex) * stringSpacing
+                    let bottomStringY = stringSpacing / 2 + CGFloat(maxStringIndex) * stringSpacing
+
+                    // If only one string is strummed, we still want a small visual indicator.
+                    // We'll center the arrow on the string and give it a small height.
+                    let isSingleStringStrum = minStringIndex == maxStringIndex
+                    
+                    let arrowCenterY = (topStringY + bottomStringY) / 2
+                    // Ensure there's a minimum height for the arrow, especially for single-string "strums".
+                    let arrowHeight = isSingleStringStrum ? stringSpacing * 0.4 : bottomStringY - topStringY
+
+                    let arrowPath = createArrowPath(
+                        center: CGPoint(x: x, y: arrowCenterY),
+                        height: arrowHeight,
+                        direction: step.strumDirection,
+                        speed: step.strumSpeed,
+                        stringSpacing: stringSpacing
+                    )
                     context.stroke(arrowPath, with: .color(color), lineWidth: 1.5)
                 }
             }
         }
     }
 
-    private func createArrowPath(center: CGPoint, height: CGFloat, direction: StrumDirection, speed: StrumSpeed) -> Path {
+    private func createArrowPath(center: CGPoint, height: CGFloat, direction: StrumDirection, speed: StrumSpeed, stringSpacing: CGFloat) -> Path {
         var path = Path()
         let arrowHeight = height
-        let arrowWidth = arrowHeight * 0.4
+        // Make arrow width consistent and based on string spacing, not variable height
+        let arrowWidth = stringSpacing * 0.6
         
         let startPoint = CGPoint(x: center.x, y: direction == .down ? center.y - arrowHeight / 2 : center.y + arrowHeight / 2)
         let endPoint = CGPoint(x: center.x, y: direction == .down ? center.y + arrowHeight / 2 : center.y - arrowHeight / 2)
@@ -97,9 +119,10 @@ struct PlayingPatternView: View {
         
         // Draw arrowhead
         let yEnd = endPoint.y
-        path.move(to: CGPoint(x: center.x - arrowWidth / 2, y: yEnd + (direction == .down ? -arrowWidth / 2 : arrowWidth / 2)))
+        let arrowheadSize = arrowWidth * 0.5 // The length of the arrowhead's "wings"
+        path.move(to: CGPoint(x: center.x - arrowheadSize, y: yEnd + (direction == .down ? -arrowheadSize : arrowheadSize)))
         path.addLine(to: CGPoint(x: center.x, y: yEnd))
-        path.addLine(to: CGPoint(x: center.x + arrowWidth / 2, y: yEnd + (direction == .down ? -arrowWidth / 2 : arrowWidth / 2)))
+        path.addLine(to: CGPoint(x: center.x + arrowheadSize, y: yEnd + (direction == .down ? -arrowheadSize : arrowheadSize)))
         
         return path
     }
