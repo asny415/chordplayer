@@ -754,7 +754,9 @@ struct SongArrangement: Codable, Hashable, Equatable {
     }
 
     mutating func addGuitarTrack() {
-        let newTrack = GuitarTrack(name: "Guitar \(guitarTracks.count + 1)")
+        let maxChannel = guitarTracks.compactMap { $0.midiChannel }.max() ?? 0
+        var newTrack = GuitarTrack(name: "Guitar \(guitarTracks.count + 1)")
+        newTrack.midiChannel = maxChannel + 1
         guitarTracks.append(newTrack)
         lastModified = Date()
     }
@@ -765,7 +767,9 @@ struct SongArrangement: Codable, Hashable, Equatable {
     }
     
     mutating func addLyricsTrack() {
-        let newTrack = LyricsTrack(name: "Lyrics \(lyricsTracks.count + 1)")
+        let maxChannel = lyricsTracks.compactMap { $0.midiChannel }.max() ?? 2
+        var newTrack = LyricsTrack(name: "Lyrics \(lyricsTracks.count + 1)")
+        newTrack.midiChannel = maxChannel + 1
         lyricsTracks.append(newTrack)
         lastModified = Date()
     }
