@@ -25,6 +25,11 @@ struct SoloEditorView: View {
     @State private var isEditingName = false
     @FocusState private var isNameFieldFocused: Bool
     @State private var temporaryName: String = ""
+    
+    // Keyboard navigation state
+    @State private var activeCell: GridPosition = GridPosition(stringIndex: 0, timeStep: 0)
+    @FocusState private var isGridFocused: Bool
+
 
     private let stringNames = ["E", "B", "G", "D", "A", "E"]
     private let beatWidth: CGFloat = 80
@@ -81,6 +86,7 @@ struct SoloEditorView: View {
                 SoloTablatureView(
                     soloSegment: $soloSegment,
                     selectedNotes: $selectedNotes,
+                    activeCell: $activeCell,
                     currentTechnique: currentTechnique,
                     currentFret: currentFret,
                     gridSize: gridSize,
@@ -121,6 +127,13 @@ struct SoloEditorView: View {
                 )
             }
             .background(Color(NSColor.textBackgroundColor))
+            .focused($isGridFocused)
+            .onTapGesture {
+                isGridFocused = true
+            }
+            .onChange(of: activeCell) { _, _ in
+                updateSelectionForActiveCell()
+            }
             
             Divider()
             
@@ -134,6 +147,9 @@ struct SoloEditorView: View {
             .padding(.horizontal)
             .frame(height: 30)
             .background(Color(NSColor.controlBackgroundColor))
+        }
+        .onAppear {
+            isGridFocused = true
         }
         .onChange(of: soloPlayer.isPlaying) { _, newValue in
             print("[SoloEditorView] Detected change: soloPlayer.isPlaying is now \(newValue)")
@@ -180,53 +196,63 @@ struct SoloEditorView: View {
             self.midiManager.sendNoteOff(note: UInt8(midiNoteNumber), velocity: 0, channel: self.midiChannel)
         }
     }
+    
+    private func updateSelectionForActiveCell() {
+        let activeTime = Double(activeCell.timeStep) * gridSize
+        if let noteAtCell = soloSegment.notes.first(where: { $0.string == activeCell.stringIndex && abs($0.startTime - activeTime) < 0.001 }) {
+            selectedNotes = [noteAtCell.id]
+        } else {
+            selectedNotes = []
+        }
+    }
 
     // MARK: - Note Editing Logic
     // MARK: - Note Editing Logic
-
     // MARK: - Note Editing Logic
 
     private func updateSelectedNote(change: (inout SoloNote) -> Void) {
         if selectedNotes.count == 1, let index = soloSegment.notes.firstIndex(where: { $0.id == selectedNotes.first! }) {
             let originalNote = soloSegment.notes[index]
-            change(&soloSegment.notes[index])
             
-            // Play sound feedback for the modified note
-            playNoteFeedback(note: soloSegment.notes[index])
+            var changedNote = originalNote
+            change(&changedNote)
+
+            // Only update and play feedback if the note has actually changed.
+            if changedNote.fret != originalNote.fret || changedNote.technique != originalNote.technique {
+                soloSegment.notes[index] = changedNote
+                playNoteFeedback(note: changedNote)
+            }
         }
     }
 
     /// The main entry point for all tap interactions on the grid.
-    private func handleGridTap(at position: CGPoint? = nil, onNote noteID: UUID? = nil) {
-        // This is the unified handler for all tap gestures on the grid.
+    private func handleGridTap(at position: CGPoint) {
+        let stringLabelWidth: CGFloat = 40.0
+        let stringIndex = Int(position.y / stringHeight)
+        let timeInBeats = Double((position.x - stringLabelWidth) / beatWidth) / Double(zoomLevel)
         
-        // Case 1: A note was tapped directly.
-        if let noteID = noteID {
-            // Simple behavior: tapping a note selects it
-            selectNote(noteID)
-            return
-        }
+        guard stringIndex >= 0 && stringIndex < 6 && timeInBeats >= 0 else { return }
         
-        // Case 2: A blank space on the grid was tapped.
-        if let position = position {
-            let stringLabelWidth: CGFloat = 40.0
-            let stringIndex = Int(position.y / stringHeight)
-            let time = Double((position.x - stringLabelWidth) / beatWidth) / Double(zoomLevel)
-            guard stringIndex >= 0 && stringIndex < 6 && time >= 0 else { return }
-            let tappedTime = snapToGrid(time)
+        let timeStep = Int(floor(timeInBeats / gridSize))
+        let tappedTime = Double(timeStep) * gridSize
+        
+        // Update active cell based on tap
+        self.activeCell = GridPosition(stringIndex: stringIndex, timeStep: timeStep)
 
-            // Default behavior: if a note exists at this grid position, select it. Otherwise add a new note.
-            if let existingNote = soloSegment.notes.first(where: { $0.string == stringIndex && tappedTime >= $0.startTime && tappedTime < ($0.startTime + ($0.duration ?? gridSize)) }) {
-                selectNote(existingNote.id)
-            } else {
-                addNote(at: tappedTime, on: stringIndex)
-            }
+        // If a note exists at this grid position, select it. Otherwise, do nothing.
+        if let existingNote = soloSegment.notes.first(where: { $0.string == stringIndex && tappedTime >= $0.startTime && tappedTime < ($0.startTime + ($0.duration ?? gridSize)) }) {
+            selectNote(existingNote.id)
         }
     }
 
     private func addNote(at time: Double, on stringIndex: Int) {
         print("[DEBUG] addNote called at time: \(time), string: \(stringIndex)")
+        // Prevent adding a note if one already exists at the exact start time
         if soloSegment.notes.contains(where: { $0.string == stringIndex && abs($0.startTime - time) < 0.001 }) {
+            // If a note exists, select it instead of adding a new one
+            if let existingNote = soloSegment.notes.first(where: { $0.string == stringIndex && abs($0.startTime - time) < 0.001 }) {
+                selectNote(existingNote.id)
+            }
             return
         }
         
@@ -265,28 +291,13 @@ struct SoloEditorView: View {
         }
     }
     
-    private func toggleTechnique(_ technique: PlayingTechnique) {
-        // Toggle technique for selected notes
-        var updatedNotes: [SoloNote] = []
-        
-        for noteId in selectedNotes {
-            if let index = soloSegment.notes.firstIndex(where: { $0.id == noteId }) {
-                var note = soloSegment.notes[index]
-                // 如果当前技巧相同，则移除技巧（设置为normal）
-                if note.technique == technique {
-                    note.technique = .normal
-                } else {
-                    note.technique = technique
-                }
-                updatedNotes.append(note)
-            }
-        }
-        
-        // 更新所有修改的音符
-        for updatedNote in updatedNotes {
-            if let index = soloSegment.notes.firstIndex(where: { $0.id == updatedNote.id }) {
-                soloSegment.notes[index] = updatedNote
-            }
+    private func toggleTechniqueOnActiveCell(_ technique: PlayingTechnique) {
+        let activeTime = Double(activeCell.timeStep) * gridSize
+        if let index = soloSegment.notes.firstIndex(where: { $0.string == activeCell.stringIndex && abs($0.startTime - activeTime) < 0.001 }) {
+            var note = soloSegment.notes[index]
+            note.technique = (note.technique == technique) ? .normal : technique
+            soloSegment.notes[index] = note
+            playNoteFeedback(note: note)
         }
     }
     
@@ -295,6 +306,10 @@ struct SoloEditorView: View {
             if selectedNotes.contains(noteId) { selectedNotes.remove(noteId) } else { selectedNotes.insert(noteId) }
         } else {
             selectedNotes = [noteId]
+            // Also update active cell when a note is selected
+            if let note = soloSegment.notes.first(where: { $0.id == noteId }) {
+                activeCell = GridPosition(stringIndex: note.string, timeStep: Int(note.startTime / gridSize))
+            }
         }
     }
     
@@ -306,15 +321,23 @@ struct SoloEditorView: View {
     private func snapToGrid(_ time: Double) -> Double { floor(time / gridSize) * gridSize }
     
     private func handleKeyDown(_ event: NSEvent) -> Bool {
-        // Check if text field is currently focused - if so, don't handle custom keyboard events
-        if let currentFirstResponder = NSApp.keyWindow?.firstResponder,
-           currentFirstResponder is NSTextField || 
-           currentFirstResponder is NSTextView {
-            // Text field or text view is focused, allow normal text input processing
-            return false
-        }
-        
+        if isNameFieldFocused { return false } // Don't interfere with name editing
+
+        // Arrow key navigation
         switch event.keyCode {
+        case 126: // Up Arrow
+            activeCell.stringIndex = max(0, activeCell.stringIndex - 1)
+            return true
+        case 125: // Down Arrow
+            activeCell.stringIndex = min(5, activeCell.stringIndex + 1)
+            return true
+        case 123: // Left Arrow
+            activeCell.timeStep = max(0, activeCell.timeStep - 1)
+            return true
+        case 124: // Right Arrow
+            let maxTimeStep = Int(soloSegment.lengthInBeats / gridSize) - 1
+            activeCell.timeStep = min(maxTimeStep, activeCell.timeStep + 1)
+            return true
         case 51: // Backspace/Delete
             deleteSelectedNotes()
             return true
@@ -322,48 +345,65 @@ struct SoloEditorView: View {
             playToggle()
             return true
         default:
-            // Check for numeric input for fret setting
-            if let chars = event.characters, let _ = Int(chars) {
+            break // Continue to character processing
+        }
+        
+        // Character-based input
+        if let chars = event.characters, let firstChar = chars.first {
+            // Numeric input for fret setting
+            if firstChar.isNumber {
                 fretInputCancellable?.cancel()
-                fretInputBuffer += chars
+                fretInputBuffer += String(firstChar)
                 
-                if fretInputBuffer.count >= 2 {
-                    commitFretInput()
-                } else {
-                    fretInputCancellable = Just(()).delay(for: .milliseconds(400), scheduler: DispatchQueue.main).sink { [self] in commitFretInput() }
+                // Use a timer to handle multi-digit input
+                fretInputCancellable = Just(()).delay(for: .milliseconds(400), scheduler: DispatchQueue.main).sink { [self] in
+                    commitFretInput(at: activeCell)
                 }
                 return true
             }
             
-            // Check for technique input
-            if let chars = event.characters, let firstChar = chars.first {
-                let technique: PlayingTechnique?
-                switch firstChar {
-                case "/":
-                    technique = .slide
-                case "^":
-                    technique = .bend
-                case "~":
-                    technique = .vibrato
-                case "p":
-                    technique = .pullOff
-                default:
-                    technique = nil
+            // Technique and other commands
+            switch firstChar {
+            case "/": toggleTechniqueOnActiveCell(.slide)
+            case "^": toggleTechniqueOnActiveCell(.bend)
+            case "~": toggleTechniqueOnActiveCell(.vibrato)
+            case "p": toggleTechniqueOnActiveCell(.pullOff)
+            case "-":
+                // Create a tie/sustain from the previous note to the END of the active cell
+                let activeStartTime = Double(activeCell.timeStep) * gridSize
+                let activeEndTime = activeStartTime + gridSize // The end time of the active cell
+                if let precedingNoteIndex = findPrecedingNoteIndex(before: activeStartTime, on: activeCell.stringIndex) {
+                    let precedingNote = soloSegment.notes[precedingNoteIndex]
+                    let newDuration = activeEndTime - precedingNote.startTime
+                    if newDuration > 0 {
+                        soloSegment.notes[precedingNoteIndex].duration = newDuration
+                    }
                 }
-                
-                if let technique = technique {
-                    toggleTechnique(technique)
-                    return true
-                }
+                return true
+            default:
+                return false // Not a recognized character
             }
-            
-            return false
+            return true
         }
+        
+        return false
     }
     
-    private func commitFretInput() {
+    private func commitFretInput(at position: GridPosition) {
         if let fret = Int(fretInputBuffer), (0...24).contains(fret) {
-            self.currentFret = fret
+            let time = Double(position.timeStep) * gridSize
+            // Check if a note already exists to update it, otherwise create a new one
+            if let index = soloSegment.notes.firstIndex(where: { $0.string == position.stringIndex && abs($0.startTime - time) < 0.001 }) {
+                soloSegment.notes[index].fret = fret
+                playNoteFeedback(note: soloSegment.notes[index])
+                selectedNotes = [soloSegment.notes[index].id]
+            } else {
+                let newNote = SoloNote(startTime: time, duration: gridSize, string: position.stringIndex, fret: fret, technique: .normal)
+                soloSegment.notes.append(newNote)
+                playNoteFeedback(note: newNote)
+                recalculateDurations(forString: position.stringIndex)
+                selectedNotes = [newNote.id]
+            }
         }
         fretInputBuffer = ""
         fretInputCancellable = nil
@@ -443,6 +483,7 @@ struct SoloToolbar: View {
 struct SoloTablatureView: View {
     @Binding var soloSegment: SoloSegment
     @Binding var selectedNotes: Set<UUID>
+    @Binding var activeCell: GridPosition
     
     let currentTechnique: PlayingTechnique
     let currentFret: Int
@@ -466,6 +507,8 @@ struct SoloTablatureView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             SoloGridView(lengthInBeats: soloSegment.lengthInBeats, gridSize: gridSize, beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel, beatsPerBar: beatsPerBar)
+            
+            ActiveCellHighlightView(activeCell: activeCell, beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel, gridSize: gridSize)
             
             VStack(spacing: 0) {
                 ForEach(0..<6, id: \.self) { stringIndex in
@@ -519,6 +562,38 @@ struct FretInputPopover: View {
         .padding()
     }
 }
+
+// MARK: - Helper Structs & Views
+
+struct GridPosition: Equatable, Hashable {
+    var stringIndex: Int
+    var timeStep: Int
+}
+
+struct ActiveCellHighlightView: View {
+    let activeCell: GridPosition
+    let beatWidth: CGFloat
+    let stringHeight: CGFloat
+    let zoomLevel: CGFloat
+    let gridSize: Double
+    
+    private let stringLabelWidth: CGFloat = 40.0
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(Color.accentColor.opacity(0.2))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(Color.accentColor, lineWidth: 2)
+            )
+            .frame(width: beatWidth * gridSize * zoomLevel, height: stringHeight)
+            .position(
+                x: stringLabelWidth + (CGFloat(activeCell.timeStep) * beatWidth * gridSize * zoomLevel) + (beatWidth * gridSize * zoomLevel / 2),
+                y: CGFloat(activeCell.stringIndex) * stringHeight + stringHeight / 2
+            )
+    }
+}
+
 
 // Other subviews (SoloGridView, SoloStringLineView, etc.) remain unchanged.
 
