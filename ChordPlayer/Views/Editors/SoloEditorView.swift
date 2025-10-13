@@ -45,6 +45,7 @@ struct SoloEditorView: View {
                 TextField("Segment Name", text: $temporaryName)
                     .font(.largeTitle)
                     .textFieldStyle(.plain)
+                    .multilineTextAlignment(.center)
                     .padding()
                     .focused($isNameFieldFocused)
                     .onSubmit {
