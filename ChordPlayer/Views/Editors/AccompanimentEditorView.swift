@@ -47,6 +47,7 @@ struct AccompanimentEditorView: View {
                     TextField("Segment Name", text: $segment.name)
                         .font(.largeTitle)
                         .textFieldStyle(.plain)
+                        .multilineTextAlignment(.center)
                         .focused($isNameFieldFocused)
                         .onSubmit { isEditingName = false }
                         .onDisappear { isEditingName = false } // Ensure editing stops if view disappears
