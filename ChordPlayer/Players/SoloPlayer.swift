@@ -160,7 +160,7 @@ class SoloPlayer: ObservableObject {
         
         let song = MusicSong(tempo: appData.preset?.bpm ?? 120.0,
                              key: appData.preset?.key ?? "C",
-                             timeSignature: MusicTimeSignature(numerator: 4, denominator: 4),
+                             timeSignature: .init(numerator: preset.timeSignature.beatsPerMeasure, denominator: preset.timeSignature.beatUnit),
                              tracks: [soloTrack])
         
         return song

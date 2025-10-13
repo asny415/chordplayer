@@ -7,8 +7,9 @@ struct GlobalSettingsView: View {
     
     // Define constants for cycles locally
     private let KEY_CYCLE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-    private let TIME_SIGNATURE_OPTIONS = [TimeSignature(beatsPerMeasure: 4, beatUnit: 4), 
-                                          TimeSignature(beatsPerMeasure: 3, beatUnit: 4), 
+    private let TIME_SIGNATURE_OPTIONS = [TimeSignature(beatsPerMeasure: 4, beatUnit: 4),
+                                          TimeSignature(beatsPerMeasure: 3, beatUnit: 4),
+                                          TimeSignature(beatsPerMeasure: 2, beatUnit: 4),
                                           TimeSignature(beatsPerMeasure: 6, beatUnit: 8)]
 
     var body: some View {

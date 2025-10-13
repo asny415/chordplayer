@@ -29,6 +29,10 @@ struct SoloEditorView: View {
     private let beatWidth: CGFloat = 80
     private let stringHeight: CGFloat = 40
 
+    private var beatsPerBar: Int {
+        appData.preset?.timeSignature.beatsPerMeasure ?? 4
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if isEditingName {
@@ -59,6 +63,7 @@ struct SoloEditorView: View {
                 isPlaying: $soloPlayer.isPlaying,
                 playbackPosition: $midiSequencer.currentTimeInBeats,
                 segmentLength: $soloSegment.lengthInBeats,
+                beatsPerBar: beatsPerBar,
                 onPlay: playToggle,
                 onSetFret: { showingFretPopover = true }
             )
@@ -79,6 +84,7 @@ struct SoloEditorView: View {
                     playbackPosition: midiSequencer.currentTimeInBeats,
                     beatWidth: beatWidth,
                     stringHeight: stringHeight,
+                    beatsPerBar: beatsPerBar,
                     onNoteSelect: selectNote,
                     onNoteDelete: deleteSelectedNotes,
                     onNoteTap: { noteId in selectNote(noteId) },
@@ -319,9 +325,7 @@ struct SoloEditorView: View {
                 if fretInputBuffer.count >= 2 {
                     commitFretInput()
                 } else {
-                    fretInputCancellable = Just(())
-                        .delay(for: .milliseconds(400), scheduler: DispatchQueue.main)
-                        .sink { [self] in commitFretInput() }
+                    fretInputCancellable = Just(()).delay(for: .milliseconds(400), scheduler: DispatchQueue.main).sink { [self] in commitFretInput() }
                 }
                 return true
             }
@@ -372,6 +376,7 @@ struct SoloToolbar: View {
     @Binding var isPlaying: Bool
     @Binding var playbackPosition: Double
     @Binding var segmentLength: Double
+    let beatsPerBar: Int
     
     @State private var showingSettings: Bool = false
 
@@ -422,7 +427,7 @@ struct SoloToolbar: View {
                 Image(systemName: "gearshape.fill")
             }.buttonStyle(.bordered)
             .popover(isPresented: $showingSettings, arrowEdge: .bottom) {
-                SegmentSettingsView(lengthInBeats: $segmentLength, midiChannel: $midiChannel)
+                SegmentSettingsView(lengthInBeats: $segmentLength, midiChannel: $midiChannel, beatsPerBar: beatsPerBar)
             }
         }
         .textFieldStyle(.roundedBorder)
@@ -442,6 +447,7 @@ struct SoloTablatureView: View {
     let playbackPosition: Double
     let beatWidth: CGFloat
     let stringHeight: CGFloat
+    let beatsPerBar: Int
     
     let onNoteSelect: (UUID, Bool) -> Void
     let onNoteDelete: () -> Void
@@ -454,7 +460,7 @@ struct SoloTablatureView: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            SoloGridView(lengthInBeats: soloSegment.lengthInBeats, gridSize: gridSize, beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel)
+            SoloGridView(lengthInBeats: soloSegment.lengthInBeats, gridSize: gridSize, beatWidth: beatWidth, stringHeight: stringHeight, zoomLevel: zoomLevel, beatsPerBar: beatsPerBar)
             
             VStack(spacing: 0) {
                 ForEach(0..<6, id: \.self) { stringIndex in
@@ -513,7 +519,7 @@ struct FretInputPopover: View {
 
 struct SoloGridView: View {
     let lengthInBeats: Double, gridSize: Double, beatWidth: CGFloat, stringHeight: CGFloat, zoomLevel: CGFloat
-    let beatsPerBar: Int = 4 // Assuming 4/4 time signature
+    let beatsPerBar: Int
 
     var body: some View {
         Canvas { context, size in
@@ -634,11 +640,11 @@ struct SegmentSettingsView: View {
     @Binding var lengthInBeats: Double
     @Binding var midiChannel: UInt8
     @State private var lengthInBarsString: String = ""
-    private let beatsPerBar: Int = 4
+    let beatsPerBar: Int
 
     var body: some View {
         VStack(spacing: 12) {
-            Text("Segment Properties").font(.headline)
+            Text("Segment Properties (BPB: \(beatsPerBar))").font(.headline)
             HStack {
                 Text("Length (bars):")
                 TextField("Length", text: $lengthInBarsString)
@@ -656,7 +662,7 @@ struct SegmentSettingsView: View {
             }
         }.padding()
         .onAppear {
-            let currentBars = lengthInBeats / Double(beatsPerBar)
+            let currentBars = (beatsPerBar > 0) ? lengthInBeats / Double(beatsPerBar) : 0
             lengthInBarsString = String(format: "%.2f", currentBars).trimmingCharacters(in: ["0", "."]) // Clean up trailing .00 or .X0
             if lengthInBarsString.isEmpty { lengthInBarsString = "0" }
         }
