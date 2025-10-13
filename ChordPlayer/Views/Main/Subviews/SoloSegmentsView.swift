@@ -102,6 +102,13 @@ struct SoloSegmentsView: View {
                 )
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            let count = appData.preset?.soloSegments.count ?? 0
+            let newSegment = SoloSegment(name: "New Solo \(count + 1)", lengthInBeats: 4.0)
+            appData.addSoloSegment(newSegment)
+            self.segmentToEdit = newSegment
+        }
     }
     
     @ViewBuilder

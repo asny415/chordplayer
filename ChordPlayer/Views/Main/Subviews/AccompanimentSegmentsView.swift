@@ -58,6 +58,11 @@ struct AccompanimentSegmentsView: View {
                 )
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            let newSegment = AccompanimentSegment(name: "New Accompaniment", lengthInMeasures: 4)
+            self.segmentToEdit = newSegment
+        }
         .sheet(item: $segmentToEdit) { segment in
             let isNew = !(appData.preset?.accompanimentSegments.contains(where: { $0.id == segment.id }) ?? false)
             

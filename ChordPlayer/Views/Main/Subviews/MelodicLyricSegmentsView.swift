@@ -63,6 +63,10 @@ struct MelodicLyricSegmentsView: View {
                 )
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            addSegment()
+        }
         .alert("Delete \(segmentToDelete?.name ?? "Segment")", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive, action: confirmDelete)
             Button("Cancel", role: .cancel) { segmentToDelete = nil }
