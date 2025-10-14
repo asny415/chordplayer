@@ -26,6 +26,7 @@ struct MelodicLyricEditorView: View {
     @State private var isEditingName = false
     @FocusState private var isNameFieldFocused: Bool
     @FocusState private var isInlineEditorFocused: Bool
+    @State private var localName: String = ""
 
     // Layout constants
     private let beatWidth: CGFloat = 120
@@ -88,13 +89,24 @@ struct MelodicLyricEditorView: View {
         HStack {
             Spacer()
             if isEditingName {
-                TextField("Segment Name", text: $segment.name)
+                TextField("Segment Name", text: $localName)
                     .font(.largeTitle).textFieldStyle(.plain).multilineTextAlignment(.center)
                     .focused($isNameFieldFocused)
-                    .onSubmit { isEditingName = false }.onDisappear { isEditingName = false }
+                    .onSubmit {
+                        segment.name = localName
+                        isEditingName = false
+                    }
+                    .onDisappear {
+                        segment.name = localName
+                        isEditingName = false
+                    }
             } else {
                 Text(segment.name).font(.largeTitle).fontWeight(.bold)
-                    .onTapGesture(count: 2) { isEditingName = true; isNameFieldFocused = true }
+                    .onTapGesture(count: 2) {
+                        localName = segment.name
+                        isEditingName = true
+                        isNameFieldFocused = true
+                    }
             }
             Spacer()
         }
