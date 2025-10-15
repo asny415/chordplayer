@@ -101,6 +101,12 @@ struct ChordPlayerApp: App {
                 }
                 .keyboardShortcut("S", modifiers: [.shift, .command])
                 
+                Button("Export Lyrics as MIDI...") {
+                    exportLyricsAsMIDI()
+                }
+                .disabled(PresetManager.shared.currentPreset == nil || (PresetManager.shared.currentPreset?.arrangement.lyricsTracks.isEmpty ?? true))
+                .keyboardShortcut("E", modifiers: [.shift, .command])
+                
                 Button("Import...") {
                     isImporting = true
                 }
@@ -146,6 +152,36 @@ struct ChordPlayerApp: App {
         savePanel.begin { result in
             if result == .OK, let url = savePanel.url {
                 presetManager.savePresetAs(to: url)
+            }
+        }
+    }
+    
+    private func exportLyricsAsMIDI() {
+        guard let preset = PresetManager.shared.currentPreset else { return }
+        
+        // Use a standard ticks per beat value, e.g., 480
+        let ticksPerBeat = 480
+        
+        guard let midiData = MIDILyricExporter.export(preset: preset, ticksPerBeat: ticksPerBeat) else {
+            // Optionally, show an alert to the user that there was nothing to export
+            print("No lyrical content found to export.")
+            return
+        }
+        
+        let savePanel = NSSavePanel()
+        savePanel.canCreateDirectories = true
+        savePanel.showsTagField = false
+        savePanel.allowedContentTypes = [UTType.midi]
+        savePanel.nameFieldStringValue = "\(preset.name) - Lyrics.mid"
+        
+        savePanel.begin { result in
+            if result == .OK, let url = savePanel.url {
+                do {
+                    try midiData.write(to: url)
+                } catch {
+                    // Optionally, show an alert to the user about the save error
+                    print("Failed to save MIDI file: \(error.localizedDescription)")
+                }
             }
         }
     }
