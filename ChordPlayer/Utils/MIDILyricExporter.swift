@@ -84,7 +84,7 @@ class MIDILyricExporter {
             
             // 歌词事件
             if !item.item.word.isEmpty {
-                midiEvents.append(MIDIEvent(tick: item.absoluteStartTick, type: .lyric(item.item.word)))
+                midiEvents.append(MIDIEvent(tick: item.absoluteStartTick, type: .lyric(item.item.word.replacingOccurrences(of: "[,，]", with: "", options: .regularExpression))))
             }
             
             // Note On 事件
