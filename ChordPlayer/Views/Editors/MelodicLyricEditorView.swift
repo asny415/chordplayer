@@ -93,11 +93,11 @@ struct MelodicLyricEditorView: View {
                     .font(.largeTitle).textFieldStyle(.plain).multilineTextAlignment(.center)
                     .focused($isNameFieldFocused)
                     .onSubmit {
-                        segment.name = localName
+                        segment.name = localName.isEmpty ? "noname" : localName
                         isEditingName = false
                     }
                     .onDisappear {
-                        segment.name = localName
+                        segment.name = localName.isEmpty ? "noname" : localName
                         isEditingName = false
                     }
             } else {

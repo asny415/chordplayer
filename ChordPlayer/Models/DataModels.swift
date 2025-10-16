@@ -1105,7 +1105,8 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        self.name = try container.decode(String.self, forKey: .name)
+        let decodedName = try container.decode(String.self, forKey: .name)
+        self.name = decodedName.isEmpty ? "noname" : decodedName
         self.lengthInBars = try container.decode(Int.self, forKey: .lengthInBars)
         self.items = try container.decode([MelodicLyricItem].self, forKey: .items)
         self.key = try container.decodeIfPresent(String.self, forKey: .key) // Add this line

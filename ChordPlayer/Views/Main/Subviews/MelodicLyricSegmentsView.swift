@@ -130,7 +130,7 @@ struct MelodicLyricSegmentsView: View {
         
         var newSegment = segment
         newSegment.id = UUID()
-        newSegment.name = "\(segment.name) Copy"
+        newSegment.name = (segment.name.isEmpty ? "noname" : segment.name) + " (copy)"
         
         appData.preset!.melodicLyricSegments.insert(newSegment, at: index + 1)
         appData.saveChanges()
