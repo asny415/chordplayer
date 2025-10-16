@@ -56,7 +56,7 @@ class MelodicLyricPlayer: ObservableObject {
         var musicNotes: [MusicNote] = []
         var consumedItemIDs = Set<UUID>()
         let transposition = self.transposition(forKey: effectiveKey) // Use effectiveKey
-        let ticksPerBeat = 12.0 // Use a double for division
+        let ticksPerBeat = 24.0 // Use a double for division
         let segmentEndBeat = Double(segment.lengthInBars * preset.timeSignature.beatsPerMeasure)
 
         for i in 0..<itemsSorted.count {

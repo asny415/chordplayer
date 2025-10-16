@@ -92,6 +92,7 @@ struct PatternStep: Codable, Identifiable, Hashable, Equatable {
 enum GridResolution: String, Codable, CaseIterable, Identifiable {
     case eighth = "8th"
     case sixteenth = "16th"
+    case thirtySecond = "32nd"
     case eighthTriplet = "8th Triplet"
     case sixteenthTriplet = "16th Triplet"
 
@@ -101,6 +102,7 @@ enum GridResolution: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .eighth: return 2
         case .sixteenth: return 4
+        case .thirtySecond: return 8
         case .eighthTriplet: return 3
         case .sixteenthTriplet: return 6
         }
@@ -215,6 +217,8 @@ struct GuitarPattern: Codable, Identifiable, Hashable, Equatable {
             resolutionCode = "1"
         case .sixteenth:
             resolutionCode = "2"
+        case .thirtySecond:
+            resolutionCode = "5"
         case .eighthTriplet:
             resolutionCode = "3"
         case .sixteenthTriplet:
@@ -1039,9 +1043,9 @@ struct MelodicLyricItem: Identifiable, Codable, Hashable {
             let legacyPosition = try container.decode(Int.self, forKey: .position)
             let legacyDuration = try container.decodeIfPresent(Int.self, forKey: .duration)
             
-            // Conversion: 1 16th note step = 3 ticks (assuming 1 beat = 12 ticks)
-            self.positionInTicks = legacyPosition * 3
-            self.durationInTicks = legacyDuration.map { $0 * 3 }
+            // Conversion: 1 16th note step = 6 ticks (assuming 1 beat = 24 ticks)
+            self.positionInTicks = legacyPosition * 6
+            self.durationInTicks = legacyDuration.map { $0 * 6 }
         }
     }
 
@@ -1078,6 +1082,9 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
     
     /// 可选的片段独立调性
     var key: String?
+    
+    /// 计时系统版本号，用于迁移
+    var timingVersion: Int?
 
     // Legacy property for migration
     private var gridUnit: Int?
@@ -1094,12 +1101,13 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
         self.resolution = resolution
         self.items = items
         self.key = key
+        self.timingVersion = 2 // New segments are always version 2
     }
     
     // MARK: - Codable Implementation for Compatibility
     
     enum CodingKeys: String, CodingKey {
-        case id, name, lengthInBars, resolution, items, gridUnit, key
+        case id, name, lengthInBars, resolution, items, gridUnit, key, timingVersion
     }
 
     init(from decoder: Decoder) throws {
@@ -1109,21 +1117,35 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
         self.name = decodedName.isEmpty ? "noname" : decodedName
         self.lengthInBars = try container.decode(Int.self, forKey: .lengthInBars)
         self.items = try container.decode([MelodicLyricItem].self, forKey: .items)
-        self.key = try container.decodeIfPresent(String.self, forKey: .key) // Add this line
+        self.key = try container.decodeIfPresent(String.self, forKey: .key)
 
         // Decode new resolution if available, otherwise fall back to legacy gridUnit
         if let res = try container.decodeIfPresent(GridResolution.self, forKey: .resolution) {
             self.resolution = res
         } else if let legacyGridUnit = try container.decodeIfPresent(Int.self, forKey: .gridUnit) {
-            // The old `gridUnit` was the number of 16th-note steps in the grid snap.
-            // 1 = 16th grid, 2 = 8th grid.
             switch legacyGridUnit {
             case 1: self.resolution = .sixteenth
             case 2: self.resolution = .eighth
-            default: self.resolution = .sixteenth // Safest fallback for other values
+            default: self.resolution = .sixteenth
             }
         } else {
-            self.resolution = .sixteenth // Default for very old data without any grid info
+            self.resolution = .sixteenth
+        }
+        
+        // Handle timing system migration
+        let version = try container.decodeIfPresent(Int.self, forKey: .timingVersion) ?? 1
+        self.timingVersion = version
+        
+        if version < 2 {
+            // This is old data (12 ticks per beat). We need to migrate it to 24 ticks per beat.
+            self.items = self.items.map { item in
+                var migratedItem = item
+                migratedItem.positionInTicks *= 2
+                if let duration = migratedItem.durationInTicks {
+                    migratedItem.durationInTicks = duration * 2
+                }
+                return migratedItem
+            }
         }
     }
 
@@ -1133,9 +1155,11 @@ struct MelodicLyricSegment: Identifiable, Codable, Hashable, Equatable {
         try container.encode(name, forKey: .name)
         try container.encode(lengthInBars, forKey: .lengthInBars)
         try container.encode(items, forKey: .items)
-        try container.encodeIfPresent(key, forKey: .key) // Add this line
-        // Always encode the new resolution property
+        try container.encodeIfPresent(key, forKey: .key)
         try container.encode(resolution, forKey: .resolution)
+        
+        // Always write the latest version number
+        try container.encode(2, forKey: .timingVersion)
     }
 }
 
