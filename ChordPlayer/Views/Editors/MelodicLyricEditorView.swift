@@ -180,7 +180,7 @@ struct MelodicLyricEditorView: View {
                         item: item,
                         isSelected: item.positionInTicks == selectedTick,
                         cellWidth: cellWidth,
-                        unitWidth: tickWidth * 3 // Restore font size to be based on 16th note width
+                        unitWidth: tickWidth * 8 // Restore font size to be based on 16th note width
                     )
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
