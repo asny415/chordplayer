@@ -182,9 +182,9 @@ struct ArrangementView: View {
                 // Set the initial slider value from AppData when the view appears
                 sliderValue = Double(appData.timelineScaleIndex)
             }
-            .onChange(of: appData.timelineScaleIndex) { newIndex in
+            .onChange(of: appData.timelineScaleIndex) {
                 // Update slider value if the index changes from another source
-                sliderValue = Double(newIndex)
+                sliderValue = Double(appData.timelineScaleIndex)
             }
         }
     }

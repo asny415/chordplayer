@@ -145,7 +145,7 @@ struct KaraokeChordsView: View {
         }
         .frame(height: 175)
         .onAppear(perform: updateChordData)
-        .onChange(of: arrangement) { _ in updateChordData() }
+        .onChange(of: arrangement) { updateChordData() }
     }
     
     private func updateChordData() {

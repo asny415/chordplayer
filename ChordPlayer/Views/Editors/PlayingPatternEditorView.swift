@@ -101,16 +101,16 @@ struct PlayingPatternEditorView: View {
                 ForEach(GridResolution.allCases) { res in Text(res.rawValue).tag(res) }
             }
             .pickerStyle(.menu)
-            .onChange(of: pattern.activeResolution) { newValue in
+            .onChange(of: pattern.activeResolution) {
                 // When resolution changes, maintain the same number of beats
                 // by recalculating the underlying total steps (pattern.length).
                 lengthInBeats.wrappedValue = beats
-                settings.resolution = newValue // Persist immediately
+                settings.resolution = pattern.activeResolution // Persist immediately
             }
             
             Stepper("Length: \(lengthInBeats.wrappedValue) beats", value: lengthInBeats, in: 1...64)
-                .onChange(of: lengthInBeats.wrappedValue) { newValue in
-                    settings.lengthInBeats = newValue // Persist immediately
+                .onChange(of: lengthInBeats.wrappedValue) {
+                    settings.lengthInBeats = lengthInBeats.wrappedValue // Persist immediately
                 }
             
             Spacer()
